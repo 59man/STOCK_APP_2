@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail \"vite\" \"node server/index.js\"",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/index.js"
   },
   "dependencies": {
     "express": "^4.19.2",

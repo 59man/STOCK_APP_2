@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.git/
+Transactions_folder/
+session.md
+server/data.json

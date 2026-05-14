@@ -1,0 +1,13 @@
+services:
+  stock-tracker:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Bind-mount the existing data file so your portfolio persists between restarts.
+      # The file must exist on the host before running `docker compose up`.
+      - ./server/data.json:/app/server/data.json
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+    restart: unless-stopped

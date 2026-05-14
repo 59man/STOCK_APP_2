@@ -37,7 +37,7 @@ export interface PortfolioRow {
   costBasis: number
   pnl: number           // price-only P&L (currentValue - costBasis)
   pnlPercent: number
-  dividendIncome: number // net dividends received (after 15% withholding tax)
+  dividendIncome: number // net dividends received (after per-country withholding tax)
   totalReturn: number   // pnl + dividendIncome
   loading: boolean
   error: string | null

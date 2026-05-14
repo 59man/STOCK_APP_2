@@ -63,7 +63,10 @@
       "Bash(node server/index.js)",
       "Bash(kill %1)",
       "Bash(lsof *)",
-      "Bash(kill 164448 *)"
+      "Bash(kill 164448 *)",
+      "Bash(git fetch *)",
+      "Bash(docker push *)",
+      "Bash(docker build *)"
     ]
   }
 }

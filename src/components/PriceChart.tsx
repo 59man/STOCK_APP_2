@@ -87,7 +87,14 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPo
 }
 
 export function PriceChart({ ticker }: Props) {
-  const [range, setRange] = useState<Range>('1Y')
+  const [range, setRange] = useState<Range>(
+    () => (localStorage.getItem('chart_range_price') as Range | null) ?? '1Y'
+  )
+
+  const handleRangeChange = (r: Range) => {
+    setRange(r)
+    localStorage.setItem('chart_range_price', r)
+  }
   const [data, setData] = useState<ChartPoint[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -115,7 +122,7 @@ export function PriceChart({ ticker }: Props) {
             <button
               key={r}
               className={`range-tab${range === r ? ' active' : ''}`}
-              onClick={() => setRange(r)}
+              onClick={() => handleRangeChange(r)}
             >
               {r}
             </button>

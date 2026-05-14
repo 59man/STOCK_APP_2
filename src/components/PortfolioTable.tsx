@@ -46,7 +46,9 @@ function pct(n: number) {
 export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed }: Props) {
   const [editingTicker, setEditingTicker] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string } | null>(null)
 
   const toggle = (ticker: string) =>
     setExpanded((prev) => {
@@ -55,12 +57,28 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
       return next
     })
 
-  const startEdit = (ticker: string, prefill: string) => { setEditingTicker(ticker); setEditValue(prefill) }
-  const cancelEdit = () => { setEditingTicker(null); setEditValue('') }
+  const startEdit = (ticker: string, prefill: string) => { setEditingTicker(ticker); setEditValue(prefill); setEditError(null) }
+  const cancelEdit = () => { setEditingTicker(null); setEditValue(''); setEditError(null) }
   const commitEdit = (ticker: string, totalQty: number) => {
-    const totalValue = parseFloat(editValue.replace(/\s/g, '').replace(',', '.'))
-    if (isFinite(totalValue) && totalValue > 0 && totalQty > 0) onSetManualPrice(ticker, totalValue / totalQty)
+    const raw = editValue.replace(/\s/g, '').replace(',', '.')
+    const totalValue = parseFloat(raw)
+    if (!raw || !isFinite(totalValue) || totalValue <= 0) {
+      setEditError('Enter a valid positive number')
+      return
+    }
+    onSetManualPrice(ticker, totalValue / totalQty)
     cancelEdit()
+  }
+
+  const handleExport = () => {
+    const allPositions = rows.flatMap((r) => r.positions)
+    const blob = new Blob([JSON.stringify(allPositions, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `portfolio_${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   if (rows.length === 0) {
@@ -107,6 +125,7 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
             </button>
           )}
           <button className="btn-secondary" onClick={onRefresh}>↻ Refresh</button>
+          <button className="btn-secondary" onClick={handleExport} title="Download all positions as JSON">↓ Export</button>
         </div>
       </div>
 
@@ -141,13 +160,13 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
               const editInline = (
                 <span className="price-edit-inline">
                   <input
-                    className="price-edit-input"
+                    className={`price-edit-input${editError ? ' price-edit-error' : ''}`}
                     type="text"
                     value={editValue}
                     autoFocus
                     placeholder="cur. value"
                     title="Enter current total position value from your bank report"
-                    onChange={(e) => setEditValue(e.target.value)}
+                    onChange={(e) => { setEditValue(e.target.value); setEditError(null) }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commitEdit(r.ticker, r.totalQuantity)
                       if (e.key === 'Escape') cancelEdit()
@@ -155,6 +174,7 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                   />
                   <button className="price-edit-ok" onClick={() => commitEdit(r.ticker, r.totalQuantity)}>✓</button>
                   <button className="price-edit-cancel" onClick={cancelEdit}>✕</button>
+                  {editError && <span className="price-edit-err-msg">{editError}</span>}
                 </span>
               )
 
@@ -232,7 +252,11 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                       {r.loading ? '…' : r.irr != null ? pct(r.irr * 100) : <span className="muted">N/A</span>}
                     </td>
                     <td>
-                      <button className="remove-btn" title={r.lots > 1 ? `Remove all ${r.lots} lots` : 'Remove'} onClick={() => onRemove(r.ids)}>✕</button>
+                      <button
+                        className="remove-btn"
+                        title={r.lots > 1 ? `Remove all ${r.lots} lots` : 'Remove'}
+                        onClick={() => setPendingDelete({ ids: r.ids, label: r.lots > 1 ? `all ${r.lots} lots of ${r.ticker}` : r.ticker })}
+                      >✕</button>
                     </td>
                   </tr>
 
@@ -295,7 +319,11 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                                             {priceUnknown ? <span className="muted">—</span> : pct(posPnlPct)}
                                           </td>
                                           <td>
-                                            <button className="remove-btn" title="Remove this lot" onClick={() => onRemove([pos.id])}>✕</button>
+                                            <button
+                                              className="remove-btn"
+                                              title="Remove this lot"
+                                              onClick={() => setPendingDelete({ ids: [pos.id], label: `lot ${i + 1} of ${r.ticker}` })}
+                                            >✕</button>
                                           </td>
                                         </tr>
                                       )
@@ -318,6 +346,24 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
           </tbody>
         </table>
       </div>
+
+      {pendingDelete && (
+        <div className="modal-overlay" onClick={() => setPendingDelete(null)}>
+          <div className="modal" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Remove position?</h2>
+              <button className="close-btn" onClick={() => setPendingDelete(null)}>✕</button>
+            </div>
+            <p style={{ padding: '0 4px 20px', color: '#aaa', fontSize: 14 }}>
+              Remove <strong style={{ color: '#e2e8f0' }}>{pendingDelete.label}</strong>? This cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setPendingDelete(null)}>Cancel</button>
+              <button className="btn-danger" onClick={() => { onRemove(pendingDelete.ids); setPendingDelete(null) }}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

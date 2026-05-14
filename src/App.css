@@ -74,6 +74,19 @@ body {
 }
 .btn-secondary:hover { background: #2e2e50; }
 
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--loss);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius);
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-danger:hover { background: rgba(239, 68, 68, 0.28); }
+
 /* ── Table ── */
 .table-wrapper {
   background: var(--surface);
@@ -232,6 +245,13 @@ tbody tr:hover { background: rgba(99, 102, 241, 0.05); }
   line-height: 1;
 }
 .price-edit-cancel:hover { color: var(--loss); }
+
+.price-edit-input.price-edit-error { border-color: var(--loss); }
+.price-edit-err-msg {
+  color: var(--loss);
+  font-size: 11px;
+  white-space: nowrap;
+}
 
 .price-clear-btn {
   background: none;

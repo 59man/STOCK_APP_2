@@ -8,11 +8,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev       # starts Vite (http://localhost:5173) + persist server (port 3001) via concurrently
 npm run build     # type-check + production build to dist/
 npm run preview   # serve the production build locally
+npm start         # runs server/index.js directly (production mode, requires prior npm run build)
 ```
 
 If port 3001 is already in use: `kill $(lsof -ti:3001)`
 
 No test suite or linter configured.
+
+## Docker
+
+```bash
+docker build -t 59man/stock-tracker:latest .
+docker push 59man/stock-tracker:latest
+
+# Run locally on port 4000
+docker run -d --name stock-tracker -p 4000:8080 \
+  -v /absolute/path/to/server/data.json:/app/server/data.json \
+  --restart unless-stopped \
+  59man/stock-tracker:latest
+```
+
+- Always use an **absolute path** for the volume mount — `~/...` resolves relative to the shell user and often points to a different file.
+- `server/data.json` is excluded from the image via `.dockerignore`; the bind-mount provides it at runtime.
+- In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` to Yahoo Finance (replacing the Vite dev proxy).
 
 ## Architecture
 
@@ -37,7 +55,7 @@ No test suite or linter configured.
 - `GET /api/persist/:key` → `{ value: string | null }`
 - `POST /api/persist/:key` body `{ value: string }` → `{ ok: true }`
 
-The Express server (`server/index.js`, port 3001) reads/writes `server/data.json`. Vite proxies `/api/persist/*` → `http://localhost:3001`.
+The Express server (`server/index.js`) reads/writes `server/data.json`. In dev, Vite proxies `/api/persist/*` → `http://localhost:3001`. In production/Docker, Express handles both the API and static file serving on a single port.
 
 ### Key types (`src/types/index.ts`)
 
@@ -66,10 +84,10 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 
 ### Components
 
-- `PortfolioTable` — aggregated position table. Props include `showClosed` / `onToggleClosed`. Each row has a `▶` expand button that reveals individual-lots mini-table and `PriceChart`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell.
+- `PortfolioTable` — aggregated position table. Props include `showClosed` / `onToggleClosed`. Each row has a `▶` expand button that reveals individual-lots mini-table and `PriceChart`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell with inline error feedback. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download).
 - `AddPositionModal` — controlled form; calls `onAdd` / `onClose`. On ticker blur, fetches `/api/yahoo/v1/finance/search?q=…` and auto-fills the Name field (works for both ticker symbols and ISINs). Has a "Closed position" checkbox that reveals Sell Date + Sell Price fields.
-- `PriceChart` — self-contained; fetches history from Yahoo Finance proxy with range selector (1M–All); handles FX conversion for EUR/USD assets via `CHART_FX` map
-- `PortfolioPnLChart` — portfolio total return chart (price P&L + net dividends). Fetches per-ticker daily history; builds synthetic history for manual-priced tickers from buy-date price anchors + current manual price
+- `PriceChart` — self-contained; fetches history from Yahoo Finance proxy with range selector (1M–All); handles FX conversion for EUR/USD assets via `CHART_FX` map; selected range persisted to `localStorage` key `chart_range_price`.
+- `PortfolioPnLChart` — portfolio total return chart (price P&L + net dividends). Fetches per-ticker daily history; builds synthetic history for manual-priced tickers from buy-date price anchors + current manual price; selected range persisted to `localStorage` key `chart_range_portfolio`.
 
 ### FX conversion pattern
 
@@ -82,15 +100,19 @@ When adding a new foreign-currency asset, update all three.
 
 ### Dividend utilities (`src/utils/dividends.ts`)
 
-- `DIVIDEND_TAX_RATE = 0.15` (Czech withholding tax)
+- `COUNTRY_WITHHOLDING_RATES` — per-country withholding tax rates (21 countries; CZ default 15 %)
+- `TICKER_COUNTRY` — maps display ticker to ISO country code (e.g. `VIG.PR → AT`, `EXUS.DE → IE`)
+- `getDividendTaxRate(ticker)` — looks up country from `TICKER_COUNTRY`, returns rate from `COUNTRY_WITHHOLDING_RATES`; defaults to 15 % (CZ) for unlisted tickers
 - `DIVIDEND_TICKER_ALIASES` — maps app tickers to the Yahoo ticker that holds dividend history
 - `fetchDividendEvents(ticker)` — fetches and parses Yahoo Finance dividend events
-- `calcNetDividends(lots, events)` — net dividend income for a position (filters events after each lot's buyDate, applies 15 % tax)
-- `cumNetDividendsAt(positions, dividendsByTicker, date)` — cumulative net dividends up to a given date (used by `PortfolioPnLChart`)
+- `calcNetDividends(lots, events, ticker)` — net dividend income for a position; filters events after each lot's buyDate **and** before each lot's sellDate; applies per-country tax rate
+- `cumNetDividendsAt(positions, dividendsByTicker, date)` — cumulative net dividends up to a given date (used by `PortfolioPnLChart`); uses per-ticker rate via `getDividendTaxRate`
+
+To add a new foreign ticker: add one line to `TICKER_COUNTRY`. To add a new country: add one line to `COUNTRY_WITHHOLDING_RATES`.
 
 ### IRR (`src/utils/xirr.ts`)
 
-Newton-Raphson with bisection fallback. Cash flows: negative on each buy date, sell proceeds on sell dates (closed lots), positive for each dividend received (per lot, 15 % tax applied, skipped if lot was sold before ex-date), positive terminal value of open lots today.
+Newton-Raphson with bisection fallback. Cash flows: negative on each buy date, sell proceeds on sell dates (closed lots), positive for each dividend received (per lot, per-country withholding tax applied via `getDividendTaxRate`, skipped if lot was sold before ex-date), positive terminal value of open lots today.
 
 ### Manual prices for unlisted funds
 
@@ -98,18 +120,18 @@ Three UniCredit onemarkets funds (ISINs LU2606422355, LU2606421548, LU2595011649
 
 ### Seed data (`src/data/seedPositions.ts`)
 
-All real purchase lots extracted from Fio banka statements (2022–2026), Revolut PDF, XTB XLSX, and UniCredit Konsolidovaný Report. EUR-denominated assets (4GLD.DE, EXUS.DE) store CZK buy prices (actual CZK debited, XTB's 0.5 % FX fee already embedded). The three onemarkets funds have a consolidated pre-existing lot (back-calculated average price) plus 6 individual monthly lots from the May–Oct 2025 report window.
+`SEED_POSITIONS` is an empty array — all real positions are stored in `server/data.json` (excluded from git). The migration mechanism (`applyMigration` / `SEED_VERSION`) remains in place for future use: bump `SEED_VERSION` and add entries to `SEED_POSITIONS` to append new tickers on next load without wiping existing data.
 
 ### Vite proxy (`vite.config.ts`)
 
 - `/api/yahoo/*` → `https://query1.finance.yahoo.com` with a browser-like `User-Agent`. Required because Yahoo blocks requests without proper headers.
 - `/api/persist/*` → `http://localhost:3001` (Express persist server).
 
-Both only active during `npm run dev`.
+Both only active during `npm run dev`. In production/Docker, Express handles both routes directly.
 
 ### Styling
 
-Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: #0f0f1a`). Full-width layout (no `max-width` cap). Notable classes: `.badge-{stock|etf|fund|commodity}`, `.gain`/`.loss`, `.badge-manual`, `.badge-sold`, `.row-closed`, `.lot-closed`, `.expand-btn`, `.detail-container`, `.lot-table`, `.closed-toggle`, `.closed-fields`.
+Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: #0f0f1a`). Full-width layout (no `max-width` cap). Notable classes: `.badge-{stock|etf|fund|commodity}`, `.gain`/`.loss`, `.badge-manual`, `.badge-sold`, `.row-closed`, `.lot-closed`, `.expand-btn`, `.detail-container`, `.lot-table`, `.closed-toggle`, `.closed-fields`, `.btn-danger`, `.price-edit-error`, `.price-edit-err-msg`.
 
 ### Responsive breakpoints (`src/App.css`)
 

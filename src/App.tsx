@@ -8,7 +8,7 @@ import { PortfolioTable } from './components/PortfolioTable'
 import { PortfolioPnLChart } from './components/PortfolioPnLChart'
 import { PortfolioRow } from './types'
 import { xirr } from './utils/xirr'
-import { calcNetDividends } from './utils/dividends'
+import { calcNetDividends, getDividendTaxRate } from './utils/dividends'
 import './App.css'
 
 export default function App() {
@@ -73,7 +73,7 @@ export default function App() {
       const currentValue = isClosed ? 0 : currentPrice * openQty
 
       const tickerDivs = dividends.get(ticker.toUpperCase()) ?? []
-      const dividendIncome = calcNetDividends(lots, tickerDivs)
+      const dividendIncome = calcNetDividends(lots, tickerDivs, ticker)
 
       // Realized P&L from closed lots + unrealized from open lots
       const realizedPnl = closedLots.reduce((s, l) => s + (l.sellPrice! - l.buyPrice) * l.quantity, 0)
@@ -93,7 +93,7 @@ export default function App() {
                   .filter((l) => l.buyDate <= div.date && (!l.sellDate || l.sellDate > div.date))
                   .reduce((s, l) => s + l.quantity, 0)
                 if (shares === 0) return []
-                return [{ date: new Date(div.date), amount: shares * div.amount * 0.85 }]
+                return [{ date: new Date(div.date), amount: shares * div.amount * (1 - getDividendTaxRate(ticker)) }]
               }),
               ...(isClosed ? [] : [{ date: today, amount: currentValue }]),
             ])
@@ -141,7 +141,7 @@ export default function App() {
       const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
       divs.forEach((div) => {
         if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
-          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * 0.85 })
+          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * (1 - getDividendTaxRate(pos.ticker)) })
         }
       })
     })

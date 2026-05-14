@@ -4,7 +4,7 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { Position } from '../types'
-import { DividendEvent, DIVIDEND_TAX_RATE, cumNetDividendsAt } from '../utils/dividends'
+import { DividendEvent, cumNetDividendsAt } from '../utils/dividends'
 
 interface ChartPoint {
   label: string
@@ -121,7 +121,14 @@ interface Props {
 
 export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props) {
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions])
-  const [range, setRange] = useState<Range>('All')
+  const [range, setRange] = useState<Range>(
+    () => (localStorage.getItem('chart_range_portfolio') as Range | null) ?? 'All'
+  )
+
+  const handleRangeChange = (r: Range) => {
+    setRange(r)
+    localStorage.setItem('chart_range_portfolio', r)
+  }
 
   const [histories, setHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -228,7 +235,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
       <div className="chart-header">
         <div>
           <h3>Portfolio Total Return</h3>
-          <span style={{ fontSize: 10, color: '#666' }}>price P&L + net dividends ({(DIVIDEND_TAX_RATE * 100).toFixed(0)}% tax)</span>
+          <span style={{ fontSize: 10, color: '#666' }}>price P&L + net dividends (after withholding tax)</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {!loading && values.length > 0 && (
@@ -241,7 +248,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
               <button
                 key={r}
                 className={`range-tab${range === r ? ' active' : ''}`}
-                onClick={() => setRange(r)}
+                onClick={() => handleRangeChange(r)}
               >
                 {r}
               </button>
