@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getItem, setItem } from '../utils/storage'
+import { randomUUID } from '../utils/uuid'
 
 export interface Portfolio {
   id: string
@@ -52,7 +53,7 @@ export function usePortfolios() {
           getItem(LEGACY_POSITIONS_KEY).catch(() => null),
           getItem(LEGACY_MANUAL_KEY).catch(() => null),
         ])
-        const defaultId = crypto.randomUUID()
+        const defaultId = randomUUID()
         const defaultPortfolio: Portfolio = { id: defaultId, name: 'Main Portfolio' }
         if (legacyPos !== null) {
           await setItem(`stock_tracker_positions_${defaultId}`, legacyPos)
@@ -81,7 +82,7 @@ export function usePortfolios() {
   }
 
   const addPortfolio = (name: string): string => {
-    const id = crypto.randomUUID()
+    const id = randomUUID()
     persist([...portfolios, { id, name }])
     return id
   }

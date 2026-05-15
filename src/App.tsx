@@ -5,6 +5,7 @@ import { PortfolioContent } from './components/PortfolioContent'
 import { ImportModal } from './components/ImportModal'
 import { Position } from './types'
 import { getItem, setItem } from './utils/storage'
+import { randomUUID } from './utils/uuid'
 import './App.css'
 
 const CURRENCIES: DisplayCurrency[] = ['CZK', 'USD', 'EUR']
@@ -87,7 +88,7 @@ export default function App() {
 
   const handleImportConfirm = async (mode: 'new' | 'current', newPortfolioName?: string) => {
     if (!importData) return
-    const positions = importData.positions.map((p) => ({ ...p, id: crypto.randomUUID() }))
+    const positions = importData.positions.map((p) => ({ ...p, id: randomUUID() }))
 
     if (mode === 'new' && newPortfolioName) {
       const id = addPortfolio(newPortfolioName)

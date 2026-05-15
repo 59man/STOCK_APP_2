@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Position } from '../types'
 import { SEED_POSITIONS } from '../data/seedPositions'
 import { getItem, setItem } from '../utils/storage'
+import { randomUUID } from '../utils/uuid'
 
 const SEEDED_KEY = 'stock_tracker_seeded'
 const SEED_VERSION = '4'
@@ -13,13 +14,13 @@ function applyMigration(
   version: string | null,
 ): { positions: Position[]; changed: boolean } {
   if (existing.length === 0 && !seeded) {
-    return { positions: SEED_POSITIONS.map((p) => ({ ...p, id: crypto.randomUUID() })), changed: true }
+    return { positions: SEED_POSITIONS.map((p) => ({ ...p, id: randomUUID() })), changed: true }
   }
   if (version !== SEED_VERSION) {
     const existingTickers = new Set(existing.map((p) => p.ticker))
     const toAdd = SEED_POSITIONS
       .filter((p) => !existingTickers.has(p.ticker))
-      .map((p) => ({ ...p, id: crypto.randomUUID() }))
+      .map((p) => ({ ...p, id: randomUUID() }))
     return { positions: toAdd.length > 0 ? [...existing, ...toAdd] : existing, changed: toAdd.length > 0 }
   }
   return { positions: existing, changed: false }
@@ -85,7 +86,7 @@ export function usePortfolio(portfolioId: string) {
   }, [positions, initialized])
 
   const addPosition = (p: Omit<Position, 'id'>) => {
-    setPositions((prev) => [...prev, { ...p, id: crypto.randomUUID() }])
+    setPositions((prev) => [...prev, { ...p, id: randomUUID() }])
   }
 
   const removePositions = (ids: string[]) => {
