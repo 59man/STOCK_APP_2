@@ -4,7 +4,7 @@ import {
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { Position } from '../types'
-import { DividendEvent, cumNetDividendsAt } from '../utils/dividends'
+import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 
 interface ChartPoint {
   label: string
@@ -45,11 +45,16 @@ function parseHistory(json: unknown): TickerHistory {
     .sort(([a], [b]) => a.localeCompare(b))
 }
 
-// Tickers whose price history needs FX conversion to CZK
+// Tickers whose price history fetchYahooHistory already converts to CZK
 const HISTORY_FX: Record<string, { priceTicker: string; fxTicker: string }> = {
   'XAU':     { priceTicker: 'GC%3DF',  fxTicker: 'USDCZK%3DX' },
   '4GLD.DE': { priceTicker: '4GLD.DE', fxTicker: 'EURCZK%3DX' },
   'EXUS.DE': { priceTicker: 'EXUS.DE', fxTicker: 'EURCZK%3DX' },
+}
+
+// Currency the fetched history is in for each ticker
+function histCurrency(ticker: string, posCurrency: string): string {
+  return HISTORY_FX[ticker.toUpperCase()] ? 'CZK' : posCurrency
 }
 
 function fxMerge(priceHist: TickerHistory, fxHist: TickerHistory): TickerHistory {
@@ -93,9 +98,9 @@ function priceAt(history: TickerHistory, date: string): number | null {
   return found
 }
 
-function fmtCZK(v: number) {
-  return new Intl.NumberFormat('cs-CZ', {
-    style: 'currency', currency: 'CZK', maximumFractionDigits: 0,
+function fmtCurrency(v: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency', currency, maximumFractionDigits: 0,
   }).format(v)
 }
 
@@ -117,9 +122,11 @@ interface Props {
   positions: Position[]
   dividends: Map<string, DividendEvent[]>
   manualPrices?: Record<string, { price: number }>
+  displayCurrency: string
+  convert: (amount: number, from: string, to: string) => number
 }
 
-export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props) {
+export function PortfolioPnLChart({ positions, dividends, manualPrices, displayCurrency, convert }: Props) {
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions])
   const [range, setRange] = useState<Range>(
     () => (localStorage.getItem('chart_range_portfolio') as Range | null) ?? 'All'
@@ -199,7 +206,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
     if (sortedDates.length === 0) return []
 
     return sortedDates.map((date) => {
-      // Price-based P&L
+      // Price-based P&L — convert each position's P&L from its native history currency
       let pricePnl = 0
       positions.forEach((pos) => {
         if (pos.buyDate > date) return
@@ -207,11 +214,22 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
         if (!h || h.length === 0) return
         const price = priceAt(h, date)
         if (price === null) return
-        pricePnl += (price - pos.buyPrice) * pos.quantity
+        const hCurrency = histCurrency(pos.ticker, pos.currency)
+        pricePnl += convert((price - pos.buyPrice) * pos.quantity, hCurrency, displayCurrency)
       })
 
-      // Add cumulative net dividends up to this date
-      const divPnl = cumNetDividendsAt(positions, dividends, date)
+      // Dividend P&L — convert from each position's native currency
+      let divPnl = 0
+      positions.forEach((pos) => {
+        const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
+        const taxRate = getDividendTaxRate(pos.ticker)
+        for (const div of divs) {
+          if (div.date > date) break
+          if (pos.buyDate <= div.date) {
+            divPnl += convert(pos.quantity * div.amount * (1 - taxRate), pos.currency, displayCurrency)
+          }
+        }
+      })
 
       return {
         label: new Date(date).toLocaleDateString('en-US', {
@@ -240,7 +258,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {!loading && values.length > 0 && (
             <span className={finalPnl >= 0 ? 'gain' : 'loss'} style={{ fontSize: 13, fontWeight: 600 }}>
-              {fmtCZK(finalPnl)}
+              {fmtCurrency(finalPnl, displayCurrency)}
             </span>
           )}
           <div className="range-tabs">
@@ -290,7 +308,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices }: Props)
             <Tooltip
               contentStyle={{ background: '#1e1e2e', border: '1px solid #333', borderRadius: 6 }}
               labelStyle={{ color: '#aaa' }}
-              formatter={(v: number) => [fmtCZK(v), 'Total Return']}
+              formatter={(v: number) => [fmtCurrency(v, displayCurrency), 'Total Return']}
             />
             <Area
               type="monotone"

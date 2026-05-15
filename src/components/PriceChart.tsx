@@ -15,8 +15,14 @@ interface ChartPoint {
   isoDate?: string
 }
 
+// Tickers whose history fetchHistory already converts to CZK
+const CHART_FX_TICKERS = new Set(['XAU', '4GLD.DE', 'EXUS.DE'])
+
 interface Props {
   ticker: string
+  tickerCurrency: string
+  displayCurrency: string
+  convert: (amount: number, from: string, to: string) => number
 }
 
 type Range = '1M' | '3M' | '6M' | '1Y' | '3Y' | '5Y' | 'All'
@@ -86,7 +92,7 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPo
   return parseRaw(await res.json(), yahooRange)
 }
 
-export function PriceChart({ ticker }: Props) {
+export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }: Props) {
   const [range, setRange] = useState<Range>(
     () => (localStorage.getItem('chart_range_price') as Range | null) ?? '1Y'
   )
@@ -99,15 +105,22 @@ export function PriceChart({ ticker }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Currency the fetched data is actually in (CHART_FX tickers are pre-converted to CZK)
+  const dataCurrency = CHART_FX_TICKERS.has(ticker.toUpperCase()) ? 'CZK' : tickerCurrency
+
   useEffect(() => {
     if (!ticker) return
     setLoading(true)
     setError(null)
     fetchHistory(ticker, RANGE_TO_YAHOO[range])
-      .then(setData)
+      .then((pts) => {
+        const factor = convert(1, dataCurrency, displayCurrency)
+        setData(factor === 1 ? pts : pts.map((p) => ({ ...p, price: p.price * factor })))
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [ticker, range])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker, range, displayCurrency])
 
   const min = data.length ? Math.min(...data.map((d) => d.price)) : 0
   const max = data.length ? Math.max(...data.map((d) => d.price)) : 0
@@ -159,7 +172,10 @@ export function PriceChart({ ticker }: Props) {
             <Tooltip
               contentStyle={{ background: '#1e1e2e', border: '1px solid #333', borderRadius: 6 }}
               labelStyle={{ color: '#aaa' }}
-              formatter={(v: number) => [`${v.toFixed(2)}`, 'Price']}
+              formatter={(v: number) => [
+                new Intl.NumberFormat('en-US', { style: 'currency', currency: displayCurrency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v),
+                'Price',
+              ]}
             />
             <Area
               type="monotone"

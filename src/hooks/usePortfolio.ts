@@ -3,7 +3,6 @@ import { Position } from '../types'
 import { SEED_POSITIONS } from '../data/seedPositions'
 import { getItem, setItem } from '../utils/storage'
 
-const STORAGE_KEY = 'stock_tracker_positions'
 const SEEDED_KEY = 'stock_tracker_seeded'
 const SEED_VERSION = '4'
 const SEED_VERSION_KEY = 'stock_tracker_seed_version'
@@ -26,15 +25,15 @@ function applyMigration(
   return { positions: existing, changed: false }
 }
 
-function syncLoad(): Position[] {
+function syncLoad(storageKey: string): Position[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey)
     const existing: Position[] = raw ? (JSON.parse(raw) as Position[]) : []
     const seeded = !!localStorage.getItem(SEEDED_KEY)
     const version = localStorage.getItem(SEED_VERSION_KEY)
     const { positions, changed } = applyMigration(existing, seeded, version)
     if (changed) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(positions))
+      localStorage.setItem(storageKey, JSON.stringify(positions))
       localStorage.setItem(SEEDED_KEY, '1')
       localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION)
     }
@@ -44,14 +43,18 @@ function syncLoad(): Position[] {
   }
 }
 
-export function usePortfolio() {
-  const [positions, setPositions] = useState<Position[]>(syncLoad)
+export function usePortfolio(portfolioId: string) {
+  const storageKey = `stock_tracker_positions_${portfolioId}`
+
+  const [positions, setPositions] = useState<Position[]>(() =>
+    portfolioId ? syncLoad(storageKey) : []
+  )
   const [initialized, setInitialized] = useState(false)
 
-  // Async: load from server on mount; fall back to sync-loaded state if server has no data
   useEffect(() => {
+    if (!portfolioId) return
     let cancelled = false
-    getItem(STORAGE_KEY).then((raw) => {
+    getItem(storageKey).then((raw) => {
       if (cancelled) return
       if (raw !== null) {
         try {
@@ -64,20 +67,21 @@ export function usePortfolio() {
             localStorage.setItem(SEEDED_KEY, '1')
             localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION)
           }
-        } catch { /* keep sync state */ }
+        } catch {}
       }
       setInitialized(true)
     }).catch(() => { if (!cancelled) setInitialized(true) })
     return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Persist to server + localStorage after initialization
   useEffect(() => {
-    if (!initialized) return
+    if (!initialized || !portfolioId) return
     const json = JSON.stringify(positions)
-    setItem(STORAGE_KEY, json)
+    setItem(storageKey, json)
     localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION)
     localStorage.setItem(SEEDED_KEY, '1')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions, initialized])
 
   const addPosition = (p: Omit<Position, 'id'>) => {

@@ -45,4 +45,5 @@ export interface PortfolioRow {
   manualPriceDate?: string    // YYYY-MM-DD when manual price was last set
   irr: number | null          // annualised XIRR including dividends, null while loading
   isClosed: boolean           // all lots have been sold
+  dailyChange: number         // today's absolute P&L change (quote.change × openQty), 0 for closed/manual
 }

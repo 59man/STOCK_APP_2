@@ -39,6 +39,113 @@ body {
 }
 .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
 
+/* ── Currency selector ── */
+.currency-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.currency-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+.currency-tab:hover { color: var(--text); }
+.currency-tab.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Portfolio tab bar ── */
+.portfolio-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 28px 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  overflow-x: auto;
+}
+.portfolio-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+  user-select: none;
+  position: relative;
+}
+.portfolio-tab:hover { color: var(--text); }
+.portfolio-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.portfolio-tab-name { line-height: 1; }
+.portfolio-tab-rename {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 1px 3px;
+  cursor: pointer;
+  opacity: 0.6;
+  line-height: 1;
+}
+.portfolio-tab-rename:hover { opacity: 1; color: var(--text); }
+.portfolio-tab-delete {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 1px 3px;
+  cursor: pointer;
+  opacity: 0;
+  line-height: 1;
+  transition: opacity 0.1s, color 0.1s;
+}
+.portfolio-tab:hover .portfolio-tab-delete { opacity: 0.6; }
+.portfolio-tab-delete:hover { opacity: 1 !important; color: var(--loss); }
+.portfolio-tab-input {
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 6px;
+  outline: none;
+  width: 140px;
+}
+.portfolio-tab-add {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.portfolio-tab-add:hover { color: var(--accent); }
+
 /* ── Main ── */
 .main {
   width: 100%;
@@ -96,16 +203,51 @@ body {
 }
 .table-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  padding: 14px 20px;
+  padding: 10px 20px;
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
-.summary { display: flex; gap: 24px; flex-wrap: wrap; }
-.summary span { color: var(--muted); font-size: 13px; }
-.summary strong { color: var(--text); }
+
+/* ── Portfolio summary table ── */
+.summary-section {
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.summary-table th {
+  background: transparent;
+  text-align: center;
+  padding: 14px 16px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  border-bottom: none;
+  white-space: nowrap;
+}
+.summary-table td {
+  text-align: center;
+  padding: 6px 16px 14px;
+  font-size: 15px;
+  font-weight: 700;
+  border-bottom: none;
+  white-space: nowrap;
+}
+.summary-table tbody tr:hover { background: transparent; }
+.summary-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.75;
+  margin-top: 2px;
+}
 
 .table-scroll { overflow-x: auto; }
 
@@ -356,6 +498,66 @@ tr.detail-row > td {
 }
 .remove-btn:hover { color: var(--loss); background: rgba(239, 68, 68, 0.1); }
 
+.sell-btn {
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: #fcd34d;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.sell-btn:hover { background: rgba(234, 179, 8, 0.22); }
+.sell-btn-sm { font-size: 10px; padding: 2px 6px; }
+
+.btn-sell {
+  background: rgba(234, 179, 8, 0.18);
+  color: #fcd34d;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  border-radius: var(--radius);
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-sell:hover { background: rgba(234, 179, 8, 0.3); }
+
+/* ── Sell modal ── */
+.sell-lots-summary {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sell-lots-list {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sell-lot-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 1fr 1fr;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+.sell-pnl-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
 .empty-state {
   text-align: center;
   padding: 60px 20px;
@@ -505,6 +707,23 @@ input, select {
 input:focus, select:focus { border-color: var(--accent); }
 input::placeholder { color: var(--muted); }
 
+/* ── Import modal ── */
+.import-summary {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.import-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -537,10 +756,10 @@ input::placeholder { color: var(--muted); }
   .header-inner,
   .main { padding-left: 16px; padding-right: 16px; }
 
-  .summary { gap: 14px; }
-  .summary span { font-size: 12px; }
+  .summary-table th { padding: 12px 10px 4px; font-size: 9px; }
+  .summary-table td { padding: 4px 10px 12px; font-size: 13px; }
 
-  .table-toolbar { padding: 12px 16px; }
+  .table-toolbar { padding: 8px 16px; }
 
   /* Hide tablet columns on main table only */
   .table-scroll > table th:nth-child(5),
@@ -570,18 +789,12 @@ input::placeholder { color: var(--muted); }
   .header-inner,
   .main { padding-left: 12px; padding-right: 12px; }
 
-  /* Summary: scroll horizontally */
-  .summary {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 16px;
-    padding-bottom: 4px;
-  }
-  .summary span { white-space: nowrap; flex-shrink: 0; }
+  /* Summary: compress font further */
+  .summary-table th { padding: 10px 8px 3px; font-size: 8px; }
+  .summary-table td { padding: 3px 8px 10px; font-size: 12px; }
+  .summary-sub { font-size: 10px; }
 
-  /* Toolbar: stack */
-  .table-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .table-toolbar > div { width: 100%; justify-content: flex-end; }
+  .table-toolbar { padding: 8px 12px; }
 
   /* Hide mobile columns */
   .table-scroll > table th:nth-child(3),

@@ -34,19 +34,23 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 ## Architecture
 
-**React 18 + Vite + TypeScript** SPA, no routing. All state lives in `App.tsx` and flows down as props.
+**React 18 + Vite + TypeScript** SPA, no routing. `App.tsx` manages global state (portfolios, active portfolio, display currency). Per-portfolio state lives in `PortfolioContent`.
 
 ### Data flow
 
-1. `usePortfolio` (`src/hooks/usePortfolio.ts`) — owns the positions list. Two-phase init: sync from `localStorage` (instant), then async from `GET /api/persist/stock_tracker_positions` (server wins if it has data). Persists changes to both server and `localStorage` after init. Seed migration: `applyMigration()` checks `SEED_VERSION` (currently `'4'`); if stale, appends any seed tickers not yet in storage. Bump `SEED_VERSION` and add entries to `SEED_POSITIONS` when new tickers are added.
+1. `usePortfolios` (`src/hooks/usePortfolios.ts`) — manages the list of `Portfolio { id, name }` objects and `activeId`. Two-phase init. On first load, migrates the legacy single-key `stock_tracker_positions` → `stock_tracker_positions_${defaultId}`. Storage keys: `stock_tracker_portfolios`, `stock_tracker_active_portfolio`.
 
-2. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live CZK prices. Yahoo Finance v8 proxy first, Stooq CSV fallback. Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair and multiply.
+2. `usePortfolio(portfolioId)` (`src/hooks/usePortfolio.ts`) — owns the positions list for one portfolio. Two-phase init: sync from `localStorage` (instant), then async from server (server wins). Storage key: `stock_tracker_positions_${portfolioId}`. Seed migration: `applyMigration()` checks `SEED_VERSION` (currently `'4'`); bump it and add entries to `SEED_POSITIONS` when new tickers are added.
 
-3. `useDividends` (`src/hooks/useDividends.ts`) — fetches dividend events from Yahoo Finance `range=max&events=div`. Module-level cache. `DIVIDEND_TICKER_ALIASES` maps renamed tickers (e.g. `COLT.PR → CZG.PR`).
+3. `useFxRates` (`src/hooks/useFxRates.ts`) — fetches USDCZK=X and EURCZK=X from Yahoo Finance on mount. Defaults `{ CZK: 1, USD: 25.0, EUR: 27.5 }` while loading. Exports `convert(amount, from, to)` — converts via CZK as base; all cross-rates go through CZK.
 
-4. `useManualPrices` (`src/hooks/useManualPrices.ts`) — stores per-unit prices for funds with no live feed. Same two-phase init + dual-persist pattern as `usePortfolio`. Stored as `{ [TICKER]: { price, updatedAt } }`. `price` is per-unit (total value ÷ quantity entered by user).
+4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first, Stooq CSV fallback. Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair and multiply to produce a CZK value.
 
-5. `App.tsx` derives `PortfolioRow[]` via `useMemo`, merging lots with quotes, manual prices, and dividends. For each ticker, lots are split into `openLots` / `closedLots`. Computes `currentPrice`, `currentValue` (open lots only), `costBasis`, `pnl` (realized + unrealized), `dividendIncome`, `totalReturn`, `irr`, `priceIsManual`, `isClosed`, and `positions[]` sorted by buyDate.
+5. `useDividends` (`src/hooks/useDividends.ts`) — fetches dividend events from Yahoo Finance `range=max&events=div`. Module-level cache. `DIVIDEND_TICKER_ALIASES` maps renamed tickers (e.g. `COLT.PR → CZG.PR`).
+
+6. `useManualPrices(portfolioId)` (`src/hooks/useManualPrices.ts`) — stores per-unit prices for funds with no live feed. Same two-phase init + dual-persist pattern as `usePortfolio`. Storage key: `stock_tracker_manual_prices_${portfolioId}`. Stored as `{ [TICKER]: { price, updatedAt } }`. `price` is per-unit (total value ÷ quantity entered by user).
+
+7. `PortfolioContent` (`src/components/PortfolioContent.tsx`) — extracted from App.tsx; mounts once per portfolio (via `key={portfolioId}`). Runs hooks 2, 4, 5, 6 above and derives `PortfolioRow[]` via `useMemo`, merging lots with quotes, manual prices, and dividends. Renders `PortfolioTable`, `PortfolioPnLChart`, and `AddPositionModal`. `App.tsx` passes `displayCurrency` + `convert` down as props.
 
 ### Storage layer (`src/utils/storage.ts`)
 
@@ -57,13 +61,19 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 The Express server (`server/index.js`) reads/writes `server/data.json`. In dev, Vite proxies `/api/persist/*` → `http://localhost:3001`. In production/Docker, Express handles both the API and static file serving on a single port.
 
+**Storage key schema:**
+- `stock_tracker_portfolios` — JSON array of `{ id, name }` objects
+- `stock_tracker_active_portfolio` — active portfolio ID string
+- `stock_tracker_positions_${id}` — JSON array of `Position[]` for each portfolio
+- `stock_tracker_manual_prices_${id}` — manual price store for each portfolio
+
 ### Key types (`src/types/index.ts`)
 
 - `Position` — a single purchase lot: ticker, name, type (`stock|etf|fund|commodity`), quantity, buyPrice, buyDate, currency; **optional** `sellPrice?: number` and `sellDate?: string` mark a lot as closed
 - `Quote` — live price response: price, change, changePercent, currency, name
-- `PortfolioRow` — one row per ticker; all aggregated fields plus `positions: Position[]`, `priceIsManual: boolean`, `manualPriceDate?: string`, `irr: number | null`, **`isClosed: boolean`**
+- `PortfolioRow` — one row per ticker; all aggregated fields plus `positions: Position[]`, `priceIsManual: boolean`, `manualPriceDate?: string`, `irr: number | null`, **`isClosed: boolean`**, **`dailyChange: number`** (absolute daily P&L change = `quote.change × openQty`)
 
-### Closed position logic (`App.tsx` rows useMemo)
+### Closed position logic (`PortfolioContent.tsx` rows useMemo)
 
 ```
 openLots  = lots where sellPrice/sellDate are absent
@@ -84,14 +94,19 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 
 ### Components
 
-- `PortfolioTable` — aggregated position table. Props include `showClosed` / `onToggleClosed`. Each row has a `▶` expand button that reveals individual-lots mini-table and `PriceChart`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell with inline error feedback. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download).
+- `PortfolioContent` — per-portfolio state container; mounts fresh on portfolio switch via `key`; owns all hooks and row computation; renders PortfolioTable + PortfolioPnLChart + AddPositionModal.
+- `PortfolioTable` — aggregated position table. Props include `showClosed` / `onToggleClosed`, `displayCurrency`, `convert`, `onSellPositions`. Each row has a `▶` expand button that reveals individual-lots mini-table and `PriceChart`. Sell buttons (amber) on main rows and individual open lots open `SellPositionModal`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell with inline error feedback. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download). Summary table below the main table shows aggregated totals (cost basis, current value, daily change, P&L, total return, portfolio IRR) in the selected display currency.
+- `SellPositionModal` — enter sell date + sell price for one ticker's open lots; shows a live P&L preview; calls `onSellPositions(ids, sellPrice, sellDate)`.
+- `ImportModal` — shows file summary (position count, open/closed breakdown, up to 8 tickers); radio to import into a new portfolio (name pre-filled from filename) or append to current; calls `onConfirm(mode, newPortfolioName?)`.
 - `AddPositionModal` — controlled form; calls `onAdd` / `onClose`. On ticker blur, fetches `/api/yahoo/v1/finance/search?q=…` and auto-fills the Name field (works for both ticker symbols and ISINs). Has a "Closed position" checkbox that reveals Sell Date + Sell Price fields.
-- `PriceChart` — self-contained; fetches history from Yahoo Finance proxy with range selector (1M–All); handles FX conversion for EUR/USD assets via `CHART_FX` map; selected range persisted to `localStorage` key `chart_range_price`.
-- `PortfolioPnLChart` — portfolio total return chart (price P&L + net dividends). Fetches per-ticker daily history; builds synthetic history for manual-priced tickers from buy-date price anchors + current manual price; selected range persisted to `localStorage` key `chart_range_portfolio`.
+- `PriceChart` — self-contained; fetches history from Yahoo Finance proxy with range selector (1M–All); handles FX conversion for EUR/USD assets via `CHART_FX` map; respects `displayCurrency` prop (converts chart values via `convert`); selected range persisted to `localStorage` key `chart_range_price`.
+- `PortfolioPnLChart` — portfolio total return chart (price P&L + net dividends) in the selected display currency. Fetches per-ticker daily history; builds synthetic history for manual-priced tickers from buy-date price anchors + current manual price; selected range persisted to `localStorage` key `chart_range_portfolio`.
 
 ### FX conversion pattern
 
-Three places carry identical ticker→{priceTicker, fxTicker} maps:
+**Display currency** (`useFxRates` → `convert`): a single `convert(amount, from, to)` function is passed as a prop from `App.tsx` through `PortfolioContent` to all table and chart components. All monetary values in the UI are passed through `convert(value, nativeCurrency, displayCurrency)` before display. The native currency of each row is `row.currency` (the currency field of its first lot).
+
+**Asset-level FX** (fetching CZK prices for foreign assets): three places carry identical ticker→{priceTicker, fxTicker} maps:
 - `useQuotes.ts` → `FX_CONVERTED` (live quote)
 - `PriceChart.tsx` → `CHART_FX` (single-ticker history)
 - `PortfolioPnLChart.tsx` → `HISTORY_FX` (portfolio history)
@@ -131,7 +146,16 @@ Both only active during `npm run dev`. In production/Docker, Express handles bot
 
 ### Styling
 
-Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: #0f0f1a`). Full-width layout (no `max-width` cap). Notable classes: `.badge-{stock|etf|fund|commodity}`, `.gain`/`.loss`, `.badge-manual`, `.badge-sold`, `.row-closed`, `.lot-closed`, `.expand-btn`, `.detail-container`, `.lot-table`, `.closed-toggle`, `.closed-fields`, `.btn-danger`, `.price-edit-error`, `.price-edit-err-msg`.
+Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: #0f0f1a`). Full-width layout (no `max-width` cap). Notable classes:
+- Position/lot badges: `.badge-{stock|etf|fund|commodity}`, `.badge-manual`, `.badge-sold`
+- P&L colours: `.gain`, `.loss`
+- Closed rows: `.row-closed`, `.lot-closed`
+- Table structure: `.expand-btn`, `.detail-container`, `.lot-table`, `.closed-toggle`, `.closed-fields`
+- Modals/actions: `.btn-danger`, `.price-edit-error`, `.price-edit-err-msg`, `.sell-btn`, `.sell-btn-sm`, `.sell-lots-summary`, `.sell-lots-list`, `.sell-lot-row`, `.sell-pnl-preview`
+- Portfolio bar: `.portfolio-bar`, `.portfolio-tab`, `.portfolio-tab.active`, `.portfolio-tab-name`, `.portfolio-tab-rename`, `.portfolio-tab-delete`, `.portfolio-tab-input`, `.portfolio-tab-add`
+- Currency switcher: `.currency-tabs`, `.currency-tab`, `.currency-tab.active`
+- Summary table: `.summary-section`, `.summary-table`, `.summary-sub`
+- Import modal: `.import-summary`, `.import-summary-row`
 
 ### Responsive breakpoints (`src/App.css`)
 

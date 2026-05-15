@@ -1,18 +1,27 @@
 import { useState } from 'react'
 import { PortfolioRow } from '../types'
 import { PriceChart } from './PriceChart'
+import { SellPositionModal } from './SellPositionModal'
 
 const COL_COUNT = 15
+
+interface SellTarget {
+  ticker: string
+  lots: Array<{ id: string; quantity: number; buyDate: string; buyPrice: number; currency: string }>
+}
 
 interface Props {
   rows: PortfolioRow[]
   onRemove: (ids: string[]) => void
+  onSellPositions: (ids: string[], sellPrice: number, sellDate: string) => void
   onRefresh: () => void
   portfolioIrr: number | null
   onSetManualPrice: (ticker: string, price: number) => void
   onClearManualPrice: (ticker: string) => void
   showClosed: boolean
   onToggleClosed: () => void
+  displayCurrency: string
+  convert: (amount: number, from: string, to: string) => number
 }
 
 function fmt(n: number, currency = 'USD') {
@@ -43,12 +52,13 @@ function pct(n: number) {
   return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
 }
 
-export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed }: Props) {
+export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, portfolioIrr, onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed, displayCurrency, convert }: Props) {
   const [editingTicker, setEditingTicker] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [editError, setEditError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string } | null>(null)
+  const [pendingSell, setPendingSell] = useState<SellTarget | null>(null)
 
   const toggle = (ticker: string) =>
     setExpanded((prev) => {
@@ -92,33 +102,63 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
   const closedCount = rows.filter((r) => r.isClosed).length
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
-  // Summary covers all rows (open + closed) so totals reflect true P&L
-  const totalCost = rows.reduce((s, r) => s + r.costBasis, 0)
-  const totalValue = rows.reduce((s, r) => s + r.currentValue, 0)
-  const totalDivs = rows.reduce((s, r) => s + r.dividendIncome, 0)
-  const totalPricePnl = rows.reduce((s, r) => s + r.pnl, 0)
+  // Summary — each row's value is converted from its native currency to displayCurrency
+  const cv = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
+  const totalCost = rows.reduce((s, r) => s + cv(r.costBasis, r.currency), 0)
+  const totalValue = rows.reduce((s, r) => s + cv(r.currentValue, r.currency), 0)
+  const totalDivs = rows.reduce((s, r) => s + cv(r.dividendIncome, r.currency), 0)
+  const totalPricePnl = rows.reduce((s, r) => s + cv(r.pnl, r.currency), 0)
   const totalReturn = totalPricePnl + totalDivs
   const totalReturnPct = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
+  const totalDailyChange = rows.reduce((s, r) => s + cv(r.dailyChange, r.currency), 0)
+  const prevTotalValue = totalValue - totalDailyChange
+  const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
 
   return (
     <div className="table-wrapper">
+
+      {/* ── Portfolio summary table ── */}
+      <div className="summary-section">
+        <table className="summary-table">
+          <thead>
+            <tr>
+              <th>Total Value</th>
+              <th>Cost Basis</th>
+              <th>Today's Change</th>
+              <th>Price P&amp;L</th>
+              <th>Net Dividends</th>
+              <th>Total Return</th>
+              <th>IRR p.a.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{fmt(totalValue, displayCurrency)}</td>
+              <td className="muted">{fmt(totalCost, displayCurrency)}</td>
+              <td className={totalDailyChange >= 0 ? 'gain' : 'loss'}>
+                {totalDailyChange >= 0 ? '+' : ''}{fmt(totalDailyChange, displayCurrency)}
+                <span className="summary-sub">{totalDailyChange >= 0 ? '+' : ''}{dailyChangePct.toFixed(2)}%</span>
+              </td>
+              <td className={totalPricePnl >= 0 ? 'gain' : 'loss'}>
+                {totalPricePnl >= 0 ? '+' : ''}{fmt(totalPricePnl, displayCurrency)}
+              </td>
+              <td className={totalDivs > 0 ? 'gain' : 'muted'}>
+                {totalDivs > 0 ? '+' + fmt(totalDivs, displayCurrency) : '—'}
+              </td>
+              <td className={totalReturn >= 0 ? 'gain' : 'loss'}>
+                {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn, displayCurrency)}
+                <span className="summary-sub">{pct(totalReturnPct)}</span>
+              </td>
+              <td className={portfolioIrr != null ? (portfolioIrr >= 0 ? 'gain' : 'loss') : 'muted'}>
+                {portfolioIrr != null ? pct(portfolioIrr * 100) : '…'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div className="table-toolbar">
-        <div className="summary">
-          <span>Total Value: <strong>{fmt(totalValue, 'CZK')}</strong></span>
-          <span className={totalPricePnl >= 0 ? 'gain' : 'loss'}>
-            Price P&amp;L: <strong>{fmt(totalPricePnl, 'CZK')}</strong>
-          </span>
-          {totalDivs > 0 && (
-            <span className="gain">Dividends: <strong>{fmt(totalDivs, 'CZK')}</strong></span>
-          )}
-          <span className={totalReturn >= 0 ? 'gain' : 'loss'}>
-            Total Return: <strong>{fmt(totalReturn, 'CZK')}</strong> ({pct(totalReturnPct)})
-          </span>
-          <span className={portfolioIrr != null ? (portfolioIrr >= 0 ? 'gain' : 'loss') : ''}>
-            IRR p.a.: <strong>{portfolioIrr != null ? pct(portfolioIrr * 100) : '…'}</strong>
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
           {closedCount > 0 && (
             <button className="btn-secondary" onClick={onToggleClosed}>
               {showClosed ? 'Hide closed' : `Show closed (${closedCount})`}
@@ -196,7 +236,7 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                     </td>
                     <td><span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span></td>
                     <td>{fmtQty(r.totalQuantity)}</td>
-                    <td>{fmtPrice(r.avgBuyPrice, r.currency)}</td>
+                    <td>{fmtPrice(cv(r.avgBuyPrice, r.currency), displayCurrency)}</td>
                     <td>{r.firstBuyDate}</td>
                     <td>
                       {r.lots > 1
@@ -210,7 +250,7 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                         : r.error && !r.priceIsManual ? <span className="muted">—</span>
                         : (
                           <span>
-                            {fmtPrice(r.currentPrice, r.currency)}
+                            {fmtPrice(cv(r.currentPrice, r.currency), displayCurrency)}
                             {r.priceIsManual && (
                               <span className="badge-manual" title={`Manually set on ${r.manualPriceDate ?? 'unknown'} — edit in Cur. Value`}> M</span>
                             )}
@@ -218,14 +258,14 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                         )}
                     </td>
 
-                    <td>{fmt(r.costBasis, r.currency)}</td>
+                    <td>{fmt(cv(r.costBasis, r.currency), displayCurrency)}</td>
 
                     {/* Cur. Value — edit target for manual prices */}
                     <td>
                       {r.loading ? '…'
                         : r.priceIsManual ? (
                           <span className="price-manual-wrap">
-                            {fmt(r.currentValue, r.currency)}
+                            {fmt(cv(r.currentValue, r.currency), displayCurrency)}
                             {isEditing ? editInline : (
                               <>
                                 <span className="badge-manual" title={`Set ${r.manualPriceDate ?? ''} — click to update`}
@@ -239,24 +279,36 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                             {isEditing ? editInline
                               : <button className="price-set-btn" onClick={() => startEdit(r.ticker, '')}>Set</button>}
                           </span>
-                        ) : fmt(r.currentValue, r.currency)}
+                        ) : fmt(cv(r.currentValue, r.currency), displayCurrency)}
                     </td>
 
-                    <td className={r.pnl >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(r.pnl, r.currency)}</td>
+                    <td className={r.pnl >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(cv(r.pnl, r.currency), displayCurrency)}</td>
                     <td className={r.dividendIncome > 0 ? 'gain' : 'muted'}>
-                      {r.dividendIncome > 0 ? fmt(r.dividendIncome, r.currency) : <span className="muted">—</span>}
+                      {r.dividendIncome > 0 ? fmt(cv(r.dividendIncome, r.currency), displayCurrency) : <span className="muted">—</span>}
                     </td>
-                    <td className={r.totalReturn >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(r.totalReturn, r.currency)}</td>
+                    <td className={r.totalReturn >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(cv(r.totalReturn, r.currency), displayCurrency)}</td>
                     <td className={totalReturnPctRow >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : pct(totalReturnPctRow)}</td>
                     <td className={r.irr != null ? (r.irr >= 0 ? 'gain' : 'loss') : ''}>
                       {r.loading ? '…' : r.irr != null ? pct(r.irr * 100) : <span className="muted">N/A</span>}
                     </td>
                     <td>
-                      <button
-                        className="remove-btn"
-                        title={r.lots > 1 ? `Remove all ${r.lots} lots` : 'Remove'}
-                        onClick={() => setPendingDelete({ ids: r.ids, label: r.lots > 1 ? `all ${r.lots} lots of ${r.ticker}` : r.ticker })}
-                      >✕</button>
+                      <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                        {!r.isClosed && (
+                          <button
+                            className="sell-btn"
+                            title="Sell / close position"
+                            onClick={() => {
+                              const openLots = r.positions.filter((p) => !p.sellPrice || !p.sellDate)
+                              setPendingSell({ ticker: r.ticker, lots: openLots.map((p) => ({ id: p.id, quantity: p.quantity, buyDate: p.buyDate, buyPrice: p.buyPrice, currency: p.currency })) })
+                            }}
+                          >Sell</button>
+                        )}
+                        <button
+                          className="remove-btn"
+                          title={r.lots > 1 ? `Remove all ${r.lots} lots` : 'Remove'}
+                          onClick={() => setPendingDelete({ ids: r.ids, label: r.lots > 1 ? `all ${r.lots} lots of ${r.ticker}` : r.ticker })}
+                        >✕</button>
+                      </span>
                     </td>
                   </tr>
 
@@ -291,11 +343,11 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                                     {r.positions.map((pos, i) => {
                                       const isSold = pos.sellPrice != null && pos.sellDate
                                       const effectivePrice = isSold ? pos.sellPrice! : r.currentPrice
-                                      const posValue = isSold ? 0 : effectivePrice * pos.quantity
-                                      const posCost  = pos.buyPrice * pos.quantity
-                                      const posPnl   = isSold
+                                      const posValue = isSold ? 0 : cv(effectivePrice * pos.quantity, pos.currency)
+                                      const posCost  = cv(pos.buyPrice * pos.quantity, pos.currency)
+                                      const posPnl   = cv(isSold
                                         ? (pos.sellPrice! - pos.buyPrice) * pos.quantity
-                                        : (effectivePrice - pos.buyPrice) * pos.quantity
+                                        : (effectivePrice - pos.buyPrice) * pos.quantity, pos.currency)
                                       const posPnlPct = ((effectivePrice - pos.buyPrice) / pos.buyPrice) * 100
                                       const priceUnknown = !isSold && (r.loading || (r.error && !r.priceIsManual))
                                       return (
@@ -303,27 +355,36 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                                           <td className="muted">{i + 1}</td>
                                           <td>{pos.buyDate}</td>
                                           <td>{fmtQty(pos.quantity)}</td>
-                                          <td>{fmtPrice(pos.buyPrice, pos.currency)}</td>
-                                          <td>{fmt(posCost, pos.currency)}</td>
+                                          <td>{fmtPrice(cv(pos.buyPrice, pos.currency), displayCurrency)}</td>
+                                          <td>{fmt(posCost, displayCurrency)}</td>
                                           {hasClosedLots && <td>{isSold ? pos.sellDate : <span className="muted">—</span>}</td>}
-                                          {hasClosedLots && <td>{isSold ? fmtPrice(pos.sellPrice!, pos.currency) : <span className="muted">—</span>}</td>}
+                                          {hasClosedLots && <td>{isSold ? fmtPrice(cv(pos.sellPrice!, pos.currency), displayCurrency) : <span className="muted">—</span>}</td>}
                                           <td>
                                             {isSold
                                               ? <span className="badge-sold" style={{ fontSize: 10 }}>SOLD</span>
-                                              : priceUnknown ? <span className="muted">—</span> : fmt(posValue, pos.currency)}
+                                              : priceUnknown ? <span className="muted">—</span> : fmt(posValue, displayCurrency)}
                                           </td>
                                           <td className={posPnl >= 0 ? 'gain' : 'loss'}>
-                                            {priceUnknown ? <span className="muted">—</span> : fmt(posPnl, pos.currency)}
+                                            {priceUnknown ? <span className="muted">—</span> : fmt(posPnl, displayCurrency)}
                                           </td>
                                           <td className={posPnlPct >= 0 ? 'gain' : 'loss'}>
                                             {priceUnknown ? <span className="muted">—</span> : pct(posPnlPct)}
                                           </td>
                                           <td>
-                                            <button
-                                              className="remove-btn"
-                                              title="Remove this lot"
-                                              onClick={() => setPendingDelete({ ids: [pos.id], label: `lot ${i + 1} of ${r.ticker}` })}
-                                            >✕</button>
+                                            <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                              {!isSold && (
+                                                <button
+                                                  className="sell-btn sell-btn-sm"
+                                                  title="Sell this lot"
+                                                  onClick={() => setPendingSell({ ticker: r.ticker, lots: [{ id: pos.id, quantity: pos.quantity, buyDate: pos.buyDate, buyPrice: pos.buyPrice, currency: pos.currency }] })}
+                                                >Sell</button>
+                                              )}
+                                              <button
+                                                className="remove-btn"
+                                                title="Remove this lot"
+                                                onClick={() => setPendingDelete({ ids: [pos.id], label: `lot ${i + 1} of ${r.ticker}` })}
+                                              >✕</button>
+                                            </span>
                                           </td>
                                         </tr>
                                       )
@@ -335,7 +396,12 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
                           </div>
 
                           {/* Price chart */}
-                          <PriceChart ticker={r.ticker} />
+                          <PriceChart
+                            ticker={r.ticker}
+                            tickerCurrency={r.currency}
+                            displayCurrency={displayCurrency}
+                            convert={convert}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -346,6 +412,15 @@ export function PortfolioTable({ rows, onRemove, onRefresh, portfolioIrr, onSetM
           </tbody>
         </table>
       </div>
+
+      {pendingSell && (
+        <SellPositionModal
+          ticker={pendingSell.ticker}
+          lots={pendingSell.lots}
+          onSell={onSellPositions}
+          onClose={() => setPendingSell(null)}
+        />
+      )}
 
       {pendingDelete && (
         <div className="modal-overlay" onClick={() => setPendingDelete(null)}>

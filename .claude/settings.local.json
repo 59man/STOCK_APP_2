@@ -66,7 +66,9 @@
       "Bash(kill 164448 *)",
       "Bash(git fetch *)",
       "Bash(docker push *)",
-      "Bash(docker build *)"
+      "Bash(docker build *)",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
     ]
   }
 }

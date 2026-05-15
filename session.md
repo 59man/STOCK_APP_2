@@ -99,3 +99,64 @@ Common mistake: using `~/path` instead of `/absolute/path` for the volume mounts
 **README.md** — added Docker section (build, push, SSH deploy guide, maintenance commands); updated Features list; fixed IRR formula in column calculations table; updated Notes section.
 
 **CLAUDE.md** — fixed all stale sections: dividend utilities (new two-level tax system), IRR (per-country rate), seed data (now empty array), components (delete confirm, error feedback, range persistence), storage layer (production/Docker mode), styling (new CSS classes).
+
+---
+
+## Session 3 — Multiple portfolios, currency switcher, sell UI, import
+
+### New features
+
+**Portfolio summary table with daily change** (`src/components/PortfolioTable.tsx`, `src/types/index.ts`)  
+A dedicated summary table below the main positions table shows portfolio-level aggregates: Total Invested, Current Value, Daily Change (today's absolute P&L move), P&L (price only), Total Return (price + dividends), and Portfolio IRR. Daily change is `Σ quote.change × openQty` across all open rows. Values convert to the selected display currency.
+
+**Display currency switcher** (`src/hooks/useFxRates.ts` (NEW), `src/App.tsx`, all table/chart components)  
+Toggle CZK / USD / EUR with buttons in the header. `useFxRates` fetches live USDCZK=X and EURCZK=X from Yahoo Finance, defaults `{ CZK:1, USD:25, EUR:27.5 }` while loading, and exports `convert(amount, from, to)` using CZK as the cross-rate base. The `convert` function is passed as a prop through `App → PortfolioContent → PortfolioTable / PriceChart / PortfolioPnLChart`. Every monetary value in the UI and in both charts converts on the fly.
+
+**Sell position UI** (`src/components/SellPositionModal.tsx` (NEW), `src/components/PortfolioTable.tsx`)  
+An amber **Sell** button appears on each open row in the main table and on each open individual lot in the expanded mini-table. Clicking opens `SellPositionModal`: sell date (defaults to today), sell price per share (native currency), and a live P&L preview `(sellPrice − avgBuy) × totalQty`. On confirm, `updatePosition(id, { sellPrice, sellDate })` is called for each selected lot. Lots with both fields set are treated as closed throughout the app.
+
+**Multiple portfolios** (`src/hooks/usePortfolios.ts` (NEW), `src/components/PortfolioContent.tsx` (NEW), `src/App.tsx`, `src/hooks/usePortfolio.ts`, `src/hooks/useManualPrices.ts`)  
+- `usePortfolios` manages `Portfolio[]` and `activeId`; two-phase init; exports `addPortfolio`, `removePortfolio`, `renamePortfolio`, `switchPortfolio`. Storage keys: `stock_tracker_portfolios`, `stock_tracker_active_portfolio`.
+- Legacy migration: on first load, `stock_tracker_positions` is copied to `stock_tracker_positions_${defaultId}` and "Main Portfolio" is created.
+- `usePortfolio` and `useManualPrices` now accept a `portfolioId` parameter; storage keys become `stock_tracker_positions_${id}` and `stock_tracker_manual_prices_${id}`.
+- `PortfolioContent` was extracted from `App.tsx`; it holds all per-portfolio hooks and row computation. Rendered with `key={activeId}` so switching portfolio remounts the component with fresh state.
+- Portfolio tab bar in the header: click to switch, double-click to rename inline (or click the ✎ icon), × to delete (requires confirmation), **+ New** to add. New portfolios auto-enter rename mode.
+
+**JSON import** (`src/components/ImportModal.tsx` (NEW), `src/App.tsx`)  
+**↑ Import** button in the portfolio bar opens a hidden file input. The selected `.json` file is parsed by `parsePositionsFromJson`, which handles three formats: a direct `Position[]` array, `{stock_tracker_positions: "..."}`, and the multi-portfolio `{stock_tracker_positions_uuid: "..."}` format. `ImportModal` shows a file summary and lets the user choose: **Create new portfolio** (name pre-filled from filename) or **Add to current portfolio** (append). After merge-import, `contentKey` is incremented to force `PortfolioContent` to remount and re-read storage.
+
+### New files
+
+- `src/hooks/useFxRates.ts` — live FX rates + `convert(amount, from, to)` helper
+- `src/hooks/usePortfolios.ts` — multi-portfolio list management + legacy migration
+- `src/components/PortfolioContent.tsx` — per-portfolio state container extracted from App.tsx
+- `src/components/SellPositionModal.tsx` — sell date + sell price form with live P&L preview
+- `src/components/ImportModal.tsx` — import target selection UI
+- `server/test-data.json` — 10 US dividend stocks (AAPL, KO, JNJ, PG, MCD, XOM, VZ open; T, PFE fully sold; MSFT partially sold + open) for testing
+
+### Modified files
+
+- `src/types/index.ts` — `PortfolioRow` gains `dailyChange: number`
+- `src/hooks/usePortfolio.ts` — accepts `portfolioId` param; per-portfolio storage key
+- `src/hooks/useManualPrices.ts` — accepts `portfolioId` param; per-portfolio storage key
+- `src/App.tsx` — rewritten to global state only; adds portfolio tab bar, currency switcher, import flow
+- `src/components/PortfolioTable.tsx` — adds `displayCurrency` + `convert` props; all values converted before display; sell buttons; summary table; `onSellPositions` prop
+- `src/components/PriceChart.tsx` — adds `tickerCurrency`, `displayCurrency`, `convert` props; chart values converted to display currency
+- `src/components/PortfolioPnLChart.tsx` — adds `displayCurrency` + `convert` props; all chart P&L and dividend values converted
+- `src/App.css` — adds portfolio bar, currency tabs, summary table, sell button, import summary styles
+
+### Docker
+
+**Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`  
+Digest: `sha256:cc5279d1bc2e8dfaf8c290eebf84453525c72b6c32ea7bb19587388a6b1718ce`
+
+### Testing the test portfolio
+
+To swap to the test data:
+```bash
+cp server/data.json server/data.json.backup
+cp server/test-data.json server/data.json
+```
+To restore: `cp server/data.json.backup server/data.json`
+
+The test portfolio uses the old single-key format (`stock_tracker_positions`) so it will be auto-migrated to a "Main Portfolio" on first load.

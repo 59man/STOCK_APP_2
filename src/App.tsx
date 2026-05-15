@@ -1,196 +1,238 @@
-import { useState, useEffect, useMemo } from 'react'
-import { usePortfolio } from './hooks/usePortfolio'
-import { useQuotes } from './hooks/useQuotes'
-import { useDividends } from './hooks/useDividends'
-import { useManualPrices } from './hooks/useManualPrices'
-import { AddPositionModal } from './components/AddPositionModal'
-import { PortfolioTable } from './components/PortfolioTable'
-import { PortfolioPnLChart } from './components/PortfolioPnLChart'
-import { PortfolioRow } from './types'
-import { xirr } from './utils/xirr'
-import { calcNetDividends, getDividendTaxRate } from './utils/dividends'
+import { useState, useRef } from 'react'
+import { usePortfolios } from './hooks/usePortfolios'
+import { useFxRates, DisplayCurrency } from './hooks/useFxRates'
+import { PortfolioContent } from './components/PortfolioContent'
+import { ImportModal } from './components/ImportModal'
+import { Position } from './types'
+import { getItem, setItem } from './utils/storage'
 import './App.css'
 
+const CURRENCIES: DisplayCurrency[] = ['CZK', 'USD', 'EUR']
+
 export default function App() {
-  const { positions, addPosition, removePositions } = usePortfolio()
-  const { quotes, loading: loadingSet, errors, fetchTickers: fetchQuotes } = useQuotes()
-  const { dividends, fetchTickers: fetchDividends } = useDividends()
-  const { prices: manualPrices, setPrice: setManualPrice, removePrice: clearManualPrice } = useManualPrices()
-  const [showModal, setShowModal] = useState(false)
-  const [showClosed, setShowClosed] = useState(false)
+  const { portfolios, activeId, ready, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio } = usePortfolios()
+  const { convert } = useFxRates()
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('CZK')
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [contentKey, setContentKey] = useState(0)
+  const [importData, setImportData] = useState<{ fileName: string; positions: Position[] } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const tickers = useMemo(
-    () => [...new Set(positions.map((p) => p.ticker))],
-    [positions]
-  )
+  // Inline rename state for the portfolio tab bar
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
 
-  useEffect(() => {
-    if (tickers.length > 0) {
-      fetchQuotes(tickers)
-      fetchDividends(tickers)
-    }
-  }, [tickers, fetchQuotes, fetchDividends])
-
-  const refresh = () => {
-    fetchQuotes(tickers)
-    fetchDividends(tickers)
+  const startRename = (id: string, currentName: string) => {
+    setEditingId(id)
+    setEditName(currentName)
   }
 
-  const rows: PortfolioRow[] = useMemo(() => {
-    const groups = new Map<string, typeof positions>()
-    positions.forEach((p) => {
-      groups.set(p.ticker, [...(groups.get(p.ticker) ?? []), p])
-    })
+  const commitRename = () => {
+    if (editingId && editName.trim()) {
+      renamePortfolio(editingId, editName.trim())
+    }
+    setEditingId(null)
+    setEditName('')
+  }
 
-    return Array.from(groups.values()).map((lots) => {
-      const ticker = lots[0].ticker
+  // ── Import ────────────────────────────────────────────
+  function parsePositionsFromJson(raw: unknown): Position[] | null {
+    // 1. Direct array of positions (Export format)
+    if (Array.isArray(raw)) return raw as Position[]
 
-      const openLots = lots.filter((l) => !l.sellPrice || !l.sellDate)
-      const closedLots = lots.filter((l) => l.sellPrice != null && l.sellDate)
-      const isClosed = openLots.length === 0
+    if (!raw || typeof raw !== 'object') return null
+    const obj = raw as Record<string, unknown>
 
-      const totalQty = lots.reduce((s, p) => s + p.quantity, 0)
-      const openQty = openLots.reduce((s, p) => s + p.quantity, 0)
-      const totalCost = lots.reduce((s, p) => s + p.buyPrice * p.quantity, 0)
-      const openCost = openLots.reduce((s, p) => s + p.buyPrice * p.quantity, 0)
-      const avgBuyPrice = totalCost / totalQty
-      const firstBuyDate = [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate))[0].buyDate
+    // 2. Old data.json format: { stock_tracker_positions: "..." }
+    if (typeof obj['stock_tracker_positions'] === 'string') {
+      try {
+        const parsed = JSON.parse(obj['stock_tracker_positions'])
+        if (Array.isArray(parsed)) return parsed as Position[]
+      } catch {}
+    }
 
-      const quote = isClosed ? undefined : quotes.get(ticker)
-      const isLoading = !isClosed && loadingSet.has(ticker)
-      const error = isClosed ? null : (errors.get(ticker) ?? null)
-      const manual = isClosed ? undefined : manualPrices[ticker.toUpperCase()]
-      const priceIsManual = !isClosed && !quote && !!manual
-
-      // For fully closed rows show the avg sell price; for open/mixed show live price
-      const avgSellPrice = closedLots.length > 0
-        ? closedLots.reduce((s, l) => s + l.sellPrice! * l.quantity, 0) / closedLots.reduce((s, l) => s + l.quantity, 0)
-        : 0
-      const openAvgBuy = openQty > 0 ? openCost / openQty : 0
-      const currentPrice = isClosed
-        ? avgSellPrice
-        : (quote?.price ?? manual?.price ?? avgBuyPrice)
-      const currentValue = isClosed ? 0 : currentPrice * openQty
-
-      const tickerDivs = dividends.get(ticker.toUpperCase()) ?? []
-      const dividendIncome = calcNetDividends(lots, tickerDivs, ticker)
-
-      // Realized P&L from closed lots + unrealized from open lots
-      const realizedPnl = closedLots.reduce((s, l) => s + (l.sellPrice! - l.buyPrice) * l.quantity, 0)
-      const unrealizedPnl = isClosed ? 0 : (currentPrice - openAvgBuy) * openQty
-      const pricePnl = realizedPnl + unrealizedPnl
-      const totalReturn = pricePnl + dividendIncome
-
-      const today = new Date()
-      const hasUsablePrice = isClosed || (!isLoading && (!!quote || !!manual))
-      const irrValue =
-        hasUsablePrice
-          ? xirr([
-              ...lots.map((p) => ({ date: new Date(p.buyDate), amount: -(p.buyPrice * p.quantity) })),
-              ...closedLots.map((l) => ({ date: new Date(l.sellDate!), amount: l.sellPrice! * l.quantity })),
-              ...tickerDivs.flatMap((div) => {
-                const shares = lots
-                  .filter((l) => l.buyDate <= div.date && (!l.sellDate || l.sellDate > div.date))
-                  .reduce((s, l) => s + l.quantity, 0)
-                if (shares === 0) return []
-                return [{ date: new Date(div.date), amount: shares * div.amount * (1 - getDividendTaxRate(ticker)) }]
-              }),
-              ...(isClosed ? [] : [{ date: today, amount: currentValue }]),
-            ])
-          : null
-
-      return {
-        ids: lots.map((p) => p.id),
-        ticker,
-        name: lots[0].name,
-        type: lots[0].type,
-        currency: lots[0].currency,
-        lots: lots.length,
-        positions: [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate)),
-        totalQuantity: totalQty,
-        avgBuyPrice,
-        firstBuyDate,
-        currentPrice,
-        currentValue,
-        costBasis: totalCost,
-        pnl: pricePnl,
-        pnlPercent: totalCost > 0 ? (pricePnl / totalCost) * 100 : 0,
-        dividendIncome,
-        totalReturn,
-        loading: isLoading,
-        error,
-        priceIsManual,
-        manualPriceDate: manual?.updatedAt,
-        irr: irrValue,
-        isClosed,
+    // 3. New multi-portfolio format: collect from all stock_tracker_positions_* keys
+    const all: Position[] = []
+    for (const key of Object.keys(obj)) {
+      if (key.startsWith('stock_tracker_positions_') && typeof obj[key] === 'string') {
+        try {
+          const parsed = JSON.parse(obj[key] as string)
+          if (Array.isArray(parsed)) all.push(...(parsed as Position[]))
+        } catch {}
       }
-    })
-  }, [positions, quotes, loadingSet, errors, dividends, manualPrices])
+    }
+    return all.length > 0 ? all : null
+  }
 
-  // Portfolio-level XIRR including dividends
-  const portfolioIrr = useMemo(() => {
-    if (positions.length === 0) return null
-    const anyLoading = rows.some((r) => r.loading)
-    const anyMissingPrice = rows.some((r) => !r.error && r.irr === null && !r.loading)
-    if (anyLoading || anyMissingPrice) return null
-
-    const totalCurrentValue = rows.reduce((s, r) => s + r.currentValue, 0)
-
-    const divCashFlows: { date: Date; amount: number }[] = []
-    positions.forEach((pos) => {
-      const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
-      divs.forEach((div) => {
-        if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
-          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * (1 - getDividendTaxRate(pos.ticker)) })
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''  // reset so same file can be re-selected
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string)
+        const positions = parsePositionsFromJson(raw)
+        if (!positions || positions.length === 0) {
+          alert('No positions found in this file.')
+          return
         }
-      })
-    })
+        setImportData({ fileName: file.name, positions })
+      } catch {
+        alert('Could not parse file — make sure it is a valid JSON file.')
+      }
+    }
+    reader.readAsText(file)
+  }
 
-    const sellCashFlows = positions
-      .filter((p) => p.sellPrice != null && p.sellDate)
-      .map((p) => ({ date: new Date(p.sellDate!), amount: p.sellPrice! * p.quantity }))
+  const handleImportConfirm = async (mode: 'new' | 'current', newPortfolioName?: string) => {
+    if (!importData) return
+    const positions = importData.positions.map((p) => ({ ...p, id: crypto.randomUUID() }))
 
-    return xirr([
-      ...positions.map((p) => ({ date: new Date(p.buyDate), amount: -(p.buyPrice * p.quantity) })),
-      ...sellCashFlows,
-      ...divCashFlows,
-      { date: new Date(), amount: totalCurrentValue },
-    ])
-  }, [positions, rows, dividends])
+    if (mode === 'new' && newPortfolioName) {
+      const id = addPortfolio(newPortfolioName)
+      await setItem(`stock_tracker_positions_${id}`, JSON.stringify(positions))
+      switchPortfolio(id)
+    } else {
+      // Append to current portfolio
+      const key = `stock_tracker_positions_${activeId}`
+      const existing = await getItem(key).catch(() => null)
+      const current: Position[] = existing ? JSON.parse(existing) : []
+      await setItem(key, JSON.stringify([...current, ...positions]))
+      // Force PortfolioContent to remount so it reads the updated storage
+      setContentKey((k) => k + 1)
+    }
+
+    setImportData(null)
+  }
+
+  const handleAddPortfolio = () => {
+    const base = 'New Portfolio'
+    const names = new Set(portfolios.map((p) => p.name))
+    let name = base
+    let n = 2
+    while (names.has(name)) { name = `${base} ${n++}` }
+    const id = addPortfolio(name)
+    switchPortfolio(id)
+    // Auto-enter rename mode on the new tab
+    setTimeout(() => startRename(id, name), 50)
+  }
+
+  const handleDeletePortfolio = (id: string) => {
+    if (portfolios.length <= 1) return
+    const p = portfolios.find((p) => p.id === id)
+    if (p && window.confirm(`Delete portfolio "${p.name}"? All positions in it will be lost.`)) {
+      removePortfolio(id)
+    }
+  }
 
   return (
     <div className="app">
       <header className="header">
         <div className="header-inner">
           <h1>📈 Stock Tracker</h1>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + Add Position
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="currency-tabs">
+              {CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  className={`currency-tab${displayCurrency === c ? ' active' : ''}`}
+                  onClick={() => setDisplayCurrency(c)}
+                >{c}</button>
+              ))}
+            </div>
+            <button className="btn-primary" onClick={() => setShowAddModal(true)}>
+              + Add Position
+            </button>
+          </div>
+        </div>
+
+        {/* ── Portfolio tab bar ── */}
+        <div className="portfolio-bar">
+          {portfolios.map((p) => {
+            const isActive = p.id === activeId
+            const isEditing = editingId === p.id
+            return (
+              <div
+                key={p.id}
+                className={`portfolio-tab${isActive ? ' active' : ''}`}
+                onClick={() => { if (!isActive) switchPortfolio(p.id) }}
+              >
+                {isEditing ? (
+                  <input
+                    className="portfolio-tab-input"
+                    value={editName}
+                    autoFocus
+                    onChange={(e) => setEditName(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitRename()
+                      if (e.key === 'Escape') { setEditingId(null); setEditName('') }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span
+                    className="portfolio-tab-name"
+                    onDoubleClick={(e) => { e.stopPropagation(); startRename(p.id, p.name) }}
+                    title="Double-click to rename"
+                  >{p.name}</span>
+                )}
+                {!isEditing && isActive && (
+                  <button
+                    className="portfolio-tab-rename"
+                    title="Rename portfolio"
+                    onClick={(e) => { e.stopPropagation(); startRename(p.id, p.name) }}
+                  >✎</button>
+                )}
+                {!isEditing && portfolios.length > 1 && (
+                  <button
+                    className="portfolio-tab-delete"
+                    title="Delete portfolio"
+                    onClick={(e) => { e.stopPropagation(); handleDeletePortfolio(p.id) }}
+                  >×</button>
+                )}
+              </div>
+            )
+          })}
+          <button className="portfolio-tab-add" onClick={handleAddPortfolio}>+ New</button>
+          <button className="portfolio-tab-add" onClick={() => fileInputRef.current?.click()}>↑ Import</button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            style={{ display: 'none' }}
+            onChange={handleFileSelected}
+          />
         </div>
       </header>
 
       <main className="main">
-        <PortfolioTable
-          rows={rows}
-          onRemove={removePositions}
-          onRefresh={refresh}
-          portfolioIrr={portfolioIrr}
-          onSetManualPrice={setManualPrice}
-          onClearManualPrice={clearManualPrice}
-          showClosed={showClosed}
-          onToggleClosed={() => setShowClosed((v) => !v)}
-        />
-
-        {positions.length > 0 && (
-          <div className="chart-section">
-            <PortfolioPnLChart positions={positions} dividends={dividends} manualPrices={manualPrices} />
+        {ready && activeId && (
+          <PortfolioContent
+            key={`${activeId}-${contentKey}`}
+            portfolioId={activeId}
+            displayCurrency={displayCurrency}
+            convert={convert}
+            showAddModal={showAddModal}
+            onCloseAddModal={() => setShowAddModal(false)}
+          />
+        )}
+        {!ready && (
+          <div className="empty-state">
+            <p>Loading portfolios…</p>
           </div>
         )}
-
       </main>
 
-      {showModal && (
-        <AddPositionModal onAdd={addPosition} onClose={() => setShowModal(false)} />
+      {importData && (
+        <ImportModal
+          fileName={importData.fileName}
+          positions={importData.positions}
+          currentPortfolioName={portfolios.find((p) => p.id === activeId)?.name ?? 'Current'}
+          onConfirm={handleImportConfirm}
+          onClose={() => setImportData(null)}
+        />
       )}
     </div>
   )

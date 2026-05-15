@@ -4,19 +4,23 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 
 ## Features
 
-- **Multi-asset portfolio** — stocks, ETFs, funds, commodities; CZK-denominated
+- **Multiple portfolios** — create, rename, and delete portfolios; switch via a tab bar; each portfolio's positions and manual prices are stored independently
+- **Multi-asset portfolio** — stocks, ETFs, funds, commodities; any currency
+- **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates
 - **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback
-- **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted to CZK using real-time FX rates
+- **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
 - **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. COLT.PR → CZG.PR)
 - **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
-- **Closed positions** — record sold lots with a sell date and sell price; realized P&L is computed separately from unrealized; fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each ticker shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
+- **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
+- **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
 - **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur
-- **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All); range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
-- **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted)
+- **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
+- **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
 - **Manual price override** — for funds with no public price feed: enter the current total value from your bank report; the app divides by quantity to derive the per-unit price; invalid input shows an inline error
+- **JSON import** — click **↑ Import** in the portfolio bar to load a JSON file; supports direct position arrays, old single-key format, and the multi-portfolio storage format; choose to import into a new portfolio or append to the current one
 - **Delete confirmation** — removing a row or lot shows a confirmation dialog; cannot be accidentally triggered
 - **JSON export** — download all positions as a dated JSON file from the toolbar (↓ Export)
-- **Persistent file storage** — portfolio data and manual prices are saved to `server/data.json` via a local Express server; survives browser clears and restarts
+- **Persistent file storage** — all portfolios and manual prices are saved to `server/data.json` via a local Express server; survives browser clears and restarts
 - **Docker support** — single-container production image; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
 - **Fully responsive** — the table adapts at three breakpoints (960 px, 640 px, 400 px) by progressively hiding non-essential columns
 
@@ -134,24 +138,26 @@ scp server/data.json your_user@your_server_ip:/DATA/stock-tracker/data.json
 
 ## Architecture
 
-React 18 + Vite + TypeScript SPA. No routing — all state in `App.tsx`, flows down as props.
+React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state (portfolios, active portfolio, display currency); per-portfolio state lives in `PortfolioContent`.
 
 ### Key hooks
 
 | Hook | Responsibility |
 |---|---|
-| `usePortfolio` | Owns positions list; two-phase init (sync from localStorage, async from server); persists to `server/data.json` + localStorage |
-| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE; skips fully-closed tickers |
+| `usePortfolios` | Manages the list of portfolios and active selection; two-phase init; legacy key migration on first load |
+| `usePortfolio(portfolioId)` | Owns positions list for one portfolio; two-phase init; persists to server + localStorage under `stock_tracker_positions_${id}` |
+| `useFxRates` | Fetches USDCZK=X and EURCZK=X from Yahoo Finance; provides `convert(amount, from, to)` helper; defaults while loading |
+| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE |
 | `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache |
-| `useManualPrices` | Stores user-entered current values for funds with no live feed; two-phase init; persists to `server/data.json` + localStorage |
+| `useManualPrices(portfolioId)` | Stores user-entered current values for funds with no live feed; two-phase init; persists under `stock_tracker_manual_prices_${id}` |
 
 ### Key types
 
 - `Position` — a single purchase lot: ticker, qty, buyPrice, buyDate, currency, type; optional `sellPrice` / `sellDate` mark it as closed
 - `Quote` — live price data from the API
-- `PortfolioRow` — one row per ticker: aggregated lots + computed financials (pnl, dividendIncome, totalReturn, irr, isClosed) + individual `positions[]`
+- `PortfolioRow` — one row per ticker: aggregated lots + computed financials (pnl, dividendIncome, totalReturn, irr, isClosed, dailyChange) + individual `positions[]`
 
-### Closed position logic (`App.tsx`)
+### Closed position logic (`PortfolioContent.tsx`)
 
 Each ticker's lots are split into `openLots` and `closedLots`:
 
@@ -165,10 +171,12 @@ Each ticker's lots are split into `openLots` and `closedLots`:
 
 Data is stored in two layers:
 
-1. **`server/data.json`** (primary) — written by the Express persist server at `server/index.js`. Keys: `stock_tracker_positions`, `stock_tracker_manual_prices`. In dev the server runs on port 3001; in Docker it shares port 8080 with the frontend.
+1. **`server/data.json`** (primary) — written by the Express persist server at `server/index.js`. Keys follow a per-portfolio pattern: `stock_tracker_positions_${id}`, `stock_tracker_manual_prices_${id}`, and `stock_tracker_portfolios` (list). In dev the server runs on port 3001; in Docker it shares port 8080 with the frontend.
 2. **`localStorage`** (fallback) — updated in sync; used for instant display on load and as fallback when the server is unreachable.
 
 On startup, hooks read from localStorage immediately (no flash), then async-fetch from the server. If the server has data it takes priority.
+
+**Legacy migration:** on first load, if the old single-key `stock_tracker_positions` is found it is copied to `stock_tracker_positions_${defaultId}` and a "Main Portfolio" is created automatically.
 
 ### Price sources
 
@@ -262,5 +270,8 @@ Configured in `src/utils/dividends.ts`. Rates reflect what is typically withheld
 - Your portfolio data is stored in `server/data.json` on disk — excluded from git via `.gitignore` and from Docker images via `.dockerignore`.
 - For unlisted funds (UniCredit onemarkets, FIO Global), enter the total position value from your bank report in the **Cur. Value** column. Click the orange **M** badge to update; **×** to clear.
 - The persist server must be running (`npm run dev`) for changes to be saved to disk. If unreachable, data is saved to localStorage only.
-- To record a sold position, click **+ Add Position**, fill in the buy details, check **Closed position (already sold)**, and enter the sell date and sell price.
+- To sell an open position, click the amber **Sell** button on the row or on any individual lot in the expanded view; enter a sell date and sell price, then confirm.
+- To record a position that was already sold in the past, click **+ Add Position**, fill in the buy details, check **Closed position (already sold)**, and enter the sell date and sell price.
+- Use **↑ Import** in the portfolio tab bar to load positions from a JSON file — either into a new portfolio or appended to the current one.
 - Use **↓ Export** in the toolbar to download a JSON backup of all positions at any time.
+- To switch between CZK, USD, and EUR display, use the currency buttons in the top-right of the header — all values and charts update immediately.
