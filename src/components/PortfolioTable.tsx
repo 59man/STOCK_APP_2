@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { PortfolioRow } from '../types'
+import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { PriceChart } from './PriceChart'
 import { SellPositionModal } from './SellPositionModal'
 
-const COL_COUNT = 15
+const COL_COUNT = 16
 
 interface SellTarget {
   ticker: string
@@ -22,6 +23,10 @@ interface Props {
   onToggleClosed: () => void
   displayCurrency: string
   convert: (amount: number, from: string, to: string) => number
+  dividendsByTicker: Map<string, DividendEvent[]>
+  taxOverrides: Record<string, number>
+  onSetDivTax: (ticker: string, date: string, rate: number) => void
+  onClearDivTax: (ticker: string, date: string) => void
 }
 
 function fmt(n: number, currency = 'USD') {
@@ -44,7 +49,6 @@ function fmtPrice(n: number, currency = 'USD') {
 }
 
 function fmtQty(n: number) {
-  // up to 4 decimal places, strip trailing zeros
   return parseFloat(n.toFixed(4)).toLocaleString()
 }
 
@@ -52,7 +56,64 @@ function pct(n: number) {
   return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
 }
 
-export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, portfolioIrr, onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed, displayCurrency, convert }: Props) {
+// Inline component for editing dividend tax rate on a single event
+function DivTaxCell({
+  ticker, date, appliedRate, isOverridden, onSet, onClear,
+}: {
+  ticker: string; date: string; appliedRate: number; isOverridden: boolean
+  onSet: (rate: number) => void; onClear: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState('')
+
+  const commit = () => {
+    const pctVal = parseFloat(val)
+    if (!isNaN(pctVal) && pctVal >= 0 && pctVal <= 100) {
+      onSet(pctVal / 100)
+      setEditing(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <span className="div-tax-edit">
+        <input
+          className="div-tax-input"
+          type="number" min="0" max="100" step="0.1"
+          autoFocus
+          value={val}
+          placeholder={(appliedRate * 100).toFixed(1)}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
+        />
+        <span className="muted" style={{ fontSize: 11 }}>%</span>
+        <button className="price-edit-ok" onClick={commit}>✓</button>
+        <button className="price-edit-cancel" onClick={() => setEditing(false)}>✕</button>
+      </span>
+    )
+  }
+
+  return (
+    <span className="div-tax-cell">
+      <span
+        className={isOverridden ? 'div-tax-custom' : 'div-tax-default'}
+        title={isOverridden ? `Custom rate — click to edit (default: ${(getDividendTaxRate(ticker) * 100).toFixed(1)}%)` : 'Default rate — click to override'}
+        onClick={() => { setVal((appliedRate * 100).toFixed(1)); setEditing(true) }}
+      >
+        {(appliedRate * 100).toFixed(1)}%
+      </span>
+      {isOverridden && (
+        <button className="div-tax-clear" title="Reset to default" onClick={onClear}>×</button>
+      )}
+    </span>
+  )
+}
+
+export function PortfolioTable({
+  rows, onRemove, onSellPositions, onRefresh, portfolioIrr,
+  onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed,
+  displayCurrency, convert, dividendsByTicker, taxOverrides, onSetDivTax, onClearDivTax,
+}: Props) {
   const [editingTicker, setEditingTicker] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [editError, setEditError] = useState<string | null>(null)
@@ -117,44 +178,50 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
   return (
     <div className="table-wrapper">
 
-      {/* ── Portfolio summary table ── */}
+      {/* ── Portfolio summary grid (mobile-friendly cards) ── */}
       <div className="summary-section">
-        <table className="summary-table">
-          <thead>
-            <tr>
-              <th>Total Value</th>
-              <th>Cost Basis</th>
-              <th>Today's Change</th>
-              <th>Price P&amp;L</th>
-              <th>Net Dividends</th>
-              <th>Total Return</th>
-              <th>IRR p.a.</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{fmt(totalValue, displayCurrency)}</td>
-              <td className="muted">{fmt(totalCost, displayCurrency)}</td>
-              <td className={totalDailyChange >= 0 ? 'gain' : 'loss'}>
-                {totalDailyChange >= 0 ? '+' : ''}{fmt(totalDailyChange, displayCurrency)}
-                <span className="summary-sub">{totalDailyChange >= 0 ? '+' : ''}{dailyChangePct.toFixed(2)}%</span>
-              </td>
-              <td className={totalPricePnl >= 0 ? 'gain' : 'loss'}>
-                {totalPricePnl >= 0 ? '+' : ''}{fmt(totalPricePnl, displayCurrency)}
-              </td>
-              <td className={totalDivs > 0 ? 'gain' : 'muted'}>
-                {totalDivs > 0 ? '+' + fmt(totalDivs, displayCurrency) : '—'}
-              </td>
-              <td className={totalReturn >= 0 ? 'gain' : 'loss'}>
-                {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn, displayCurrency)}
-                <span className="summary-sub">{pct(totalReturnPct)}</span>
-              </td>
-              <td className={portfolioIrr != null ? (portfolioIrr >= 0 ? 'gain' : 'loss') : 'muted'}>
-                {portfolioIrr != null ? pct(portfolioIrr * 100) : '…'}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="summary-grid">
+          <div className="summary-card">
+            <span className="summary-label">Total Value</span>
+            <span className="summary-value">{fmt(totalValue, displayCurrency)}</span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">Cost Basis</span>
+            <span className="summary-value muted">{fmt(totalCost, displayCurrency)}</span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">Today's Change</span>
+            <span className={`summary-value ${totalDailyChange >= 0 ? 'gain' : 'loss'}`}>
+              {totalDailyChange >= 0 ? '+' : ''}{fmt(totalDailyChange, displayCurrency)}
+              <span className="summary-sub">{totalDailyChange >= 0 ? '+' : ''}{dailyChangePct.toFixed(2)}%</span>
+            </span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">Price P&amp;L</span>
+            <span className={`summary-value ${totalPricePnl >= 0 ? 'gain' : 'loss'}`}>
+              {totalPricePnl >= 0 ? '+' : ''}{fmt(totalPricePnl, displayCurrency)}
+            </span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">Net Dividends</span>
+            <span className={`summary-value ${totalDivs > 0 ? 'gain' : 'muted'}`}>
+              {totalDivs > 0 ? '+' + fmt(totalDivs, displayCurrency) : '—'}
+            </span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">Total Return</span>
+            <span className={`summary-value ${totalReturn >= 0 ? 'gain' : 'loss'}`}>
+              {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn, displayCurrency)}
+              <span className="summary-sub">{pct(totalReturnPct)}</span>
+            </span>
+          </div>
+          <div className="summary-card">
+            <span className="summary-label">IRR p.a.</span>
+            <span className={`summary-value ${portfolioIrr != null ? (portfolioIrr >= 0 ? 'gain' : 'loss') : 'muted'}`}>
+              {portfolioIrr != null ? pct(portfolioIrr * 100) : '…'}
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="table-toolbar">
@@ -180,6 +247,7 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
               <th>Avg Buy</th>
               <th>First Buy</th>
               <th>Lots</th>
+              <th>Broker</th>
               <th>Cur. Price</th>
               <th>Cost Basis</th>
               <th>Cur. Value</th>
@@ -196,6 +264,12 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
               const totalReturnPctRow = r.costBasis > 0 ? (r.totalReturn / r.costBasis) * 100 : 0
               const isEditing = editingTicker === r.ticker
               const isExpanded = expanded.has(r.ticker)
+
+              // Broker display: show broker from first lot; "Mixed" if lots differ
+              const brokers = [...new Set(r.positions.map((p) => p.broker).filter(Boolean))]
+              const brokerDisplay = brokers.length === 0 ? null
+                : brokers.length === 1 ? brokers[0]
+                : 'Mixed'
 
               const editInline = (
                 <span className="price-edit-inline">
@@ -219,9 +293,9 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
               )
 
               return (
-                <>
+                <Fragment key={r.ticker}>
                   {/* ── Aggregated row ── */}
-                  <tr key={r.ticker} className={[isExpanded ? 'row-expanded' : '', r.isClosed ? 'row-closed' : ''].filter(Boolean).join(' ')}>
+                  <tr className={[isExpanded ? 'row-expanded' : '', r.isClosed ? 'row-closed' : ''].filter(Boolean).join(' ')}>
                     <td>
                       <button
                         className={`expand-btn ${isExpanded ? 'expanded' : ''}`}
@@ -241,6 +315,11 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                     <td>
                       {r.lots > 1
                         ? <span className="lots-badge">{r.lots} lots</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                    <td>
+                      {brokerDisplay
+                        ? <span className="broker-badge">{brokerDisplay}</span>
                         : <span className="muted">—</span>}
                     </td>
 
@@ -322,6 +401,7 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                           <div className="lot-table-wrap">
                             {(() => {
                               const hasClosedLots = r.positions.some((p) => p.sellPrice != null && p.sellDate)
+                              const hasBrokers = r.positions.some((p) => p.broker)
                               return (
                                 <table className="lot-table">
                                   <thead>
@@ -336,6 +416,7 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                                       <th>Cur. Value</th>
                                       <th>P&amp;L</th>
                                       <th>P&amp;L %</th>
+                                      {hasBrokers && <th>Broker</th>}
                                       <th></th>
                                     </tr>
                                   </thead>
@@ -370,6 +451,9 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                                           <td className={posPnlPct >= 0 ? 'gain' : 'loss'}>
                                             {priceUnknown ? <span className="muted">—</span> : pct(posPnlPct)}
                                           </td>
+                                          {hasBrokers && (
+                                            <td>{pos.broker ? <span className="broker-badge">{pos.broker}</span> : <span className="muted">—</span>}</td>
+                                          )}
                                           <td>
                                             <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                                               {!isSold && (
@@ -395,6 +479,65 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                             })()}
                           </div>
 
+                          {/* Dividend events panel with editable tax rates */}
+                          {(() => {
+                            const tickerDivs = dividendsByTicker.get(r.ticker.toUpperCase()) ?? []
+                            const relevantDivs = tickerDivs.filter((div) =>
+                              r.positions.some((lot) => lot.buyDate <= div.date && (!lot.sellDate || lot.sellDate > div.date))
+                            )
+                            if (relevantDivs.length === 0) return null
+
+                            return (
+                              <div className="div-panel">
+                                <div className="div-panel-title">Dividends received</div>
+                                <table className="lot-table">
+                                  <thead>
+                                    <tr>
+                                      <th>Ex-date</th>
+                                      <th>Per share</th>
+                                      <th>Shares</th>
+                                      <th>Gross</th>
+                                      <th>Tax %</th>
+                                      <th>Net</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {relevantDivs.map((div) => {
+                                      const shares = r.positions
+                                        .filter((lot) => lot.buyDate <= div.date && (!lot.sellDate || lot.sellDate > div.date))
+                                        .reduce((s, lot) => s + lot.quantity, 0)
+                                      const overrideKey = `${r.ticker.toUpperCase()}::${div.date}`
+                                      const defaultRate = getDividendTaxRate(r.ticker)
+                                      const appliedRate = taxOverrides[overrideKey] ?? defaultRate
+                                      const isOverridden = overrideKey in taxOverrides
+                                      const gross = shares * div.amount
+                                      const net = gross * (1 - appliedRate)
+                                      return (
+                                        <tr key={div.date}>
+                                          <td>{div.date}</td>
+                                          <td>{div.amount.toFixed(4)}</td>
+                                          <td>{fmtQty(shares)}</td>
+                                          <td>{fmt(gross, r.currency)}</td>
+                                          <td>
+                                            <DivTaxCell
+                                              ticker={r.ticker}
+                                              date={div.date}
+                                              appliedRate={appliedRate}
+                                              isOverridden={isOverridden}
+                                              onSet={(rate) => onSetDivTax(r.ticker, div.date, rate)}
+                                              onClear={() => onClearDivTax(r.ticker, div.date)}
+                                            />
+                                          </td>
+                                          <td className="gain">{fmt(net, r.currency)}</td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )
+                          })()}
+
                           {/* Price chart */}
                           <PriceChart
                             ticker={r.ticker}
@@ -406,7 +549,7 @@ export function PortfolioTable({ rows, onRemove, onSellPositions, onRefresh, por
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </tbody>

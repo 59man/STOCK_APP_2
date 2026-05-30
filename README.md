@@ -46,10 +46,10 @@ kill $(lsof -ti:3001)
 
 ```bash
 # Build image
-docker build -t YOUR_DOCKERHUB_USERNAME/stock-tracker:latest .
+docker build -t 59man/stock-tracker:latest .
 
 # Push to Docker Hub
-docker push YOUR_DOCKERHUB_USERNAME/stock-tracker:latest
+docker push 59man/stock-tracker:latest
 ```
 
 ### Deploy on a server via SSH
@@ -79,7 +79,7 @@ scp server/data.json your_user@your_server_ip:/DATA/stock-tracker/data.json
 
 **4. Pull the image**
 ```bash
-docker pull YOUR_DOCKERHUB_USERNAME/stock-tracker:latest
+docker pull 59man/stock-tracker:latest
 ```
 
 **5. Run the container**
@@ -91,7 +91,7 @@ docker run -d \
   -p 4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
   --restart unless-stopped \
-  YOUR_DOCKERHUB_USERNAME/stock-tracker:latest
+  59man/stock-tracker:latest
 ```
 
 The app is now at `http://your_server_ip:4000`.
@@ -120,12 +120,12 @@ docker start stock-tracker       # start again
 ### Update to a new image version
 
 ```bash
-docker pull YOUR_DOCKERHUB_USERNAME/stock-tracker:latest
+docker pull 59man/stock-tracker:latest
 docker stop stock-tracker && docker rm stock-tracker
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
   --restart unless-stopped \
-  YOUR_DOCKERHUB_USERNAME/stock-tracker:latest
+  59man/stock-tracker:latest
 ```
 
 ### Update portfolio data on the server

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { Quote } from '../types'
+import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 
 const CACHE_TTL = 60_000
 
@@ -13,21 +14,13 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
-// Tickers whose price must be fetched in a foreign currency and converted to CZK.
-// priceTicker: the Yahoo Finance ticker (pre-encoded for URL)
-// fxTicker:    Yahoo Finance FX pair returning CZK per 1 unit of foreign currency
-const FX_CONVERTED: Record<string, { priceTicker: string; fxTicker: string; fallbackName: string }> = {
-  'XAU':     { priceTicker: 'GC%3DF',     fxTicker: 'USDCZK%3DX', fallbackName: 'Gold (XAU)' },
-  '4GLD.DE': { priceTicker: '4GLD.DE',    fxTicker: 'EURCZK%3DX', fallbackName: 'Xetra-Gold' },
-  'EXUS.DE': { priceTicker: 'EXUS.DE',    fxTicker: 'EURCZK%3DX', fallbackName: 'iShares MSCI World ex USA' },
-}
-
 async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
-  const { priceTicker, fxTicker, fallbackName } = FX_CONVERTED[ticker.toUpperCase()]
+  const { priceTicker, fxTicker, fallbackName = ticker.toUpperCase() } = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   const [priceRes, fxRes] = await Promise.all([
     withTimeout(fetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=1d`), 9000),
     withTimeout(fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=1d`), 9000),
   ])
+  if (priceRes.status === 429 || fxRes.status === 429) throw new Error('Yahoo rate-limited (429) — retry later')
   if (!priceRes.ok) throw new Error(`Price fetch ${priceRes.status}`)
   if (!fxRes.ok) throw new Error(`FX fetch ${fxRes.status}`)
   const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
@@ -50,6 +43,7 @@ async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
 async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`
   const res = await withTimeout(fetch(path), 9000)
+  if (res.status === 429) throw new Error('Yahoo rate-limited (429) — retry later')
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()
   const meta = json?.chart?.result?.[0]?.meta
@@ -102,7 +96,7 @@ async function fetchQuote(ticker: string): Promise<Quote> {
   if (cached && now - cached.ts < CACHE_TTL) return cached.quote
 
   // Tickers needing FX conversion (stored in CZK in the portfolio)
-  if (key in FX_CONVERTED) {
+  if (FX_CONVERTED_SET.has(key)) {
     const quote = await fetchFxConvertedQuote(ticker)
     cache.set(key, { quote, ts: now })
     return quote

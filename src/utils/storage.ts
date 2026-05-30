@@ -14,11 +14,12 @@ export async function getItem(key: string): Promise<string | null> {
 export async function setItem(key: string, value: string): Promise<void> {
   localStorage.setItem(key, value)
   try {
-    await fetch(`${BASE}/${encodeURIComponent(key)}`, {
+    const res = await fetch(`${BASE}/${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ value }),
     })
+    if (!res.ok) console.warn(`[storage] setItem failed for "${key}": HTTP ${res.status}`)
   } catch {
     // server unavailable — localStorage already updated
   }

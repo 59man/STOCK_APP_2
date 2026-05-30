@@ -7,6 +7,7 @@ export interface Position {
   buyPrice: number
   buyDate: string
   currency: string
+  broker?: string
   sellPrice?: number
   sellDate?: string
 }

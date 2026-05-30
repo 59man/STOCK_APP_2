@@ -2,3 +2,4 @@ node_modules/
 dist/
 Transactions_folder/
 server/*.json
+audits/

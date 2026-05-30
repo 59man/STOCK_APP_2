@@ -6,6 +6,7 @@ import { ImportModal } from './components/ImportModal'
 import { Position } from './types'
 import { getItem, setItem } from './utils/storage'
 import { randomUUID } from './utils/uuid'
+import { parsePositionsFromJson } from './utils/importParser'
 import './App.css'
 
 const CURRENCIES: DisplayCurrency[] = ['CZK', 'USD', 'EUR']
@@ -37,34 +38,6 @@ export default function App() {
   }
 
   // ── Import ────────────────────────────────────────────
-  function parsePositionsFromJson(raw: unknown): Position[] | null {
-    // 1. Direct array of positions (Export format)
-    if (Array.isArray(raw)) return raw as Position[]
-
-    if (!raw || typeof raw !== 'object') return null
-    const obj = raw as Record<string, unknown>
-
-    // 2. Old data.json format: { stock_tracker_positions: "..." }
-    if (typeof obj['stock_tracker_positions'] === 'string') {
-      try {
-        const parsed = JSON.parse(obj['stock_tracker_positions'])
-        if (Array.isArray(parsed)) return parsed as Position[]
-      } catch {}
-    }
-
-    // 3. New multi-portfolio format: collect from all stock_tracker_positions_* keys
-    const all: Position[] = []
-    for (const key of Object.keys(obj)) {
-      if (key.startsWith('stock_tracker_positions_') && typeof obj[key] === 'string') {
-        try {
-          const parsed = JSON.parse(obj[key] as string)
-          if (Array.isArray(parsed)) all.push(...(parsed as Position[]))
-        } catch {}
-      }
-    }
-    return all.length > 0 ? all : null
-  }
-
   const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -73,12 +46,15 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const raw = JSON.parse(ev.target?.result as string)
-        const positions = parsePositionsFromJson(raw)
-        if (!positions || positions.length === 0) {
-          alert('No positions found in this file.')
+        const result = parsePositionsFromJson(raw)
+        if (!result || result.valid.length === 0) {
+          alert('No valid positions found in this file.')
           return
         }
-        setImportData({ fileName: file.name, positions })
+        if (result.skipped > 0) {
+          console.warn(`[import] ${result.skipped} position(s) skipped — missing required fields`)
+        }
+        setImportData({ fileName: file.name, positions: result.valid })
       } catch {
         alert('Could not parse file — make sure it is a valid JSON file.')
       }
@@ -98,7 +74,12 @@ export default function App() {
       // Append to current portfolio
       const key = `stock_tracker_positions_${activeId}`
       const existing = await getItem(key).catch(() => null)
-      const current: Position[] = existing ? JSON.parse(existing) : []
+      let current: Position[] = []
+      if (existing) {
+        try { current = JSON.parse(existing) } catch {
+          console.warn('[import] could not parse existing positions — appending to empty list')
+        }
+      }
       await setItem(key, JSON.stringify([...current, ...positions]))
       // Force PortfolioContent to remount so it reads the updated storage
       setContentKey((k) => k + 1)

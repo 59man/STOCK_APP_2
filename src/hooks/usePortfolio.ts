@@ -68,7 +68,9 @@ export function usePortfolio(portfolioId: string) {
             localStorage.setItem(SEEDED_KEY, '1')
             localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION)
           }
-        } catch {}
+        } catch (err) {
+          console.warn('[usePortfolio] failed to parse server data:', err)
+        }
       }
       setInitialized(true)
     }).catch(() => { if (!cancelled) setInitialized(true) })

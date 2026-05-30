@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
+import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 
 interface ChartPoint {
   label: string
@@ -45,16 +46,9 @@ function parseHistory(json: unknown): TickerHistory {
     .sort(([a], [b]) => a.localeCompare(b))
 }
 
-// Tickers whose price history fetchYahooHistory already converts to CZK
-const HISTORY_FX: Record<string, { priceTicker: string; fxTicker: string }> = {
-  'XAU':     { priceTicker: 'GC%3DF',  fxTicker: 'USDCZK%3DX' },
-  '4GLD.DE': { priceTicker: '4GLD.DE', fxTicker: 'EURCZK%3DX' },
-  'EXUS.DE': { priceTicker: 'EXUS.DE', fxTicker: 'EURCZK%3DX' },
-}
-
 // Currency the fetched history is in for each ticker
 function histCurrency(ticker: string, posCurrency: string): string {
-  return HISTORY_FX[ticker.toUpperCase()] ? 'CZK' : posCurrency
+  return FX_CONVERTED_SET.has(ticker.toUpperCase()) ? 'CZK' : posCurrency
 }
 
 function fxMerge(priceHist: TickerHistory, fxHist: TickerHistory): TickerHistory {
@@ -72,7 +66,7 @@ function fxMerge(priceHist: TickerHistory, fxHist: TickerHistory): TickerHistory
 }
 
 async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<TickerHistory> {
-  const fx = HISTORY_FX[ticker.toUpperCase()]
+  const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
       fetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
@@ -124,9 +118,10 @@ interface Props {
   manualPrices?: Record<string, { price: number }>
   displayCurrency: string
   convert: (amount: number, from: string, to: string) => number
+  taxOverrides?: Record<string, number>
 }
 
-export function PortfolioPnLChart({ positions, dividends, manualPrices, displayCurrency, convert }: Props) {
+export function PortfolioPnLChart({ positions, dividends, manualPrices, displayCurrency, convert, taxOverrides }: Props) {
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions])
   const [range, setRange] = useState<Range>(
     () => (localStorage.getItem('chart_range_portfolio') as Range | null) ?? 'All'
@@ -222,11 +217,12 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
       let divPnl = 0
       positions.forEach((pos) => {
         const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
-        const taxRate = getDividendTaxRate(pos.ticker)
+        const defaultRate = getDividendTaxRate(pos.ticker)
         for (const div of divs) {
           if (div.date > date) break
           if (pos.buyDate <= div.date) {
-            divPnl += convert(pos.quantity * div.amount * (1 - taxRate), pos.currency, displayCurrency)
+            const rate = taxOverrides?.[`${pos.ticker.toUpperCase()}::${div.date}`] ?? defaultRate
+            divPnl += convert(pos.quantity * div.amount * (1 - rate), pos.currency, displayCurrency)
           }
         }
       })
@@ -239,7 +235,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
         pnl: Math.round(pricePnl + divPnl),
       }
     })
-  }, [effectiveHistories, positions, dividends, range, firstBuyDate])
+  }, [effectiveHistories, positions, dividends, range, firstBuyDate, taxOverrides])
 
   const values = chartData.map((d) => d.pnl)
   const minVal = values.length ? Math.min(...values) : 0

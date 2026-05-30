@@ -234,20 +234,25 @@ body {
   gap: 8px;
 }
 
-/* ── Portfolio summary table ── */
+/* ── Portfolio summary grid ── */
 .summary-section {
+  background: var(--border); /* gap colour = gridline colour */
   border-bottom: 1px solid var(--border);
-  overflow-x: auto;
 }
-.summary-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
 }
-.summary-table th {
-  background: transparent;
-  text-align: center;
-  padding: 14px 16px 4px;
+.summary-card {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 13px 12px;
+  min-width: 0;
+}
+.summary-label {
   font-family: var(--mono);
   font-size: 9.5px;
   font-weight: 600;
@@ -255,24 +260,70 @@ body {
   letter-spacing: 0.8px;
   color: var(--muted);
   white-space: nowrap;
+  margin-bottom: 4px;
 }
-.summary-table td {
-  text-align: center;
-  padding: 4px 16px 14px;
-  font-size: 16px;
+.summary-value {
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.2px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
-.summary-table tbody tr:hover { background: transparent; }
 .summary-sub {
   display: block;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   opacity: 0.85;
-  margin-top: 3px;
+  margin-top: 2px;
+}
+
+/* ── Broker badge ── */
+.broker-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface3);
+  color: var(--text-2);
+  border: 1px solid var(--border-2);
+  white-space: nowrap;
+}
+
+/* ── Dividend events panel ── */
+.div-panel {
+  margin-top: 14px;
+  margin-bottom: 4px;
+}
+.div-panel-title {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-bottom: 6px;
+}
+.div-tax-cell { display: inline-flex; align-items: center; gap: 3px; }
+.div-tax-default { color: var(--muted); cursor: pointer; font-size: 12px; font-family: var(--mono); }
+.div-tax-default:hover { color: var(--text); }
+.div-tax-custom { color: var(--manual); cursor: pointer; font-size: 12px; font-family: var(--mono); font-weight: 700; }
+.div-tax-custom:hover { opacity: 0.8; }
+.div-tax-clear { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 1px; line-height: 1; }
+.div-tax-clear:hover { color: var(--loss); }
+.div-tax-edit { display: inline-flex; align-items: center; gap: 3px; }
+.div-tax-input {
+  width: 55px;
+  font-size: 12px;
+  padding: 2px 4px;
+  background: var(--surface3);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
 }
 
 .table-scroll { overflow-x: auto; }
@@ -649,25 +700,34 @@ input::placeholder { color: var(--faint); }
 .closed-fields { border-left: 2px solid var(--border-2); padding-left: 12px; }
 
 /* ══════════════════════════════════════════════════
-   RESPONSIVE — unchanged column-hiding behaviour
+   RESPONSIVE
+   Column layout (1-indexed):
+   1:expand 2:Ticker 3:Type 4:Qty 5:AvgBuy 6:FirstBuy 7:Lots
+   8:Broker 9:CurPrice 10:CostBasis 11:CurValue 12:PricePnL
+   13:Divid 14:TotalReturn 15:Return% 16:IRR 17:Actions
    ══════════════════════════════════════════════════ */
 @media (max-width: 960px) {
   .header-inner, .main { padding-left: 14px; padding-right: 14px; }
-  .summary-table th { padding: 12px 10px 4px; font-size: 9px; }
-  .summary-table td { padding: 4px 10px 12px; font-size: 14px; }
+  /* summary grid: 4 columns on medium screens */
+  .summary-grid { grid-template-columns: repeat(4, 1fr); }
+  .summary-card { align-items: flex-start; padding: 11px 10px; }
+  .summary-value { font-size: 14px; }
   .table-toolbar { padding: 8px 14px; }
+  /* hide: AvgBuy(5), FirstBuy(6), Lots(7), Broker(8), CostBasis(10), Divid(13), IRR(16) */
   .table-scroll > table th:nth-child(5),
   .table-scroll > table td:nth-child(5),
   .table-scroll > table th:nth-child(6),
   .table-scroll > table td:nth-child(6),
   .table-scroll > table th:nth-child(7),
   .table-scroll > table td:nth-child(7),
-  .table-scroll > table th:nth-child(9),
-  .table-scroll > table td:nth-child(9),
-  .table-scroll > table th:nth-child(12),
-  .table-scroll > table td:nth-child(12),
-  .table-scroll > table th:nth-child(15),
-  .table-scroll > table td:nth-child(15) { display: none; }
+  .table-scroll > table th:nth-child(8),
+  .table-scroll > table td:nth-child(8),
+  .table-scroll > table th:nth-child(10),
+  .table-scroll > table td:nth-child(10),
+  .table-scroll > table th:nth-child(13),
+  .table-scroll > table td:nth-child(13),
+  .table-scroll > table th:nth-child(16),
+  .table-scroll > table td:nth-child(16) { display: none; }
   th { padding: 9px 10px; }
   td { padding: 9px 10px; }
 }
@@ -675,16 +735,19 @@ input::placeholder { color: var(--faint); }
 @media (max-width: 640px) {
   .header h1 { font-size: 14px; }
   .header-inner, .main { padding-left: 12px; padding-right: 12px; }
-  .summary-table th { padding: 10px 8px 3px; font-size: 8.5px; }
-  .summary-table td { padding: 3px 8px 10px; font-size: 13px; }
-  .summary-sub { font-size: 10px; }
+  /* summary grid: 2 columns on mobile — cards are readable */
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .summary-card { padding: 10px 12px; align-items: flex-start; }
+  .summary-value { font-size: 13px; }
+  .summary-label { font-size: 9px; }
   .table-toolbar { padding: 8px 12px; }
+  /* hide: Type(3), CurPrice(9), TotalReturn(14) */
   .table-scroll > table th:nth-child(3),
   .table-scroll > table td:nth-child(3),
-  .table-scroll > table th:nth-child(8),
-  .table-scroll > table td:nth-child(8),
-  .table-scroll > table th:nth-child(13),
-  .table-scroll > table td:nth-child(13) { display: none; }
+  .table-scroll > table th:nth-child(9),
+  .table-scroll > table td:nth-child(9),
+  .table-scroll > table th:nth-child(14),
+  .table-scroll > table td:nth-child(14) { display: none; }
   th { padding: 8px 8px; }
   td { padding: 9px 8px; font-size: 12.5px; }
   .ticker { font-size: 12.5px; }

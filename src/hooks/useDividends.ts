@@ -30,7 +30,7 @@ export function useDividends() {
           cache.set(ticker.toUpperCase(), events)
           setDividends((prev) => new Map(prev).set(ticker.toUpperCase(), events))
         } catch {
-          cache.set(ticker.toUpperCase(), [])
+          // Don't cache errors — allow retry on next fetch cycle
         } finally {
           inFlight.current.delete(ticker)
         }

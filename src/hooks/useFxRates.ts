@@ -25,7 +25,9 @@ export function useFxRates() {
       fetchFxRate('EURCZK%3DX'),
     ]).then(([usd, eur]) => {
       setRates({ CZK: 1, USD: usd, EUR: eur })
-    }).catch(() => {})
+    }).catch((err) => {
+      console.warn('[useFxRates] failed to fetch FX rates, using defaults:', err instanceof Error ? err.message : err)
+    })
   }, [])
 
   const convert = useCallback(

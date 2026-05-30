@@ -3,6 +3,7 @@ import { usePortfolio } from '../hooks/usePortfolio'
 import { useQuotes } from '../hooks/useQuotes'
 import { useDividends } from '../hooks/useDividends'
 import { useManualPrices } from '../hooks/useManualPrices'
+import { useManualDividendTaxes } from '../hooks/useManualDividendTaxes'
 import { PortfolioTable } from './PortfolioTable'
 import { PortfolioPnLChart } from './PortfolioPnLChart'
 import { AddPositionModal } from './AddPositionModal'
@@ -23,6 +24,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
   const { quotes, loading: loadingSet, errors, fetchTickers: fetchQuotes } = useQuotes()
   const { dividends, fetchTickers: fetchDividends } = useDividends()
   const { prices: manualPrices, setPrice: setManualPrice, removePrice: clearManualPrice } = useManualPrices(portfolioId)
+  const { taxOverrides, setDivTax, clearDivTax } = useManualDividendTaxes(portfolioId)
   const [showClosed, setShowClosed] = useState(false)
 
   const tickers = useMemo(
@@ -78,7 +80,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const currentValue = isClosed ? 0 : currentPrice * openQty
 
       const tickerDivs = dividends.get(ticker.toUpperCase()) ?? []
-      const dividendIncome = calcNetDividends(lots, tickerDivs, ticker)
+      const dividendIncome = calcNetDividends(lots, tickerDivs, ticker, taxOverrides)
 
       const realizedPnl = closedLots.reduce((s, l) => s + (l.sellPrice! - l.buyPrice) * l.quantity, 0)
       const unrealizedPnl = isClosed ? 0 : (currentPrice - openAvgBuy) * openQty
@@ -96,7 +98,8 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
                 .filter((l) => l.buyDate <= div.date && (!l.sellDate || l.sellDate > div.date))
                 .reduce((s, l) => s + l.quantity, 0)
               if (shares === 0) return []
-              return [{ date: new Date(div.date), amount: shares * div.amount * (1 - getDividendTaxRate(ticker)) }]
+              const rate = taxOverrides[`${ticker.toUpperCase()}::${div.date}`] ?? getDividendTaxRate(ticker)
+              return [{ date: new Date(div.date), amount: shares * div.amount * (1 - rate) }]
             }),
             ...(isClosed ? [] : [{ date: today, amount: currentValue }]),
           ])
@@ -131,7 +134,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         dailyChange,
       }
     })
-  }, [positions, quotes, loadingSet, errors, dividends, manualPrices])
+  }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides])
 
   const portfolioIrr = useMemo(() => {
     if (positions.length === 0) return null
@@ -146,7 +149,8 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
       divs.forEach((div) => {
         if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
-          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * (1 - getDividendTaxRate(pos.ticker)) })
+          const rate = taxOverrides[`${pos.ticker.toUpperCase()}::${div.date}`] ?? getDividendTaxRate(pos.ticker)
+          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * (1 - rate) })
         }
       })
     })
@@ -161,7 +165,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       ...divCashFlows,
       { date: new Date(), amount: totalCurrentValue },
     ])
-  }, [positions, rows, dividends])
+  }, [positions, rows, dividends, taxOverrides])
 
   return (
     <>
@@ -179,6 +183,10 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         onToggleClosed={() => setShowClosed((v) => !v)}
         displayCurrency={displayCurrency}
         convert={convert}
+        dividendsByTicker={dividends}
+        taxOverrides={taxOverrides}
+        onSetDivTax={setDivTax}
+        onClearDivTax={clearDivTax}
       />
 
       {positions.length > 0 && (
@@ -189,6 +197,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
             manualPrices={manualPrices}
             displayCurrency={displayCurrency}
             convert={convert}
+            taxOverrides={taxOverrides}
           />
         </div>
       )}

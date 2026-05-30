@@ -8,15 +8,13 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 
 interface ChartPoint {
   date: string
   price: number
   isoDate?: string
 }
-
-// Tickers whose history fetchHistory already converts to CZK
-const CHART_FX_TICKERS = new Set(['XAU', '4GLD.DE', 'EXUS.DE'])
 
 interface Props {
   ticker: string
@@ -57,14 +55,8 @@ function parseRaw(json: unknown, yahooRange: string): ChartPoint[] {
     .filter((d) => isFinite(d.price) && d.price > 0)
 }
 
-const CHART_FX: Record<string, { priceTicker: string; fxTicker: string }> = {
-  'XAU':     { priceTicker: 'GC%3DF',  fxTicker: 'USDCZK%3DX' },
-  '4GLD.DE': { priceTicker: '4GLD.DE', fxTicker: 'EURCZK%3DX' },
-  'EXUS.DE': { priceTicker: 'EXUS.DE', fxTicker: 'EURCZK%3DX' },
-}
-
 async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPoint[]> {
-  const fx = CHART_FX[ticker.toUpperCase()]
+  const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
       fetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
@@ -105,8 +97,8 @@ export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }:
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Currency the fetched data is actually in (CHART_FX tickers are pre-converted to CZK)
-  const dataCurrency = CHART_FX_TICKERS.has(ticker.toUpperCase()) ? 'CZK' : tickerCurrency
+  // Currency the fetched data is actually in (FX-converted tickers are pre-converted to CZK)
+  const dataCurrency = FX_CONVERTED_SET.has(ticker.toUpperCase()) ? 'CZK' : tickerCurrency
 
   useEffect(() => {
     if (!ticker) return

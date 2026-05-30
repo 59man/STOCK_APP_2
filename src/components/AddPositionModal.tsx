@@ -17,6 +17,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
     buyPrice: '',
     buyDate: new Date().toISOString().slice(0, 10),
     currency: 'USD',
+    broker: '',
     isClosed: false,
     sellPrice: '',
     sellDate: new Date().toISOString().slice(0, 10),
@@ -59,6 +60,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
       buyPrice: parseFloat(form.buyPrice),
       buyDate: form.buyDate,
       currency: form.currency,
+      ...(form.broker.trim() ? { broker: form.broker.trim() } : {}),
     }
     onAdd(
       form.isClosed
@@ -150,6 +152,24 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
               </select>
             </label>
           </div>
+
+          <label>
+            Broker / Platform <span className="muted" style={{ fontSize: 11 }}>(optional)</span>
+            <input
+              list="broker-list"
+              placeholder="e.g. XTB, Revolut, IBKR"
+              value={form.broker}
+              onChange={(e) => set('broker', e.target.value)}
+            />
+            <datalist id="broker-list">
+              <option value="XTB" />
+              <option value="Revolut" />
+              <option value="Interactive Brokers" />
+              <option value="Fio banka" />
+              <option value="Degiro" />
+              <option value="Trading 212" />
+            </datalist>
+          </label>
 
           <label className="closed-toggle">
             <input
