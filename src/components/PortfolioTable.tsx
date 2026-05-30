@@ -1,11 +1,76 @@
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useRef, useEffect } from 'react'
 import { PortfolioRow } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
+import { ManualPriceEntry } from '../hooks/useManualPrices'
 import { PriceChart } from './PriceChart'
 import { SellPositionModal } from './SellPositionModal'
 
-const COL_COUNT = 16
+// ── Column definitions ────────────────────────────────────────────────────────
+const COLUMN_DEFS = [
+  { key: 'type',        label: 'Type',         defaultVisible: true  },
+  { key: 'qty',         label: 'Qty',          defaultVisible: true  },
+  { key: 'avgBuy',      label: 'Avg Buy',      defaultVisible: true  },
+  { key: 'firstBuy',    label: 'First Buy',    defaultVisible: true  },
+  { key: 'lots',        label: 'Lots',         defaultVisible: true  },
+  { key: 'broker',      label: 'Broker',       defaultVisible: true  },
+  { key: 'curPrice',    label: 'Cur. Price',   defaultVisible: true  },
+  { key: 'today',       label: 'Today',        defaultVisible: true  },
+  { key: 'costBasis',   label: 'Cost Basis',   defaultVisible: true  },
+  { key: 'curValue',    label: 'Cur. Value',   defaultVisible: true  },
+  { key: 'pricePnl',    label: 'Price P&L',    defaultVisible: true  },
+  { key: 'dividends',   label: 'Divid. (net)', defaultVisible: true  },
+  { key: 'totalReturn', label: 'Total Return', defaultVisible: true  },
+  { key: 'returnPct',   label: 'Return %',     defaultVisible: true  },
+  { key: 'irr',         label: 'IRR p.a.',     defaultVisible: true  },
+] as const
 
+type ColKey = typeof COLUMN_DEFS[number]['key']
+
+// CSS class for each column — used by responsive breakpoints in App.css
+const COL_CLASS: Record<ColKey, string> = {
+  type:        'col-type',
+  qty:         'col-qty',
+  avgBuy:      'col-avg-buy',
+  firstBuy:    'col-first-buy',
+  lots:        'col-lots',
+  broker:      'col-broker',
+  curPrice:    'col-cur-price',
+  today:       'col-today',
+  costBasis:   'col-cost-basis',
+  curValue:    'col-cur-value',
+  pricePnl:    'col-price-pnl',
+  dividends:   'col-dividends',
+  totalReturn: 'col-total-return',
+  returnPct:   'col-return-pct',
+  irr:         'col-irr',
+}
+
+const COL_STORAGE_KEY = 'stock_tracker_column_config'
+
+interface ColConfig { key: ColKey; visible: boolean }
+
+function loadColConfig(): ColConfig[] {
+  try {
+    const raw = localStorage.getItem(COL_STORAGE_KEY)
+    if (raw) {
+      const stored = JSON.parse(raw) as { key: string; visible: boolean }[]
+      const knownKeys = new Set(COLUMN_DEFS.map(d => d.key as string))
+      const storedKeys = new Set(stored.map(c => c.key))
+      return [
+        ...stored.filter(c => knownKeys.has(c.key)) as ColConfig[],
+        // append any new columns not yet in stored config
+        ...COLUMN_DEFS.filter(d => !storedKeys.has(d.key)).map(d => ({ key: d.key, visible: d.defaultVisible })),
+      ]
+    }
+  } catch {}
+  return COLUMN_DEFS.map(d => ({ key: d.key as ColKey, visible: d.defaultVisible }))
+}
+
+function saveColConfig(cfg: ColConfig[]) {
+  try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(cfg)) } catch {}
+}
+
+// ── Supporting types ──────────────────────────────────────────────────────────
 interface SellTarget {
   ticker: string
   lots: Array<{ id: string; quantity: number; buyDate: string; buyPrice: number; currency: string }>
@@ -25,38 +90,29 @@ interface Props {
   convert: (amount: number, from: string, to: string) => number
   dividendsByTicker: Map<string, DividendEvent[]>
   taxOverrides: Record<string, number>
+  manualPrices: Record<string, ManualPriceEntry>
   onSetDivTax: (ticker: string, date: string, rate: number) => void
   onClearDivTax: (ticker: string, date: string) => void
 }
 
+// ── Formatting helpers ────────────────────────────────────────────────────────
 function fmt(n: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n)
 }
 
 function fmtPrice(n: number, currency = 'USD') {
   const digits = n < 10 ? 4 : 2
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
+    style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits,
   }).format(n)
 }
 
-function fmtQty(n: number) {
-  return parseFloat(n.toFixed(4)).toLocaleString()
-}
+function fmtQty(n: number) { return parseFloat(n.toFixed(4)).toLocaleString() }
+function pct(n: number) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%' }
 
-function pct(n: number) {
-  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'
-}
-
-// Inline component for editing dividend tax rate on a single event
+// ── DivTaxCell ────────────────────────────────────────────────────────────────
 function DivTaxCell({
   ticker, date, appliedRate, isOverridden, onSet, onClear,
 }: {
@@ -68,21 +124,15 @@ function DivTaxCell({
 
   const commit = () => {
     const pctVal = parseFloat(val)
-    if (!isNaN(pctVal) && pctVal >= 0 && pctVal <= 100) {
-      onSet(pctVal / 100)
-      setEditing(false)
-    }
+    if (!isNaN(pctVal) && pctVal >= 0 && pctVal <= 100) { onSet(pctVal / 100); setEditing(false) }
   }
 
   if (editing) {
     return (
       <span className="div-tax-edit">
         <input
-          className="div-tax-input"
-          type="number" min="0" max="100" step="0.1"
-          autoFocus
-          value={val}
-          placeholder={(appliedRate * 100).toFixed(1)}
+          className="div-tax-input" type="number" min="0" max="100" step="0.1"
+          autoFocus value={val} placeholder={(appliedRate * 100).toFixed(1)}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }}
         />
@@ -109,10 +159,11 @@ function DivTaxCell({
   )
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export function PortfolioTable({
   rows, onRemove, onSellPositions, onRefresh, portfolioIrr,
   onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed,
-  displayCurrency, convert, dividendsByTicker, taxOverrides, onSetDivTax, onClearDivTax,
+  displayCurrency, convert, dividendsByTicker, taxOverrides, manualPrices, onSetDivTax, onClearDivTax,
 }: Props) {
   const [editingTicker, setEditingTicker] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -120,6 +171,42 @@ export function PortfolioTable({
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [pendingDelete, setPendingDelete] = useState<{ ids: string[]; label: string } | null>(null)
   const [pendingSell, setPendingSell] = useState<SellTarget | null>(null)
+
+  // Column config
+  const [colConfig, setColConfig] = useState<ColConfig[]>(loadColConfig)
+  const [showColPanel, setShowColPanel] = useState(false)
+  const colPanelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showColPanel) return
+    const handler = (e: MouseEvent) => {
+      if (colPanelRef.current && !colPanelRef.current.contains(e.target as Node)) {
+        setShowColPanel(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showColPanel])
+
+  const activeColumns = colConfig.filter(c => c.visible)
+
+  const toggleColumn = (key: ColKey) => {
+    const next = colConfig.map(c => c.key === key ? { ...c, visible: !c.visible } : c)
+    setColConfig(next); saveColConfig(next)
+  }
+
+  const moveColumn = (index: number, dir: -1 | 1) => {
+    const target = index + dir
+    if (target < 0 || target >= colConfig.length) return
+    const next = [...colConfig]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setColConfig(next); saveColConfig(next)
+  }
+
+  const resetColumns = () => {
+    const next = COLUMN_DEFS.map(d => ({ key: d.key as ColKey, visible: d.defaultVisible }))
+    setColConfig(next); saveColConfig(next)
+  }
 
   const toggle = (ticker: string) =>
     setExpanded((prev) => {
@@ -133,17 +220,17 @@ export function PortfolioTable({
   const commitEdit = (ticker: string, totalQty: number) => {
     const raw = editValue.replace(/\s/g, '').replace(',', '.')
     const totalValue = parseFloat(raw)
-    if (!raw || !isFinite(totalValue) || totalValue <= 0) {
-      setEditError('Enter a valid positive number')
-      return
-    }
+    if (!raw || !isFinite(totalValue) || totalValue <= 0) { setEditError('Enter a valid positive number'); return }
     onSetManualPrice(ticker, totalValue / totalQty)
     cancelEdit()
   }
 
   const handleExport = () => {
     const allPositions = rows.flatMap((r) => r.positions)
-    const blob = new Blob([JSON.stringify(allPositions, null, 2)], { type: 'application/json' })
+    const exportData: Record<string, unknown> = { version: 1, positions: allPositions }
+    if (Object.keys(taxOverrides).length > 0) exportData.dividendTaxOverrides = taxOverrides
+    if (Object.keys(manualPrices).length > 0) exportData.manualPrices = manualPrices
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -163,7 +250,6 @@ export function PortfolioTable({
   const closedCount = rows.filter((r) => r.isClosed).length
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
-  // Summary — each row's value is converted from its native currency to displayCurrency
   const cv = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
   const totalCost = rows.reduce((s, r) => s + cv(r.costBasis, r.currency), 0)
   const totalValue = rows.reduce((s, r) => s + cv(r.currentValue, r.currency), 0)
@@ -175,10 +261,13 @@ export function PortfolioTable({
   const prevTotalValue = totalValue - totalDailyChange
   const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
 
+  // colSpan for detail row = expand(1) + ticker(1) + active cols + actions(1)
+  const detailColSpan = activeColumns.length + 3
+
   return (
     <div className="table-wrapper">
 
-      {/* ── Portfolio summary grid (mobile-friendly cards) ── */}
+      {/* ── Summary grid ── */}
       <div className="summary-section">
         <div className="summary-grid">
           <div className="summary-card">
@@ -224,8 +313,9 @@ export function PortfolioTable({
         </div>
       </div>
 
+      {/* ── Toolbar ── */}
       <div className="table-toolbar">
-        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
           {closedCount > 0 && (
             <button className="btn-secondary" onClick={onToggleClosed}>
               {showClosed ? 'Hide closed' : `Show closed (${closedCount})`}
@@ -233,29 +323,54 @@ export function PortfolioTable({
           )}
           <button className="btn-secondary" onClick={onRefresh}>↻ Refresh</button>
           <button className="btn-secondary" onClick={handleExport} title="Download all positions as JSON">↓ Export</button>
+          {/* Column config button */}
+          <div className="col-panel-wrap" ref={colPanelRef}>
+            <button
+              className={`btn-secondary${showColPanel ? ' active' : ''}`}
+              onClick={() => setShowColPanel(v => !v)}
+              title="Show/hide and reorder columns"
+            >⚙ Columns</button>
+            {showColPanel && (
+              <div className="col-panel">
+                {colConfig.map((col, i) => {
+                  const def = COLUMN_DEFS.find(d => d.key === col.key)
+                  return (
+                    <div key={col.key} className="col-panel-item">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={col.visible}
+                          onChange={() => toggleColumn(col.key)}
+                        />
+                        {def?.label ?? col.key}
+                      </label>
+                      <div className="col-panel-arrows">
+                        <button onClick={() => moveColumn(i, -1)} disabled={i === 0} title="Move up">↑</button>
+                        <button onClick={() => moveColumn(i, 1)} disabled={i === colConfig.length - 1} title="Move down">↓</button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="col-panel-divider" />
+                <button className="col-panel-reset" onClick={resetColumns}>Reset to default</button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* ── Table ── */}
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
               <th></th>
               <th>Ticker</th>
-              <th>Type</th>
-              <th>Qty</th>
-              <th>Avg Buy</th>
-              <th>First Buy</th>
-              <th>Lots</th>
-              <th>Broker</th>
-              <th>Cur. Price</th>
-              <th>Cost Basis</th>
-              <th>Cur. Value</th>
-              <th>Price P&amp;L</th>
-              <th>Divid. (net)</th>
-              <th>Total Return</th>
-              <th>Return %</th>
-              <th>IRR p.a.</th>
+              {activeColumns.map(col => (
+                <th key={col.key} className={COL_CLASS[col.key]}>
+                  {COLUMN_DEFS.find(d => d.key === col.key)?.label}
+                </th>
+              ))}
               <th></th>
             </tr>
           </thead>
@@ -264,21 +379,18 @@ export function PortfolioTable({
               const totalReturnPctRow = r.costBasis > 0 ? (r.totalReturn / r.costBasis) * 100 : 0
               const isEditing = editingTicker === r.ticker
               const isExpanded = expanded.has(r.ticker)
-
-              // Broker display: show broker from first lot; "Mixed" if lots differ
               const brokers = [...new Set(r.positions.map((p) => p.broker).filter(Boolean))]
-              const brokerDisplay = brokers.length === 0 ? null
-                : brokers.length === 1 ? brokers[0]
-                : 'Mixed'
+              const brokerDisplay = brokers.length === 0 ? null : brokers.length === 1 ? brokers[0] : 'Mixed'
+              const noLivePrice = r.isClosed || r.priceIsManual || (!!r.error && !r.priceIsManual)
+              const dailyVal = cv(r.dailyChange, r.currency)
+              const prevVal = cv(r.currentValue, r.currency) - dailyVal
+              const dailyPct = prevVal > 0 ? (dailyVal / prevVal) * 100 : 0
 
               const editInline = (
                 <span className="price-edit-inline">
                   <input
                     className={`price-edit-input${editError ? ' price-edit-error' : ''}`}
-                    type="text"
-                    value={editValue}
-                    autoFocus
-                    placeholder="cur. value"
+                    type="text" value={editValue} autoFocus placeholder="cur. value"
                     title="Enter current total position value from your bank report"
                     onChange={(e) => { setEditValue(e.target.value); setEditError(null) }}
                     onKeyDown={(e) => {
@@ -294,8 +406,8 @@ export function PortfolioTable({
 
               return (
                 <Fragment key={r.ticker}>
-                  {/* ── Aggregated row ── */}
                   <tr className={[isExpanded ? 'row-expanded' : '', r.isClosed ? 'row-closed' : ''].filter(Boolean).join(' ')}>
+                    {/* Fixed: expand button */}
                     <td>
                       <button
                         className={`expand-btn ${isExpanded ? 'expanded' : ''}`}
@@ -303,79 +415,146 @@ export function PortfolioTable({
                         title={isExpanded ? 'Collapse' : 'Expand transactions & chart'}
                       >▶</button>
                     </td>
+
+                    {/* Fixed: Ticker */}
                     <td>
                       <span className="ticker">{r.ticker}</span>
                       {r.isClosed && <span className="badge-sold">SOLD</span>}
                       {r.name && r.name !== r.ticker && <span className="name">{r.name}</span>}
                     </td>
-                    <td><span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span></td>
-                    <td>{fmtQty(r.totalQuantity)}</td>
-                    <td>{fmtPrice(cv(r.avgBuyPrice, r.currency), displayCurrency)}</td>
-                    <td>{r.firstBuyDate}</td>
-                    <td>
-                      {r.lots > 1
-                        ? <span className="lots-badge">{r.lots} lots</span>
-                        : <span className="muted">—</span>}
-                    </td>
-                    <td>
-                      {brokerDisplay
-                        ? <span className="broker-badge">{brokerDisplay}</span>
-                        : <span className="muted">—</span>}
-                    </td>
 
-                    {/* Cur. Price */}
-                    <td>
-                      {r.loading ? <span className="loading-dot">…</span>
-                        : r.error && !r.priceIsManual ? <span className="muted">—</span>
-                        : (
-                          <span>
-                            {fmtPrice(cv(r.currentPrice, r.currency), displayCurrency)}
-                            {r.priceIsManual && (
-                              <span className="badge-manual" title={`Manually set on ${r.manualPriceDate ?? 'unknown'} — edit in Cur. Value`}> M</span>
-                            )}
-                          </span>
-                        )}
-                    </td>
+                    {/* Dynamic columns */}
+                    {activeColumns.map(col => {
+                      const cls = COL_CLASS[col.key]
+                      switch (col.key) {
+                        case 'type':
+                          return <td key={col.key} className={cls}><span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span></td>
 
-                    <td>{fmt(cv(r.costBasis, r.currency), displayCurrency)}</td>
+                        case 'qty':
+                          return <td key={col.key} className={cls}>{fmtQty(r.totalQuantity)}</td>
 
-                    {/* Cur. Value — edit target for manual prices */}
-                    <td>
-                      {r.loading ? '…'
-                        : r.priceIsManual ? (
-                          <span className="price-manual-wrap">
-                            {fmt(cv(r.currentValue, r.currency), displayCurrency)}
-                            {isEditing ? editInline : (
-                              <>
-                                <span className="badge-manual" title={`Set ${r.manualPriceDate ?? ''} — click to update`}
-                                  onClick={() => startEdit(r.ticker, r.currentValue.toFixed(2))}>M</span>
-                                <button className="price-clear-btn" title="Clear manual price" onClick={() => onClearManualPrice(r.ticker)}>×</button>
-                              </>
-                            )}
-                          </span>
-                        ) : r.error ? (
-                          <span className="price-error-wrap">
-                            {isEditing ? editInline
-                              : <button className="price-set-btn" onClick={() => startEdit(r.ticker, '')}>Set</button>}
-                          </span>
-                        ) : fmt(cv(r.currentValue, r.currency), displayCurrency)}
-                    </td>
+                        case 'avgBuy':
+                          return <td key={col.key} className={cls}>{fmtPrice(cv(r.avgBuyPrice, r.currency), displayCurrency)}</td>
 
-                    <td className={r.pnl >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(cv(r.pnl, r.currency), displayCurrency)}</td>
-                    <td className={r.dividendIncome > 0 ? 'gain' : 'muted'}>
-                      {r.dividendIncome > 0 ? fmt(cv(r.dividendIncome, r.currency), displayCurrency) : <span className="muted">—</span>}
-                    </td>
-                    <td className={r.totalReturn >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : fmt(cv(r.totalReturn, r.currency), displayCurrency)}</td>
-                    <td className={totalReturnPctRow >= 0 ? 'gain' : 'loss'}>{r.loading ? '…' : pct(totalReturnPctRow)}</td>
-                    <td className={r.irr != null ? (r.irr >= 0 ? 'gain' : 'loss') : ''}>
-                      {r.loading ? '…' : r.irr != null ? pct(r.irr * 100) : <span className="muted">N/A</span>}
-                    </td>
+                        case 'firstBuy':
+                          return <td key={col.key} className={cls}>{r.firstBuyDate}</td>
+
+                        case 'lots':
+                          return (
+                            <td key={col.key} className={cls}>
+                              {r.lots > 1 ? <span className="lots-badge">{r.lots} lots</span> : <span className="muted">—</span>}
+                            </td>
+                          )
+
+                        case 'broker':
+                          return (
+                            <td key={col.key} className={cls}>
+                              {brokerDisplay ? <span className="broker-badge">{brokerDisplay}</span> : <span className="muted">—</span>}
+                            </td>
+                          )
+
+                        case 'curPrice':
+                          return (
+                            <td key={col.key} className={cls}>
+                              {r.loading ? <span className="loading-dot">…</span>
+                                : r.error && !r.priceIsManual ? <span className="muted">—</span>
+                                : (
+                                  <span>
+                                    {fmtPrice(cv(r.currentPrice, r.currency), displayCurrency)}
+                                    {r.priceIsManual && (
+                                      <span className="badge-manual" title={`Manually set on ${r.manualPriceDate ?? 'unknown'} — edit in Cur. Value`}> M</span>
+                                    )}
+                                  </span>
+                                )}
+                            </td>
+                          )
+
+                        case 'today':
+                          return (
+                            <td key={col.key} className={`${cls}${!r.loading && !noLivePrice && r.dailyChange !== 0 ? (r.dailyChange >= 0 ? ' gain' : ' loss') : ''}`}>
+                              {r.loading ? <span className="loading-dot">…</span>
+                                : noLivePrice ? <span className="muted">—</span>
+                                : (
+                                  <>
+                                    {dailyVal >= 0 ? '+' : ''}{fmt(dailyVal, displayCurrency)}
+                                    <span className="summary-sub">{pct(dailyPct)}</span>
+                                  </>
+                                )}
+                            </td>
+                          )
+
+                        case 'costBasis':
+                          return <td key={col.key} className={cls}>{fmt(cv(r.costBasis, r.currency), displayCurrency)}</td>
+
+                        case 'curValue':
+                          return (
+                            <td key={col.key} className={cls}>
+                              {r.loading ? '…'
+                                : r.priceIsManual ? (
+                                  <span className="price-manual-wrap">
+                                    {fmt(cv(r.currentValue, r.currency), displayCurrency)}
+                                    {isEditing ? editInline : (
+                                      <>
+                                        <span className="badge-manual" title={`Set ${r.manualPriceDate ?? ''} — click to update`}
+                                          onClick={() => startEdit(r.ticker, r.currentValue.toFixed(2))}>M</span>
+                                        <button className="price-clear-btn" title="Clear manual price" onClick={() => onClearManualPrice(r.ticker)}>×</button>
+                                      </>
+                                    )}
+                                  </span>
+                                ) : r.error ? (
+                                  <span className="price-error-wrap">
+                                    {isEditing ? editInline
+                                      : <button className="price-set-btn" onClick={() => startEdit(r.ticker, '')}>Set</button>}
+                                  </span>
+                                ) : fmt(cv(r.currentValue, r.currency), displayCurrency)}
+                            </td>
+                          )
+
+                        case 'pricePnl':
+                          return (
+                            <td key={col.key} className={`${cls} ${r.pnl >= 0 ? 'gain' : 'loss'}`}>
+                              {r.loading ? '…' : fmt(cv(r.pnl, r.currency), displayCurrency)}
+                            </td>
+                          )
+
+                        case 'dividends':
+                          return (
+                            <td key={col.key} className={`${cls} ${r.dividendIncome > 0 ? 'gain' : 'muted'}`}>
+                              {r.dividendIncome > 0 ? fmt(cv(r.dividendIncome, r.currency), displayCurrency) : <span className="muted">—</span>}
+                            </td>
+                          )
+
+                        case 'totalReturn':
+                          return (
+                            <td key={col.key} className={`${cls} ${r.totalReturn >= 0 ? 'gain' : 'loss'}`}>
+                              {r.loading ? '…' : fmt(cv(r.totalReturn, r.currency), displayCurrency)}
+                            </td>
+                          )
+
+                        case 'returnPct':
+                          return (
+                            <td key={col.key} className={`${cls} ${totalReturnPctRow >= 0 ? 'gain' : 'loss'}`}>
+                              {r.loading ? '…' : pct(totalReturnPctRow)}
+                            </td>
+                          )
+
+                        case 'irr':
+                          return (
+                            <td key={col.key} className={`${cls}${r.irr != null ? (r.irr >= 0 ? ' gain' : ' loss') : ''}`}>
+                              {r.loading ? '…' : r.irr != null ? pct(r.irr * 100) : <span className="muted">N/A</span>}
+                            </td>
+                          )
+
+                        default: return null
+                      }
+                    })}
+
+                    {/* Fixed: Actions */}
                     <td>
                       <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                         {!r.isClosed && (
                           <button
-                            className="sell-btn"
-                            title="Sell / close position"
+                            className="sell-btn" title="Sell / close position"
                             onClick={() => {
                               const openLots = r.positions.filter((p) => !p.sellPrice || !p.sellDate)
                               setPendingSell({ ticker: r.ticker, lots: openLots.map((p) => ({ id: p.id, quantity: p.quantity, buyDate: p.buyDate, buyPrice: p.buyPrice, currency: p.currency })) })
@@ -394,7 +573,7 @@ export function PortfolioTable({
                   {/* ── Expanded detail row ── */}
                   {isExpanded && (
                     <tr className="detail-row">
-                      <td colSpan={COL_COUNT + 1}>
+                      <td colSpan={detailColSpan}>
                         <div className="detail-container">
 
                           {/* Individual lots mini-table */}
@@ -406,16 +585,10 @@ export function PortfolioTable({
                                 <table className="lot-table">
                                   <thead>
                                     <tr>
-                                      <th>#</th>
-                                      <th>Buy Date</th>
-                                      <th>Qty</th>
-                                      <th>Buy Price</th>
-                                      <th>Cost</th>
+                                      <th>#</th><th>Buy Date</th><th>Qty</th><th>Buy Price</th><th>Cost</th>
                                       {hasClosedLots && <th>Sell Date</th>}
                                       {hasClosedLots && <th>Sell Price</th>}
-                                      <th>Cur. Value</th>
-                                      <th>P&amp;L</th>
-                                      <th>P&amp;L %</th>
+                                      <th>Cur. Value</th><th>P&amp;L</th><th>P&amp;L %</th>
                                       {hasBrokers && <th>Broker</th>}
                                       <th></th>
                                     </tr>
@@ -440,32 +613,18 @@ export function PortfolioTable({
                                           <td>{fmt(posCost, displayCurrency)}</td>
                                           {hasClosedLots && <td>{isSold ? pos.sellDate : <span className="muted">—</span>}</td>}
                                           {hasClosedLots && <td>{isSold ? fmtPrice(cv(pos.sellPrice!, pos.currency), displayCurrency) : <span className="muted">—</span>}</td>}
-                                          <td>
-                                            {isSold
-                                              ? <span className="badge-sold" style={{ fontSize: 10 }}>SOLD</span>
-                                              : priceUnknown ? <span className="muted">—</span> : fmt(posValue, displayCurrency)}
-                                          </td>
-                                          <td className={posPnl >= 0 ? 'gain' : 'loss'}>
-                                            {priceUnknown ? <span className="muted">—</span> : fmt(posPnl, displayCurrency)}
-                                          </td>
-                                          <td className={posPnlPct >= 0 ? 'gain' : 'loss'}>
-                                            {priceUnknown ? <span className="muted">—</span> : pct(posPnlPct)}
-                                          </td>
-                                          {hasBrokers && (
-                                            <td>{pos.broker ? <span className="broker-badge">{pos.broker}</span> : <span className="muted">—</span>}</td>
-                                          )}
+                                          <td>{isSold ? <span className="badge-sold" style={{ fontSize: 10 }}>SOLD</span> : priceUnknown ? <span className="muted">—</span> : fmt(posValue, displayCurrency)}</td>
+                                          <td className={posPnl >= 0 ? 'gain' : 'loss'}>{priceUnknown ? <span className="muted">—</span> : fmt(posPnl, displayCurrency)}</td>
+                                          <td className={posPnlPct >= 0 ? 'gain' : 'loss'}>{priceUnknown ? <span className="muted">—</span> : pct(posPnlPct)}</td>
+                                          {hasBrokers && <td>{pos.broker ? <span className="broker-badge">{pos.broker}</span> : <span className="muted">—</span>}</td>}
                                           <td>
                                             <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                                               {!isSold && (
-                                                <button
-                                                  className="sell-btn sell-btn-sm"
-                                                  title="Sell this lot"
+                                                <button className="sell-btn sell-btn-sm" title="Sell this lot"
                                                   onClick={() => setPendingSell({ ticker: r.ticker, lots: [{ id: pos.id, quantity: pos.quantity, buyDate: pos.buyDate, buyPrice: pos.buyPrice, currency: pos.currency }] })}
                                                 >Sell</button>
                                               )}
-                                              <button
-                                                className="remove-btn"
-                                                title="Remove this lot"
+                                              <button className="remove-btn" title="Remove this lot"
                                                 onClick={() => setPendingDelete({ ids: [pos.id], label: `lot ${i + 1} of ${r.ticker}` })}
                                               >✕</button>
                                             </span>
@@ -479,27 +638,19 @@ export function PortfolioTable({
                             })()}
                           </div>
 
-                          {/* Dividend events panel with editable tax rates */}
+                          {/* Dividend events panel */}
                           {(() => {
                             const tickerDivs = dividendsByTicker.get(r.ticker.toUpperCase()) ?? []
                             const relevantDivs = tickerDivs.filter((div) =>
                               r.positions.some((lot) => lot.buyDate <= div.date && (!lot.sellDate || lot.sellDate > div.date))
                             )
                             if (relevantDivs.length === 0) return null
-
                             return (
                               <div className="div-panel">
                                 <div className="div-panel-title">Dividends received</div>
                                 <table className="lot-table">
                                   <thead>
-                                    <tr>
-                                      <th>Ex-date</th>
-                                      <th>Per share</th>
-                                      <th>Shares</th>
-                                      <th>Gross</th>
-                                      <th>Tax %</th>
-                                      <th>Net</th>
-                                    </tr>
+                                    <tr><th>Ex-date</th><th>Per share</th><th>Shares</th><th>Gross</th><th>Tax %</th><th>Net</th></tr>
                                   </thead>
                                   <tbody>
                                     {relevantDivs.map((div) => {
@@ -520,10 +671,8 @@ export function PortfolioTable({
                                           <td>{fmt(gross, r.currency)}</td>
                                           <td>
                                             <DivTaxCell
-                                              ticker={r.ticker}
-                                              date={div.date}
-                                              appliedRate={appliedRate}
-                                              isOverridden={isOverridden}
+                                              ticker={r.ticker} date={div.date}
+                                              appliedRate={appliedRate} isOverridden={isOverridden}
                                               onSet={(rate) => onSetDivTax(r.ticker, div.date, rate)}
                                               onClear={() => onClearDivTax(r.ticker, div.date)}
                                             />

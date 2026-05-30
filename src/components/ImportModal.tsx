@@ -5,11 +5,13 @@ interface Props {
   fileName: string
   positions: Position[]
   currentPortfolioName: string
+  hasTaxOverrides: boolean
+  hasManualPrices: boolean
   onConfirm: (mode: 'new' | 'current', newPortfolioName?: string) => void
   onClose: () => void
 }
 
-export function ImportModal({ fileName, positions, currentPortfolioName, onConfirm, onClose }: Props) {
+export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxOverrides, hasManualPrices, onConfirm, onClose }: Props) {
   const baseName = fileName.replace(/\.json$/i, '')
   const [mode, setMode] = useState<'new' | 'current'>('new')
   const [newName, setNewName] = useState(baseName)
@@ -51,6 +53,18 @@ export function ImportModal({ fileName, positions, currentPortfolioName, onConfi
               {tickers.join(', ')}{positions.length > tickers.length ? ' …' : ''}
             </span>
           </div>
+          {hasTaxOverrides && (
+            <div className="import-summary-row">
+              <span className="muted">Tax overrides</span>
+              <span className="gain">✓ included</span>
+            </div>
+          )}
+          {hasManualPrices && (
+            <div className="import-summary-row">
+              <span className="muted">Manual prices</span>
+              <span className="gain">✓ included</span>
+            </div>
+          )}
         </div>
 
         {/* Import target */}
@@ -93,7 +107,7 @@ export function ImportModal({ fileName, positions, currentPortfolioName, onConfi
 
           {mode === 'current' && (
             <p style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, paddingLeft: 26 }}>
-              Imported positions will be appended. Existing positions are kept.
+              Imported positions will be appended. Tax overrides and manual prices are merged — imported values override existing ones for the same key.
             </p>
           )}
         </div>

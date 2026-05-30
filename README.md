@@ -10,17 +10,21 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback
 - **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
 - **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. COLT.PR → CZG.PR)
+- **Custom dividend tax rates** — override the default withholding rate for any individual dividend event (click the % in the expanded row); custom rates are highlighted in amber and included in all P&L and IRR calculations
 - **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
+- **Broker / platform column** — optionally record which broker each lot was bought through (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212); shown as a badge per row with "Mixed" when lots differ
+- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change
+- **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any column and reorder them with ↑ ↓ arrows; layout is saved to localStorage and persists across reloads
 - **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
 - **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
 - **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur
 - **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
 - **Manual price override** — for funds with no public price feed: enter the current total value from your bank report; the app divides by quantity to derive the per-unit price; invalid input shows an inline error
-- **JSON import** — click **↑ Import** in the portfolio bar to load a JSON file; supports direct position arrays, old single-key format, and the multi-portfolio storage format; choose to import into a new portfolio or append to the current one
+- **Enhanced JSON export** — ↓ Export bundles positions, custom dividend tax rates, and manual prices into a single versioned JSON file (`version: 1`)
+- **Enhanced JSON import** — ↑ Import restores positions, tax overrides, and manual prices from an enhanced export; the import modal shows which extras are included; appending to an existing portfolio merges overrides
 - **Delete confirmation** — removing a row or lot shows a confirmation dialog; cannot be accidentally triggered
-- **JSON export** — download all positions as a dated JSON file from the toolbar (↓ Export)
-- **Persistent file storage** — all portfolios and manual prices are saved to `server/data.json` via a local Express server; survives browser clears and restarts
+- **Persistent file storage** — all data is saved to `server/data.json` via a local Express server with atomic writes (`.tmp` → rename + `.bak` backup); survives browser clears and restarts
 - **Docker support** — single-container production image; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
 - **Fully responsive** — the table adapts at three breakpoints (960 px, 640 px, 400 px) by progressively hiding non-essential columns
 
@@ -176,6 +180,8 @@ Data is stored in two layers:
 
 On startup, hooks read from localStorage immediately (no flash), then async-fetch from the server. If the server has data it takes priority.
 
+The Express server keeps an **in-memory store** loaded once at startup and flushes to disk with a debounced atomic write: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. SIGINT/SIGTERM flush before exit.
+
 **Legacy migration:** on first load, if the old single-key `stock_tracker_positions` is found it is copied to `stock_tracker_positions_${defaultId}` and a "Main Portfolio" is created automatically.
 
 ### Price sources
@@ -197,13 +203,19 @@ In **production / Docker** (`NODE_ENV=production`), Express handles all three ro
 - Forwards `/api/yahoo/*` to Yahoo Finance with a browser-like User-Agent
 - Handles `/api/persist/*` read/write to `data.json`
 
+### Column configuration
+
+Click **⚙ Columns** in the table toolbar to open the column config panel. Each of the 15 configurable columns (everything except Ticker, the expand button, and Actions) can be independently shown/hidden and reordered. The configuration is saved to `localStorage` key `stock_tracker_column_config` and persists across reloads. "Reset to default" restores the original order and visibility.
+
 ### Responsive breakpoints (`src/App.css`)
 
-| Breakpoint | Columns hidden | Columns visible |
-|---|---|---|
-| ≤ 960 px (tablet) | Avg Buy, First Buy, Lots, Cost Basis, Dividends, IRR | Ticker, Type, Qty, Cur. Price, Cur. Value, P&L, Total Return, Return % |
-| ≤ 640 px (mobile) | + Type, Cur. Price, Total Return | Ticker, Qty, Cur. Value, P&L, Return % |
-| ≤ 400 px (small) | + Qty | Ticker, Cur. Value, P&L, Return % |
+Breakpoint rules use CSS class names (`.col-avg-buy`, `.col-today`, etc.) rather than `nth-child` selectors, so they continue to work correctly regardless of the user's column order.
+
+| Breakpoint | Additionally hidden |
+|---|---|
+| ≤ 960 px (tablet) | Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR |
+| ≤ 640 px (mobile) | + Type, Cur. Price, Total Return |
+| ≤ 400 px (small) | + Qty |
 
 ### Styling
 

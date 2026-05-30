@@ -1,5 +1,12 @@
 import { Position } from '../types'
 
+export interface ParseResult {
+  valid: Position[]
+  skipped: number
+  dividendTaxOverrides?: Record<string, number>
+  manualPrices?: Record<string, { price: number; updatedAt: string }>
+}
+
 /** Minimal schema guard — rejects positions missing numeric required fields */
 function isValidPosition(p: unknown): p is Omit<Position, 'id'> {
   if (!p || typeof p !== 'object') return false
@@ -14,37 +21,57 @@ function isValidPosition(p: unknown): p is Omit<Position, 'id'> {
 
 /**
  * Parses position data from imported JSON.
- * Handles three formats:
- *   1. Direct Position[] array (export format)
- *   2. { stock_tracker_positions: "..." } (legacy single-key format)
- *   3. { stock_tracker_positions_<uuid>: "..." } (multi-portfolio format)
+ * Handles four formats:
+ *   1. v1 enhanced export { version: 1, positions, dividendTaxOverrides?, manualPrices? }
+ *   2. Direct Position[] array (legacy export format)
+ *   3. { stock_tracker_positions: "..." } (legacy single-key format)
+ *   4. { stock_tracker_positions_<uuid>: "..." } (multi-portfolio format)
  *
- * Returns { valid, skipped } — callers should warn if skipped > 0.
+ * Returns { valid, skipped, dividendTaxOverrides?, manualPrices? } — callers warn if skipped > 0.
  */
-export function parsePositionsFromJson(raw: unknown): { valid: Position[]; skipped: number } | null {
+export function parsePositionsFromJson(raw: unknown): ParseResult | null {
   let candidates: unknown[] = []
+  let dividendTaxOverrides: Record<string, number> | undefined
+  let manualPrices: Record<string, { price: number; updatedAt: string }> | undefined
 
-  if (Array.isArray(raw)) {
-    candidates = raw
-  } else if (raw && typeof raw === 'object') {
+  // Format 1: v1 enhanced export
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const obj = raw as Record<string, unknown>
-
-    // Legacy single-key format
-    if (typeof obj['stock_tracker_positions'] === 'string') {
-      try {
-        const parsed = JSON.parse(obj['stock_tracker_positions'])
-        if (Array.isArray(parsed)) candidates = parsed
-      } catch {}
+    if (obj.version === 1 && Array.isArray(obj.positions)) {
+      candidates = obj.positions
+      if (obj.dividendTaxOverrides && typeof obj.dividendTaxOverrides === 'object' && !Array.isArray(obj.dividendTaxOverrides)) {
+        dividendTaxOverrides = obj.dividendTaxOverrides as Record<string, number>
+      }
+      if (obj.manualPrices && typeof obj.manualPrices === 'object' && !Array.isArray(obj.manualPrices)) {
+        manualPrices = obj.manualPrices as Record<string, { price: number; updatedAt: string }>
+      }
     }
+  }
 
-    // Multi-portfolio format
-    if (candidates.length === 0) {
-      for (const key of Object.keys(obj)) {
-        if (key.startsWith('stock_tracker_positions_') && typeof obj[key] === 'string') {
-          try {
-            const parsed = JSON.parse(obj[key] as string)
-            if (Array.isArray(parsed)) candidates.push(...parsed)
-          } catch {}
+  // Formats 2-4: legacy
+  if (candidates.length === 0) {
+    if (Array.isArray(raw)) {
+      candidates = raw
+    } else if (raw && typeof raw === 'object') {
+      const obj = raw as Record<string, unknown>
+
+      // Legacy single-key format
+      if (typeof obj['stock_tracker_positions'] === 'string') {
+        try {
+          const parsed = JSON.parse(obj['stock_tracker_positions'])
+          if (Array.isArray(parsed)) candidates = parsed
+        } catch {}
+      }
+
+      // Multi-portfolio format
+      if (candidates.length === 0) {
+        for (const key of Object.keys(obj)) {
+          if (key.startsWith('stock_tracker_positions_') && typeof obj[key] === 'string') {
+            try {
+              const parsed = JSON.parse(obj[key] as string)
+              if (Array.isArray(parsed)) candidates.push(...parsed)
+            } catch {}
+          }
         }
       }
     }
@@ -53,5 +80,5 @@ export function parsePositionsFromJson(raw: unknown): { valid: Position[]; skipp
   if (candidates.length === 0) return null
 
   const valid = candidates.filter(isValidPosition) as Position[]
-  return { valid, skipped: candidates.length - valid.length }
+  return { valid, skipped: candidates.length - valid.length, dividendTaxOverrides, manualPrices }
 }

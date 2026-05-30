@@ -185,6 +185,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         convert={convert}
         dividendsByTicker={dividends}
         taxOverrides={taxOverrides}
+        manualPrices={manualPrices}
         onSetDivTax={setDivTax}
         onClearDivTax={clearDivTax}
       />

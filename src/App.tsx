@@ -17,7 +17,12 @@ export default function App() {
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('CZK')
   const [showAddModal, setShowAddModal] = useState(false)
   const [contentKey, setContentKey] = useState(0)
-  const [importData, setImportData] = useState<{ fileName: string; positions: Position[] } | null>(null)
+  const [importData, setImportData] = useState<{
+    fileName: string
+    positions: Position[]
+    taxOverrides?: Record<string, number>
+    manualPrices?: Record<string, { price: number; updatedAt: string }>
+  } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Inline rename state for the portfolio tab bar
@@ -54,7 +59,12 @@ export default function App() {
         if (result.skipped > 0) {
           console.warn(`[import] ${result.skipped} position(s) skipped — missing required fields`)
         }
-        setImportData({ fileName: file.name, positions: result.valid })
+        setImportData({
+          fileName: file.name,
+          positions: result.valid,
+          taxOverrides: result.dividendTaxOverrides,
+          manualPrices: result.manualPrices,
+        })
       } catch {
         alert('Could not parse file — make sure it is a valid JSON file.')
       }
@@ -69,18 +79,41 @@ export default function App() {
     if (mode === 'new' && newPortfolioName) {
       const id = addPortfolio(newPortfolioName)
       await setItem(`stock_tracker_positions_${id}`, JSON.stringify(positions))
+      if (importData.taxOverrides && Object.keys(importData.taxOverrides).length > 0) {
+        await setItem(`stock_tracker_div_tax_${id}`, JSON.stringify(importData.taxOverrides))
+      }
+      if (importData.manualPrices && Object.keys(importData.manualPrices).length > 0) {
+        await setItem(`stock_tracker_manual_prices_${id}`, JSON.stringify(importData.manualPrices))
+      }
       switchPortfolio(id)
     } else {
-      // Append to current portfolio
-      const key = `stock_tracker_positions_${activeId}`
-      const existing = await getItem(key).catch(() => null)
+      // Append to current portfolio — merge overrides rather than replace
+      const posKey = `stock_tracker_positions_${activeId}`
+      const existing = await getItem(posKey).catch(() => null)
       let current: Position[] = []
       if (existing) {
         try { current = JSON.parse(existing) } catch {
           console.warn('[import] could not parse existing positions — appending to empty list')
         }
       }
-      await setItem(key, JSON.stringify([...current, ...positions]))
+      await setItem(posKey, JSON.stringify([...current, ...positions]))
+
+      if (importData.taxOverrides && Object.keys(importData.taxOverrides).length > 0) {
+        const taxKey = `stock_tracker_div_tax_${activeId}`
+        const existingTax = await getItem(taxKey).catch(() => null)
+        let currentTax: Record<string, number> = {}
+        if (existingTax) { try { currentTax = JSON.parse(existingTax) } catch {} }
+        await setItem(taxKey, JSON.stringify({ ...currentTax, ...importData.taxOverrides }))
+      }
+
+      if (importData.manualPrices && Object.keys(importData.manualPrices).length > 0) {
+        const priceKey = `stock_tracker_manual_prices_${activeId}`
+        const existingPrices = await getItem(priceKey).catch(() => null)
+        let currentPrices: Record<string, { price: number; updatedAt: string }> = {}
+        if (existingPrices) { try { currentPrices = JSON.parse(existingPrices) } catch {} }
+        await setItem(priceKey, JSON.stringify({ ...currentPrices, ...importData.manualPrices }))
+      }
+
       // Force PortfolioContent to remount so it reads the updated storage
       setContentKey((k) => k + 1)
     }
@@ -212,6 +245,8 @@ export default function App() {
           fileName={importData.fileName}
           positions={importData.positions}
           currentPortfolioName={portfolios.find((p) => p.id === activeId)?.name ?? 'Current'}
+          hasTaxOverrides={!!importData.taxOverrides && Object.keys(importData.taxOverrides).length > 0}
+          hasManualPrices={!!importData.manualPrices && Object.keys(importData.manualPrices).length > 0}
           onConfirm={handleImportConfirm}
           onClose={() => setImportData(null)}
         />

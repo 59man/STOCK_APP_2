@@ -234,6 +234,67 @@ body {
   gap: 8px;
 }
 
+/* ── Column config panel ── */
+.col-panel-wrap { position: relative; }
+.col-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 210px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.col-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+}
+.col-panel-item label {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.col-panel-item input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: var(--accent); }
+.col-panel-arrows { display: flex; gap: 2px; flex-shrink: 0; }
+.col-panel-arrows button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 3px;
+  padding: 2px 5px;
+  font-size: 10px;
+  cursor: pointer;
+  line-height: 1.3;
+}
+.col-panel-arrows button:hover:not(:disabled) { color: var(--text); border-color: var(--border-2); }
+.col-panel-arrows button:disabled { opacity: 0.25; cursor: default; }
+.col-panel-divider { border: none; border-top: 1px solid var(--border); margin: 5px 0; }
+.col-panel-reset {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.col-panel-reset:hover { color: var(--text); }
+
 /* ── Portfolio summary grid ── */
 .summary-section {
   background: var(--border); /* gap colour = gridline colour */
@@ -713,21 +774,15 @@ input::placeholder { color: var(--faint); }
   .summary-card { align-items: flex-start; padding: 11px 10px; }
   .summary-value { font-size: 14px; }
   .table-toolbar { padding: 8px 14px; }
-  /* hide: AvgBuy(5), FirstBuy(6), Lots(7), Broker(8), CostBasis(10), Divid(13), IRR(16) */
-  .table-scroll > table th:nth-child(5),
-  .table-scroll > table td:nth-child(5),
-  .table-scroll > table th:nth-child(6),
-  .table-scroll > table td:nth-child(6),
-  .table-scroll > table th:nth-child(7),
-  .table-scroll > table td:nth-child(7),
-  .table-scroll > table th:nth-child(8),
-  .table-scroll > table td:nth-child(8),
-  .table-scroll > table th:nth-child(10),
-  .table-scroll > table td:nth-child(10),
-  .table-scroll > table th:nth-child(13),
-  .table-scroll > table td:nth-child(13),
-  .table-scroll > table th:nth-child(16),
-  .table-scroll > table td:nth-child(16) { display: none; }
+  /* hide by column class — works regardless of order/config */
+  .table-scroll > table .col-avg-buy,
+  .table-scroll > table .col-first-buy,
+  .table-scroll > table .col-lots,
+  .table-scroll > table .col-broker,
+  .table-scroll > table .col-today,
+  .table-scroll > table .col-cost-basis,
+  .table-scroll > table .col-dividends,
+  .table-scroll > table .col-irr { display: none; }
   th { padding: 9px 10px; }
   td { padding: 9px 10px; }
 }
@@ -741,13 +796,9 @@ input::placeholder { color: var(--faint); }
   .summary-value { font-size: 13px; }
   .summary-label { font-size: 9px; }
   .table-toolbar { padding: 8px 12px; }
-  /* hide: Type(3), CurPrice(9), TotalReturn(14) */
-  .table-scroll > table th:nth-child(3),
-  .table-scroll > table td:nth-child(3),
-  .table-scroll > table th:nth-child(9),
-  .table-scroll > table td:nth-child(9),
-  .table-scroll > table th:nth-child(14),
-  .table-scroll > table td:nth-child(14) { display: none; }
+  .table-scroll > table .col-type,
+  .table-scroll > table .col-cur-price,
+  .table-scroll > table .col-total-return { display: none; }
   th { padding: 8px 8px; }
   td { padding: 9px 8px; font-size: 12.5px; }
   .ticker { font-size: 12.5px; }
@@ -761,8 +812,7 @@ input::placeholder { color: var(--faint); }
 }
 
 @media (max-width: 400px) {
-  .table-scroll > table th:nth-child(4),
-  .table-scroll > table td:nth-child(4) { display: none; }
+  .table-scroll > table .col-qty { display: none; }
   th { padding: 7px 6px; }
   td { padding: 8px 6px; font-size: 12px; }
 }
