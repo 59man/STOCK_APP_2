@@ -1,4 +1,4 @@
 node_modules/
 dist/
-server/data.json
 Transactions_folder/
+server/*.json
