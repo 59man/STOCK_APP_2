@@ -68,7 +68,10 @@
       "Bash(docker push *)",
       "Bash(docker build *)",
       "Bash(node -e ' *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(pip install *)",
+      "Bash(docker info *)",
+      "Bash(docker system *)"
     ]
   }
 }

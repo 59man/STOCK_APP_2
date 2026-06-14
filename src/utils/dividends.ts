@@ -41,6 +41,8 @@ const TICKER_COUNTRY: Record<string, string> = {
   'VIG.PR':  'AT',  // Vienna Insurance Group — Austria
   'EXUS.DE': 'IE',  // iShares MSCI World ex USA UCITS ETF — Ireland-domiciled
   '4GLD.DE': 'DE',  // Xetra-Gold ETC — Germany (no dividends in practice)
+  'UCG.MI':  'IT',  // UniCredit — Italy 26 % at source
+  'DTE.DE':  'DE',  // Deutsche Telekom — Germany
 }
 
 export function getDividendTaxRate(ticker: string): number {

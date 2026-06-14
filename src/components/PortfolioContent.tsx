@@ -175,6 +175,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         onSellPositions={(ids, sellPrice, sellDate) =>
           ids.forEach((id) => updatePosition(id, { sellPrice, sellDate }))
         }
+        onUpdatePosition={updatePosition}
         onRefresh={refresh}
         portfolioIrr={portfolioIrr}
         onSetManualPrice={setManualPrice}

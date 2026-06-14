@@ -52,34 +52,36 @@ process.on('SIGTERM', () => { clearTimeout(flushTimer); flushToDisk(); process.e
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
-// In production the Vite dev-server proxy is absent, so Express forwards Yahoo requests.
-// Replicates the vite.config.ts proxy: /api/yahoo/* → https://query1.finance.yahoo.com/*
+// In production the Vite dev-server proxy is absent, so Express forwards external requests.
+async function proxyRequest(res, url, extraHeaders = {}) {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 15_000)
+  try {
+    const upstream = await fetch(url, {
+      signal: ac.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', 'Accept': 'application/json, text/plain, */*', ...extraHeaders },
+    })
+    clearTimeout(timer)
+    const body = await upstream.arrayBuffer()
+    res.status(upstream.status).set('content-type', upstream.headers.get('content-type') ?? 'application/json').send(Buffer.from(body))
+  } catch (err) {
+    clearTimeout(timer)
+    const isTimeout = err.name === 'AbortError'
+    res.status(isTimeout ? 504 : 502).json({ error: isTimeout ? 'Upstream timeout' : 'Upstream request failed' })
+  }
+}
+
 if (IS_PROD) {
-  app.get('/api/yahoo/*', async (req, res, next) => {
+  app.get('/api/yahoo/*', (req, res) => {
     const upstreamPath = req.path.replace('/api/yahoo', '')
     const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
-    const url = `https://query1.finance.yahoo.com${upstreamPath}${qs}`
-    const ac = new AbortController()
-    const timer = setTimeout(() => ac.abort(), 15_000)
-    try {
-      const upstream = await fetch(url, {
-        signal: ac.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-        },
-      })
-      clearTimeout(timer)
-      const body = await upstream.arrayBuffer()
-      res
-        .status(upstream.status)
-        .set('content-type', upstream.headers.get('content-type') ?? 'application/json')
-        .send(Buffer.from(body))
-    } catch (err) {
-      clearTimeout(timer)
-      const isTimeout = err.name === 'AbortError'
-      res.status(isTimeout ? 504 : 502).json({ error: isTimeout ? 'Upstream timeout' : 'Upstream request failed' })
-    }
+    proxyRequest(res, `https://query1.finance.yahoo.com${upstreamPath}${qs}`)
+  })
+
+  app.get('/api/stooq/*', (req, res) => {
+    const upstreamPath = req.path.replace('/api/stooq', '')
+    const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+    proxyRequest(res, `https://stooq.com${upstreamPath}${qs}`)
   })
 }
 

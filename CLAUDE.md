@@ -30,7 +30,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 - Always use an **absolute path** for the volume mount — `~/...` resolves relative to the shell user and often points to a different file.
 - `server/data.json` is excluded from the image via `.dockerignore`; the bind-mount provides it at runtime.
-- In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` to Yahoo Finance (replacing the Vite dev proxy).
+- In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout.
 
 ## Architecture
 
@@ -44,7 +44,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 3. `useFxRates` (`src/hooks/useFxRates.ts`) — fetches USDCZK=X and EURCZK=X from Yahoo Finance on mount. Defaults `{ CZK: 1, USD: 25.0, EUR: 27.5 }` while loading. Exports `convert(amount, from, to)` — converts via CZK as base; all cross-rates go through CZK.
 
-4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first, Stooq CSV fallback. Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message.
+4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first (`/api/yahoo/*`), Stooq CSV fallback (`/api/stooq/*` — also proxied to avoid CORS). Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message.
 
 5. `useDividends` (`src/hooks/useDividends.ts`) — fetches dividend events from Yahoo Finance `range=max&events=div`. Module-level cache (only on success — errors are not cached, allowing retry). `DIVIDEND_TICKER_ALIASES` maps renamed tickers (e.g. `COLT.PR → CZG.PR`).
 
@@ -72,7 +72,7 @@ The Express server (`server/index.js`) maintains an **in-memory store** loaded f
 
 ### Key types (`src/types/index.ts`)
 
-- `Position` — a single purchase lot: ticker, name, type (`stock|etf|fund|commodity`), quantity, buyPrice, buyDate, currency; **optional** `broker?: string`, `sellPrice?: number`, and `sellDate?: string`
+- `Position` — a single purchase lot: ticker, name, type (`stock|etf|fund|commodity`), quantity, buyPrice, buyDate, currency; **optional** `broker?: string`, `isin?: string`, `sellPrice?: number`, and `sellDate?: string`
 - `Quote` — live price response: price, change, changePercent, currency, name
 - `PortfolioRow` — one row per ticker; all aggregated fields plus `positions: Position[]`, `priceIsManual: boolean`, `manualPriceDate?: string`, `irr: number | null`, **`isClosed: boolean`**, **`dailyChange: number`** (absolute daily P&L change = `quote.change × openQty`)
 
@@ -98,7 +98,11 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 ### Components
 
 - `PortfolioContent` — per-portfolio state container; mounts fresh on portfolio switch via `key`; owns all hooks and row computation; renders PortfolioTable + PortfolioPnLChart + AddPositionModal.
-- `PortfolioTable` — 17-column aggregated position table (expand btn + 15 data cols + actions). Props include `showClosed` / `onToggleClosed`, `displayCurrency`, `convert`, `onSellPositions`, `dividendsByTicker`, `taxOverrides`, `onSetDivTax`, `onClearDivTax`. Each row has a `▶` expand button that reveals individual-lots mini-table, dividend event panel with editable tax rates, and `PriceChart`. Sell buttons (amber) on main rows and individual open lots open `SellPositionModal`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell with inline error feedback. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download). Summary section uses a CSS grid of 7 `.summary-card` elements — mobile-friendly, replacing the old horizontal table. Row fragments use `<Fragment key={r.ticker}>` to give React stable identity for the aggregated + detail row pair.
+- `PortfolioTable` — 17-column aggregated position table (expand btn + 15 data cols + actions). Props include `showClosed` / `onToggleClosed`, `displayCurrency`, `convert`, `onSellPositions`, `onUpdatePosition`, `dividendsByTicker`, `taxOverrides`, `onSetDivTax`, `onClearDivTax`. Each row has a `▶` expand button that reveals individual-lots mini-table, dividend event panel with editable tax rates, and `PriceChart`. Sell buttons on main rows and individual open lots open `SellPositionModal`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download) and **✎ Edit / ✓ Done** toggle for edit mode. Summary section uses a CSS grid of 7 `.summary-card` elements. Row fragments use `<Fragment key={r.ticker}>`.
+
+  **Edit mode** (toolbar toggle): the Ticker cell expands into a block with an editable ticker input, a **▶ Test** button (live Yahoo fetch bypassing the 60 s cache — shows price + currency on success, HTTP status / error on failure), an ISIN input (stored as `isin` on all lots of the ticker), and a **⟲** lookup button (Yahoo search to resolve ticker+name from an ISIN). The Name cell becomes an editable input. The Type badge becomes a `<select>`. In the expanded lot view, each lot shows a **✎** button that replaces the row with inline inputs for: Buy Date, Qty, Buy Price + Currency mini-select, Broker, and (for sold lots) Sell Date + Sell Price. Committing calls `onUpdatePosition(id, updates)` from `PortfolioContent` → `usePortfolio`. In view mode, if a position has an `isin` stored it is shown below the name as a small monospace `.isin-display` label.
+
+  **Column config**: `COLUMN_DEFS` now has a `hideBelow?: number` field per column. `loadColConfig()` uses `window.innerWidth` to set responsive defaults on first visit (no stored config). Column visibility is JS-only — the CSS breakpoints no longer hide columns by class. The column panel opens as a bottom sheet on ≤ 640 px screens (`.col-panel-backdrop` + fixed positioning).
 - `SellPositionModal` — enter sell date + sell price for one ticker's open lots; shows a live P&L preview; calls `onSellPositions(ids, sellPrice, sellDate)`.
 - `ImportModal` — shows file summary (position count, open/closed breakdown, up to 8 tickers); radio to import into a new portfolio (name pre-filled from filename) or append to current; calls `onConfirm(mode, newPortfolioName?)`.
 - `AddPositionModal` — controlled form; calls `onAdd` / `onClose`. On ticker blur, fetches `/api/yahoo/v1/finance/search?q=…` and auto-fills the Name field (works for both ticker symbols and ISINs). Has a "Closed position" checkbox that reveals Sell Date + Sell Price fields. Has a **Broker / Platform** field with a datalist (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212).
@@ -148,9 +152,10 @@ Three UniCredit onemarkets funds (ISINs LU2606422355, LU2606421548, LU2595011649
 ### Vite proxy (`vite.config.ts`)
 
 - `/api/yahoo/*` → `https://query1.finance.yahoo.com` with a browser-like `User-Agent`. Required because Yahoo blocks requests without proper headers.
+- `/api/stooq/*` → `https://stooq.com`. Required to avoid CORS — Stooq doesn't serve CORS headers, so direct browser fetches are blocked.
 - `/api/persist/*` → `http://localhost:3001` (Express persist server).
 
-Both only active during `npm run dev`. In production/Docker, Express handles both routes directly.
+All three only active during `npm run dev`. In production/Docker, Express handles all routes directly via a shared `proxyRequest()` helper.
 
 ### Styling
 
@@ -166,15 +171,25 @@ Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: 
 - Broker: `.broker-badge`
 - Dividend panel: `.div-panel`, `.div-panel-title`, `.div-tax-cell`, `.div-tax-custom`, `.div-tax-default`, `.div-tax-edit`, `.div-tax-input`, `.div-tax-clear`
 - Import modal: `.import-summary`, `.import-summary-row`
+- Edit mode: `.ticker-edit-block`, `.ticker-edit-row`, `.ticker-edit-input`, `.isin-edit-input`, `.fetch-test-btn`, `.fetch-test-result`, `.name-edit-input`, `.type-edit-select`, `.edit-lot-btn`, `.lot-draft-input`, `.currency-mini-select`, `.isin-display`
+- Column panel: `.col-panel-backdrop` (mobile overlay), `.col-panel-wrap`, `.col-panel`, `.col-panel-item`, `.col-panel-arrows`, `.col-panel-reset`
 
 ### Responsive breakpoints (`src/App.css`)
 
-Three `@media` blocks at the bottom of the file:
+Column visibility is **JS-controlled** via `COLUMN_DEFS[n].hideBelow` — the CSS media queries no longer hide columns. `loadColConfig()` reads `window.innerWidth` to set responsive defaults on first visit; after that the stored user config is used.
 
-| Breakpoint | Hidden main-table columns |
+Three `@media` blocks handle non-column layout adjustments:
+
+| Breakpoint | Changes |
 |---|---|
-| ≤ 960 px | Avg Buy, First Buy, Lots, Broker, Cost Basis, Dividends, IRR; summary-grid → 4 cols |
-| ≤ 640 px | + Type, Cur. Price, Total Return; modal form-row stacks to 1 column; summary-grid → 2 cols |
-| ≤ 400 px | + Qty |
+| ≤ 960 px | summary-grid → 4 cols; reduced padding |
+| ≤ 640 px | summary-grid → 2 cols; toolbar `flex-wrap`; column panel → fixed bottom sheet; modal form-row stacks |
+| ≤ 400 px | reduced padding / font sizes |
 
-Column visibility is controlled with `.table-scroll > table th/td:nth-child(N)` selectors so no JSX changes are needed to add/remove columns at a breakpoint.
+Default column visibility by viewport (matches former CSS behaviour):
+
+| Column | Hidden below |
+|---|---|
+| Type, Cur. Price, Total Return | 640 px |
+| Qty | 400 px |
+| Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR | 960 px |

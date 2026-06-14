@@ -1,32 +1,79 @@
 import { useState, Fragment, useRef, useEffect } from 'react'
-import { PortfolioRow } from '../types'
+import { PortfolioRow, Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
 import { PriceChart } from './PriceChart'
 import { SellPositionModal } from './SellPositionModal'
 
+// ── Ticker fetch test & ISIN lookup ───────────────────────────────────────────
+interface FetchTestResult { state: 'loading' | 'ok' | 'error'; msg: string }
+
+async function testTickerFetch(ticker: string): Promise<{ ok: boolean; msg: string }> {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 8000)
+  try {
+    const res = await fetch(
+      `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker.trim())}?interval=1d&range=1d`,
+      { signal: ac.signal }
+    )
+    clearTimeout(timer)
+    if (res.status === 429) return { ok: false, msg: 'Rate limited (429) — try later' }
+    if (!res.ok) return { ok: false, msg: `HTTP ${res.status}` }
+    const json = await res.json()
+    const meta = json?.chart?.result?.[0]?.meta
+    const price = meta?.regularMarketPrice
+    if (!price) return { ok: false, msg: 'No price in response' }
+    return { ok: true, msg: `${price} ${meta?.currency ?? ''}` }
+  } catch (e) {
+    clearTimeout(timer)
+    return { ok: false, msg: e instanceof Error ? (e.name === 'AbortError' ? 'Timeout' : e.message) : 'Failed' }
+  }
+}
+
+async function lookupTickerByIsin(query: string): Promise<{ ticker: string; name: string } | null> {
+  try {
+    const res = await fetch(
+      `/api/yahoo/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=1&newsCount=0`
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const hit = data?.quotes?.[0]
+    if (!hit?.symbol) return null
+    return { ticker: hit.symbol as string, name: (hit.longname || hit.shortname || '') as string }
+  } catch {
+    return null
+  }
+}
+
 // ── Column definitions ────────────────────────────────────────────────────────
-const COLUMN_DEFS = [
-  { key: 'type',        label: 'Type',         defaultVisible: true  },
-  { key: 'qty',         label: 'Qty',          defaultVisible: true  },
-  { key: 'avgBuy',      label: 'Avg Buy',      defaultVisible: true  },
-  { key: 'firstBuy',    label: 'First Buy',    defaultVisible: true  },
-  { key: 'lots',        label: 'Lots',         defaultVisible: true  },
-  { key: 'broker',      label: 'Broker',       defaultVisible: true  },
-  { key: 'curPrice',    label: 'Cur. Price',   defaultVisible: true  },
-  { key: 'today',       label: 'Today',        defaultVisible: true  },
-  { key: 'costBasis',   label: 'Cost Basis',   defaultVisible: true  },
+type ColKey = 'type' | 'qty' | 'avgBuy' | 'firstBuy' | 'lots' | 'broker' | 'curPrice' | 'today' | 'costBasis' | 'curValue' | 'pricePnl' | 'dividends' | 'totalReturn' | 'returnPct' | 'irr'
+
+interface ColumnDef {
+  key: ColKey
+  label: string
+  defaultVisible: boolean
+  hideBelow?: number  // hide by default when viewport width ≤ this value
+}
+
+const COLUMN_DEFS: ColumnDef[] = [
+  { key: 'type',        label: 'Type',         defaultVisible: true, hideBelow: 640  },
+  { key: 'qty',         label: 'Qty',          defaultVisible: true, hideBelow: 400  },
+  { key: 'avgBuy',      label: 'Avg Buy',      defaultVisible: true, hideBelow: 960  },
+  { key: 'firstBuy',    label: 'First Buy',    defaultVisible: true, hideBelow: 960  },
+  { key: 'lots',        label: 'Lots',         defaultVisible: true, hideBelow: 960  },
+  { key: 'broker',      label: 'Broker',       defaultVisible: true, hideBelow: 960  },
+  { key: 'curPrice',    label: 'Cur. Price',   defaultVisible: true, hideBelow: 640  },
+  { key: 'today',       label: 'Today',        defaultVisible: true, hideBelow: 960  },
+  { key: 'costBasis',   label: 'Cost Basis',   defaultVisible: true, hideBelow: 960  },
   { key: 'curValue',    label: 'Cur. Value',   defaultVisible: true  },
   { key: 'pricePnl',    label: 'Price P&L',    defaultVisible: true  },
-  { key: 'dividends',   label: 'Divid. (net)', defaultVisible: true  },
-  { key: 'totalReturn', label: 'Total Return', defaultVisible: true  },
+  { key: 'dividends',   label: 'Divid. (net)', defaultVisible: true, hideBelow: 960  },
+  { key: 'totalReturn', label: 'Total Return', defaultVisible: true, hideBelow: 640  },
   { key: 'returnPct',   label: 'Return %',     defaultVisible: true  },
-  { key: 'irr',         label: 'IRR p.a.',     defaultVisible: true  },
-] as const
+  { key: 'irr',         label: 'IRR p.a.',     defaultVisible: true, hideBelow: 960  },
+]
 
-type ColKey = typeof COLUMN_DEFS[number]['key']
-
-// CSS class for each column — used by responsive breakpoints in App.css
+// CSS class for each column
 const COL_CLASS: Record<ColKey, string> = {
   type:        'col-type',
   qty:         'col-qty',
@@ -50,6 +97,7 @@ const COL_STORAGE_KEY = 'stock_tracker_column_config'
 interface ColConfig { key: ColKey; visible: boolean }
 
 function loadColConfig(): ColConfig[] {
+  const width = typeof window !== 'undefined' ? window.innerWidth : 9999
   try {
     const raw = localStorage.getItem(COL_STORAGE_KEY)
     if (raw) {
@@ -58,12 +106,17 @@ function loadColConfig(): ColConfig[] {
       const storedKeys = new Set(stored.map(c => c.key))
       return [
         ...stored.filter(c => knownKeys.has(c.key)) as ColConfig[],
-        // append any new columns not yet in stored config
-        ...COLUMN_DEFS.filter(d => !storedKeys.has(d.key)).map(d => ({ key: d.key, visible: d.defaultVisible })),
+        ...COLUMN_DEFS.filter(d => !storedKeys.has(d.key)).map(d => ({
+          key: d.key,
+          visible: !d.hideBelow || width > d.hideBelow,
+        })),
       ]
     }
   } catch {}
-  return COLUMN_DEFS.map(d => ({ key: d.key as ColKey, visible: d.defaultVisible }))
+  return COLUMN_DEFS.map(d => ({
+    key: d.key,
+    visible: !d.hideBelow || width > d.hideBelow,
+  }))
 }
 
 function saveColConfig(cfg: ColConfig[]) {
@@ -80,6 +133,7 @@ interface Props {
   rows: PortfolioRow[]
   onRemove: (ids: string[]) => void
   onSellPositions: (ids: string[], sellPrice: number, sellDate: string) => void
+  onUpdatePosition: (id: string, updates: Partial<Omit<Position, 'id'>>) => void
   onRefresh: () => void
   portfolioIrr: number | null
   onSetManualPrice: (ticker: string, price: number) => void
@@ -161,7 +215,7 @@ function DivTaxCell({
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function PortfolioTable({
-  rows, onRemove, onSellPositions, onRefresh, portfolioIrr,
+  rows, onRemove, onSellPositions, onUpdatePosition, onRefresh, portfolioIrr,
   onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed,
   displayCurrency, convert, dividendsByTicker, taxOverrides, manualPrices, onSetDivTax, onClearDivTax,
 }: Props) {
@@ -176,6 +230,16 @@ export function PortfolioTable({
   const [colConfig, setColConfig] = useState<ColConfig[]>(loadColConfig)
   const [showColPanel, setShowColPanel] = useState(false)
   const colPanelRef = useRef<HTMLDivElement>(null)
+
+  // Edit mode
+  const [editMode, setEditMode] = useState(false)
+  const [editingLotId, setEditingLotId] = useState<string | null>(null)
+  const [lotDraft, setLotDraft] = useState<Partial<Omit<Position, 'id'>>>({})
+  const [nameEdits, setNameEdits] = useState<Record<string, string>>({})
+  const [tickerEdits, setTickerEdits] = useState<Record<string, string>>({})
+  const [isinEdits, setIsinEdits] = useState<Record<string, string>>({})
+  const [fetchTests, setFetchTests] = useState<Record<string, FetchTestResult>>({})
+  const [lookingUp, setLookingUp] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (!showColPanel) return
@@ -204,7 +268,8 @@ export function PortfolioTable({
   }
 
   const resetColumns = () => {
-    const next = COLUMN_DEFS.map(d => ({ key: d.key as ColKey, visible: d.defaultVisible }))
+    const width = window.innerWidth
+    const next = COLUMN_DEFS.map(d => ({ key: d.key, visible: !d.hideBelow || width > d.hideBelow }))
     setColConfig(next); saveColConfig(next)
   }
 
@@ -223,6 +288,93 @@ export function PortfolioTable({
     if (!raw || !isFinite(totalValue) || totalValue <= 0) { setEditError('Enter a valid positive number'); return }
     onSetManualPrice(ticker, totalValue / totalQty)
     cancelEdit()
+  }
+
+  // Lot inline editing
+  const startLotEdit = (pos: Position) => {
+    setEditingLotId(pos.id)
+    setLotDraft({
+      buyDate: pos.buyDate,
+      quantity: pos.quantity,
+      buyPrice: pos.buyPrice,
+      currency: pos.currency,
+      broker: pos.broker,
+      sellDate: pos.sellDate,
+      sellPrice: pos.sellPrice,
+    })
+  }
+
+  const commitLotEdit = (id: string) => {
+    const qty = parseFloat(String(lotDraft.quantity ?? ''))
+    const buyP = parseFloat(String(lotDraft.buyPrice ?? ''))
+    if (!isFinite(qty) || qty <= 0) return
+    if (!isFinite(buyP) || buyP < 0) return
+    const updates: Partial<Omit<Position, 'id'>> = {
+      buyDate: lotDraft.buyDate ?? '',
+      quantity: qty,
+      buyPrice: buyP,
+      currency: lotDraft.currency ?? 'CZK',
+      broker: lotDraft.broker || undefined,
+    }
+    if (lotDraft.sellDate) {
+      updates.sellDate = lotDraft.sellDate
+      const sp = parseFloat(String(lotDraft.sellPrice ?? ''))
+      if (isFinite(sp) && sp >= 0) updates.sellPrice = sp
+    } else {
+      updates.sellDate = undefined
+      updates.sellPrice = undefined
+    }
+    onUpdatePosition(id, updates)
+    setEditingLotId(null)
+    setLotDraft({})
+  }
+
+  const cancelLotEdit = () => { setEditingLotId(null); setLotDraft({}) }
+
+  const commitNameEdit = (ticker: string, positions: Position[]) => {
+    const v = nameEdits[ticker]
+    if (v !== undefined && v.trim() && v.trim() !== positions[0]?.name) {
+      positions.forEach(p => onUpdatePosition(p.id, { name: v.trim() }))
+    }
+    setNameEdits(prev => { const n = { ...prev }; delete n[ticker]; return n })
+  }
+
+  const commitTickerEdit = (oldTicker: string, positions: Position[]) => {
+    const newTicker = (tickerEdits[oldTicker] ?? oldTicker).toUpperCase().trim()
+    if (newTicker && newTicker !== oldTicker) {
+      positions.forEach(p => onUpdatePosition(p.id, { ticker: newTicker }))
+    }
+    setTickerEdits(prev => { const n = { ...prev }; delete n[oldTicker]; return n })
+    setFetchTests(prev => { const n = { ...prev }; delete n[oldTicker]; return n })
+  }
+
+  const commitIsinEdit = (ticker: string, positions: Position[]) => {
+    const v = (isinEdits[ticker] ?? '').trim().toUpperCase()
+    const current = positions[0]?.isin ?? ''
+    if (v !== current) {
+      positions.forEach(p => onUpdatePosition(p.id, { isin: v || undefined }))
+    }
+    setIsinEdits(prev => { const n = { ...prev }; delete n[ticker]; return n })
+  }
+
+  const runFetchTest = async (rowTicker: string) => {
+    const ticker = (tickerEdits[rowTicker] ?? rowTicker).trim()
+    if (!ticker) return
+    setFetchTests(prev => ({ ...prev, [rowTicker]: { state: 'loading', msg: '' } }))
+    const result = await testTickerFetch(ticker)
+    setFetchTests(prev => ({ ...prev, [rowTicker]: { state: result.ok ? 'ok' : 'error', msg: result.msg } }))
+  }
+
+  const runLookup = async (rowTicker: string, positions: Position[]) => {
+    const query = (isinEdits[rowTicker] ?? positions[0]?.isin ?? '').trim()
+    if (!query) return
+    setLookingUp(prev => ({ ...prev, [rowTicker]: true }))
+    const result = await lookupTickerByIsin(query)
+    setLookingUp(prev => ({ ...prev, [rowTicker]: false }))
+    if (result) {
+      setTickerEdits(prev => ({ ...prev, [rowTicker]: result.ticker }))
+      if (result.name) setNameEdits(prev => ({ ...prev, [rowTicker]: result.name }))
+    }
   }
 
   const handleExport = () => {
@@ -261,7 +413,6 @@ export function PortfolioTable({
   const prevTotalValue = totalValue - totalDailyChange
   const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
 
-  // colSpan for detail row = expand(1) + ticker(1) + active cols + actions(1)
   const detailColSpan = activeColumns.length + 3
 
   return (
@@ -315,12 +466,19 @@ export function PortfolioTable({
 
       {/* ── Toolbar ── */}
       <div className="table-toolbar">
-        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center', flexWrap: 'wrap' }}>
           {closedCount > 0 && (
             <button className="btn-secondary" onClick={onToggleClosed}>
               {showClosed ? 'Hide closed' : `Show closed (${closedCount})`}
             </button>
           )}
+          <button
+            className={`btn-secondary${editMode ? ' active' : ''}`}
+            onClick={() => { setEditMode(v => !v); setEditingLotId(null); setLotDraft({}) }}
+            title="Toggle edit mode to modify position data"
+          >
+            {editMode ? '✓ Done' : '✎ Edit'}
+          </button>
           <button className="btn-secondary" onClick={onRefresh}>↻ Refresh</button>
           <button className="btn-secondary" onClick={handleExport} title="Download all positions as JSON">↓ Export</button>
           {/* Column config button */}
@@ -331,29 +489,32 @@ export function PortfolioTable({
               title="Show/hide and reorder columns"
             >⚙ Columns</button>
             {showColPanel && (
-              <div className="col-panel">
-                {colConfig.map((col, i) => {
-                  const def = COLUMN_DEFS.find(d => d.key === col.key)
-                  return (
-                    <div key={col.key} className="col-panel-item">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={col.visible}
-                          onChange={() => toggleColumn(col.key)}
-                        />
-                        {def?.label ?? col.key}
-                      </label>
-                      <div className="col-panel-arrows">
-                        <button onClick={() => moveColumn(i, -1)} disabled={i === 0} title="Move up">↑</button>
-                        <button onClick={() => moveColumn(i, 1)} disabled={i === colConfig.length - 1} title="Move down">↓</button>
+              <>
+                <div className="col-panel-backdrop" onClick={() => setShowColPanel(false)} />
+                <div className="col-panel">
+                  {colConfig.map((col, i) => {
+                    const def = COLUMN_DEFS.find(d => d.key === col.key)
+                    return (
+                      <div key={col.key} className="col-panel-item">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={col.visible}
+                            onChange={() => toggleColumn(col.key)}
+                          />
+                          {def?.label ?? col.key}
+                        </label>
+                        <div className="col-panel-arrows">
+                          <button onClick={() => moveColumn(i, -1)} disabled={i === 0} title="Move up">↑</button>
+                          <button onClick={() => moveColumn(i, 1)} disabled={i === colConfig.length - 1} title="Move down">↓</button>
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-                <div className="col-panel-divider" />
-                <button className="col-panel-reset" onClick={resetColumns}>Reset to default</button>
-              </div>
+                    )
+                  })}
+                  <div className="col-panel-divider" />
+                  <button className="col-panel-reset" onClick={resetColumns}>Reset to default</button>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -418,9 +579,68 @@ export function PortfolioTable({
 
                     {/* Fixed: Ticker */}
                     <td>
-                      <span className="ticker">{r.ticker}</span>
-                      {r.isClosed && <span className="badge-sold">SOLD</span>}
-                      {r.name && r.name !== r.ticker && <span className="name">{r.name}</span>}
+                      {editMode ? (
+                        <div className="ticker-edit-block">
+                          {/* Row 1: editable ticker + test button */}
+                          <div className="ticker-edit-row">
+                            <input
+                              className="ticker-edit-input"
+                              value={tickerEdits[r.ticker] ?? r.ticker}
+                              placeholder="TICKER"
+                              title="Ticker symbol — press Enter to apply"
+                              onChange={e => setTickerEdits(prev => ({ ...prev, [r.ticker]: e.target.value.toUpperCase() }))}
+                              onBlur={() => commitTickerEdit(r.ticker, r.positions)}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                            />
+                            <button
+                              className={`fetch-test-btn${fetchTests[r.ticker]?.state === 'ok' ? ' fetch-test-ok' : fetchTests[r.ticker]?.state === 'error' ? ' fetch-test-err' : ''}`}
+                              onClick={() => runFetchTest(r.ticker)}
+                              disabled={fetchTests[r.ticker]?.state === 'loading'}
+                              title="Test if this ticker can fetch a live price from Yahoo Finance"
+                            >{fetchTests[r.ticker]?.state === 'loading' ? '…' : '▶ Test'}</button>
+                          </div>
+                          {/* Test result */}
+                          {fetchTests[r.ticker] && fetchTests[r.ticker].state !== 'loading' && (
+                            <span className={`fetch-test-result ${fetchTests[r.ticker].state === 'ok' ? 'fetch-test-ok' : 'fetch-test-err'}`}>
+                              {fetchTests[r.ticker].state === 'ok' ? '✓' : '✗'} {fetchTests[r.ticker].msg}
+                            </span>
+                          )}
+                          {/* Row 2: ISIN + lookup button */}
+                          <div className="ticker-edit-row">
+                            <input
+                              className="isin-edit-input"
+                              value={isinEdits[r.ticker] ?? r.positions[0]?.isin ?? ''}
+                              placeholder="ISIN (optional)"
+                              title="Store the ISIN for reference; use ⟲ to look up ticker from ISIN"
+                              onChange={e => setIsinEdits(prev => ({ ...prev, [r.ticker]: e.target.value }))}
+                              onBlur={() => commitIsinEdit(r.ticker, r.positions)}
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                            />
+                            <button
+                              className="fetch-test-btn"
+                              onClick={() => runLookup(r.ticker, r.positions)}
+                              disabled={lookingUp[r.ticker]}
+                              title="Look up ticker symbol from the ISIN above using Yahoo Finance"
+                            >{lookingUp[r.ticker] ? '…' : '⟲'}</button>
+                          </div>
+                          {/* Row 3: name edit */}
+                          <input
+                            className="name-edit-input"
+                            value={nameEdits[r.ticker] ?? r.name}
+                            placeholder={r.name || r.ticker}
+                            onChange={e => setNameEdits(prev => ({ ...prev, [r.ticker]: e.target.value }))}
+                            onBlur={() => commitNameEdit(r.ticker, r.positions)}
+                            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <span className="ticker">{r.ticker}</span>
+                          {r.isClosed && <span className="badge-sold">SOLD</span>}
+                          {r.name && r.name !== r.ticker && <span className="name">{r.name}</span>}
+                          {r.positions[0]?.isin && <span className="isin-display">{r.positions[0].isin}</span>}
+                        </>
+                      )}
                     </td>
 
                     {/* Dynamic columns */}
@@ -428,7 +648,27 @@ export function PortfolioTable({
                       const cls = COL_CLASS[col.key]
                       switch (col.key) {
                         case 'type':
-                          return <td key={col.key} className={cls}><span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span></td>
+                          return (
+                            <td key={col.key} className={cls}>
+                              {editMode ? (
+                                <select
+                                  className="type-edit-select"
+                                  value={r.type}
+                                  onChange={e => {
+                                    const t = e.target.value as Position['type']
+                                    r.positions.forEach(p => onUpdatePosition(p.id, { type: t }))
+                                  }}
+                                >
+                                  <option value="stock">STOCK</option>
+                                  <option value="etf">ETF</option>
+                                  <option value="fund">FUND</option>
+                                  <option value="commodity">COMMODITY</option>
+                                </select>
+                              ) : (
+                                <span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span>
+                              )}
+                            </td>
+                          )
 
                         case 'qty':
                           return <td key={col.key} className={cls}>{fmtQty(r.totalQuantity)}</td>
@@ -595,6 +835,85 @@ export function PortfolioTable({
                                   </thead>
                                   <tbody>
                                     {r.positions.map((pos, i) => {
+                                      if (editMode && editingLotId === pos.id) {
+                                        // ── Inline edit row ──
+                                        return (
+                                          <tr key={pos.id} className="lot-draft-row">
+                                            <td className="muted">{i + 1}</td>
+                                            <td>
+                                              <input
+                                                className="lot-draft-input" type="date"
+                                                value={lotDraft.buyDate ?? ''}
+                                                onChange={e => setLotDraft(d => ({ ...d, buyDate: e.target.value }))}
+                                              />
+                                            </td>
+                                            <td>
+                                              <input
+                                                className="lot-draft-input" type="number" step="any" min="0"
+                                                value={String(lotDraft.quantity ?? '')}
+                                                onChange={e => setLotDraft(d => ({ ...d, quantity: parseFloat(e.target.value) || 0 }))}
+                                              />
+                                            </td>
+                                            <td>
+                                              <span style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                                <input
+                                                  className="lot-draft-input" type="number" step="any" min="0"
+                                                  value={String(lotDraft.buyPrice ?? '')}
+                                                  onChange={e => setLotDraft(d => ({ ...d, buyPrice: parseFloat(e.target.value) || 0 }))}
+                                                />
+                                                <select
+                                                  className="currency-mini-select"
+                                                  value={lotDraft.currency ?? 'CZK'}
+                                                  onChange={e => setLotDraft(d => ({ ...d, currency: e.target.value }))}
+                                                >
+                                                  {['CZK', 'USD', 'EUR', 'GBP', 'CHF'].map(c => <option key={c}>{c}</option>)}
+                                                </select>
+                                              </span>
+                                            </td>
+                                            <td className="muted">—</td>
+                                            {hasClosedLots && (
+                                              <td>
+                                                <input
+                                                  className="lot-draft-input" type="date"
+                                                  value={lotDraft.sellDate ?? ''}
+                                                  onChange={e => setLotDraft(d => ({ ...d, sellDate: e.target.value || undefined }))}
+                                                />
+                                              </td>
+                                            )}
+                                            {hasClosedLots && (
+                                              <td>
+                                                <input
+                                                  className="lot-draft-input" type="number" step="any" min="0"
+                                                  value={String(lotDraft.sellPrice ?? '')}
+                                                  onChange={e => setLotDraft(d => ({ ...d, sellPrice: parseFloat(e.target.value) || undefined }))}
+                                                />
+                                              </td>
+                                            )}
+                                            <td className="muted">—</td>
+                                            <td className="muted">—</td>
+                                            <td className="muted">—</td>
+                                            {hasBrokers && (
+                                              <td>
+                                                <input
+                                                  className="lot-draft-input" type="text"
+                                                  value={lotDraft.broker ?? ''}
+                                                  placeholder="broker"
+                                                  list="broker-datalist"
+                                                  onChange={e => setLotDraft(d => ({ ...d, broker: e.target.value || undefined }))}
+                                                />
+                                              </td>
+                                            )}
+                                            <td>
+                                              <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                                <button className="price-edit-ok" title="Save" onClick={() => commitLotEdit(pos.id)}>✓</button>
+                                                <button className="price-edit-cancel" title="Cancel" onClick={cancelLotEdit}>✕</button>
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        )
+                                      }
+
+                                      // ── Normal display row ──
                                       const isSold = pos.sellPrice != null && pos.sellDate
                                       const effectivePrice = isSold ? pos.sellPrice! : r.currentPrice
                                       const posValue = isSold ? 0 : cv(effectivePrice * pos.quantity, pos.currency)
@@ -619,7 +938,12 @@ export function PortfolioTable({
                                           {hasBrokers && <td>{pos.broker ? <span className="broker-badge">{pos.broker}</span> : <span className="muted">—</span>}</td>}
                                           <td>
                                             <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                              {!isSold && (
+                                              {editMode && !editingLotId && (
+                                                <button className="edit-lot-btn" title="Edit this lot"
+                                                  onClick={() => startLotEdit(pos)}
+                                                >✎</button>
+                                              )}
+                                              {!isSold && !editMode && (
                                                 <button className="sell-btn sell-btn-sm" title="Sell this lot"
                                                   onClick={() => setPendingSell({ ticker: r.ticker, lots: [{ id: pos.id, quantity: pos.quantity, buyDate: pos.buyDate, buyPrice: pos.buyPrice, currency: pos.currency }] })}
                                                 >Sell</button>
@@ -637,6 +961,16 @@ export function PortfolioTable({
                               )
                             })()}
                           </div>
+
+                          {/* Datalist for broker autocomplete in edit mode */}
+                          <datalist id="broker-datalist">
+                            <option value="XTB" />
+                            <option value="Revolut" />
+                            <option value="IBKR" />
+                            <option value="Fio banka" />
+                            <option value="Degiro" />
+                            <option value="Trading 212" />
+                          </datalist>
 
                           {/* Dividend events panel */}
                           {(() => {

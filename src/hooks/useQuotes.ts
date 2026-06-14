@@ -61,7 +61,7 @@ async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
 }
 
 async function fetchFromStooq(ticker: string): Promise<Quote> {
-  const url = `https://stooq.com/q/l/?s=${ticker.toLowerCase()}&f=sd2t2ohlcv&h&e=csv`
+  const url = `/api/stooq/q/l/?s=${ticker.toLowerCase()}&f=sd2t2ohlcv&h&e=csv`
   const res = await withTimeout(fetch(url), 9000)
   if (!res.ok) throw new Error(`Stooq ${res.status}`)
   const text = await res.text()

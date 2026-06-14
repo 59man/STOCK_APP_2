@@ -7,16 +7,17 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Multiple portfolios** — create, rename, and delete portfolios; switch via a tab bar; each portfolio's positions and manual prices are stored independently
 - **Multi-asset portfolio** — stocks, ETFs, funds, commodities; any currency
 - **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates
-- **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback
+- **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback — both sources routed through a server-side proxy to avoid CORS
 - **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
 - **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. COLT.PR → CZG.PR)
 - **Custom dividend tax rates** — override the default withholding rate for any individual dividend event (click the % in the expanded row); custom rates are highlighted in amber and included in all P&L and IRR calculations
 - **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
 - **Broker / platform column** — optionally record which broker each lot was bought through (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212); shown as a badge per row with "Mixed" when lots differ
 - **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change
-- **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any column and reorder them with ↑ ↓ arrows; layout is saved to localStorage and persists across reloads
+- **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any of the 15 data columns and reorder them with ↑ ↓ arrows; config saved to localStorage; opens as a bottom sheet on mobile; responsive defaults match the former CSS breakpoints but the user's choices always win
 - **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
 - **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
+- **ISIN support** — optional ISIN field stored per position; displayed below the ticker name in the table; editable in edit mode with a **⟲ Lookup** button that resolves ticker + name from an ISIN via Yahoo Finance search
 - **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur
 - **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
@@ -157,7 +158,7 @@ React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state 
 
 ### Key types
 
-- `Position` — a single purchase lot: ticker, qty, buyPrice, buyDate, currency, type; optional `sellPrice` / `sellDate` mark it as closed
+- `Position` — a single purchase lot: ticker, qty, buyPrice, buyDate, currency, type; optional `broker`, `isin`, `sellPrice` / `sellDate`; fully closed when both sell fields are set
 - `Quote` — live price data from the API
 - `PortfolioRow` — one row per ticker: aggregated lots + computed financials (pnl, dividendIncome, totalReturn, irr, isClosed, dailyChange) + individual `positions[]`
 
@@ -197,25 +198,24 @@ The Express server keeps an **in-memory store** loaded once at startup and flush
 
 ### Production vs dev proxy
 
-In **dev** (`npm run dev`), Vite proxies both `/api/yahoo/*` and `/api/persist/*`.  
-In **production / Docker** (`NODE_ENV=production`), Express handles all three roles:
+In **dev** (`npm run dev`), Vite proxies `/api/yahoo/*`, `/api/stooq/*`, and `/api/persist/*`.  
+In **production / Docker** (`NODE_ENV=production`), Express handles all routes:
 - Serves static files from `dist/`
-- Forwards `/api/yahoo/*` to Yahoo Finance with a browser-like User-Agent
+- Forwards `/api/yahoo/*` → Yahoo Finance with a browser-like User-Agent
+- Forwards `/api/stooq/*` → Stooq (CSV fallback for price quotes; direct browser fetch blocked by CORS)
 - Handles `/api/persist/*` read/write to `data.json`
 
 ### Column configuration
 
-Click **⚙ Columns** in the table toolbar to open the column config panel. Each of the 15 configurable columns (everything except Ticker, the expand button, and Actions) can be independently shown/hidden and reordered. The configuration is saved to `localStorage` key `stock_tracker_column_config` and persists across reloads. "Reset to default" restores the original order and visibility.
+Click **⚙ Columns** in the table toolbar to open the column config panel. Each of the 15 configurable columns can be independently shown/hidden and reordered with ↑ ↓ arrows. The configuration is saved to `localStorage` key `stock_tracker_column_config`. On ≤ 640 px screens the panel opens as a **bottom sheet** with a dark backdrop.
 
-### Responsive breakpoints (`src/App.css`)
+Column visibility is **JS-controlled** — there are no CSS `display: none` rules per column. `COLUMN_DEFS` in `PortfolioTable.tsx` has a `hideBelow?: number` field; `loadColConfig()` reads `window.innerWidth` on first visit to set defaults matching the former CSS breakpoints. After that, the stored user config is used — explicitly enabled columns always show regardless of viewport width.
 
-Breakpoint rules use CSS class names (`.col-avg-buy`, `.col-today`, etc.) rather than `nth-child` selectors, so they continue to work correctly regardless of the user's column order.
-
-| Breakpoint | Additionally hidden |
+| Default hidden below | Columns |
 |---|---|
-| ≤ 960 px (tablet) | Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR |
-| ≤ 640 px (mobile) | + Type, Cur. Price, Total Return |
-| ≤ 400 px (small) | + Qty |
+| 960 px | Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR |
+| 640 px | Type, Cur. Price, Total Return |
+| 400 px | Qty |
 
 ### Styling
 

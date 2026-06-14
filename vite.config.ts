@@ -18,6 +18,11 @@ export default defineConfig({
           'Accept': 'application/json, text/plain, */*',
         },
       },
+      '/api/stooq': {
+        target: 'https://stooq.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/stooq/, ''),
+      },
     },
   },
 })
