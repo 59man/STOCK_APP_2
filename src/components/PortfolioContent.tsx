@@ -6,6 +6,7 @@ import { useManualPrices } from '../hooks/useManualPrices'
 import { useManualDividendTaxes } from '../hooks/useManualDividendTaxes'
 import { PortfolioTable } from './PortfolioTable'
 import { PortfolioPnLChart } from './PortfolioPnLChart'
+import { PortfolioPieCharts } from './PortfolioPieCharts'
 import { AddPositionModal } from './AddPositionModal'
 import { PortfolioRow } from '../types'
 import { xirr } from '../utils/xirr'
@@ -200,6 +201,11 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
             displayCurrency={displayCurrency}
             convert={convert}
             taxOverrides={taxOverrides}
+          />
+          <PortfolioPieCharts
+            rows={rows}
+            displayCurrency={displayCurrency}
+            convert={convert}
           />
         </div>
       )}

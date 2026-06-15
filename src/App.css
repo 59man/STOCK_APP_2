@@ -954,3 +954,98 @@ input::placeholder { color: var(--faint); }
   th { padding: 7px 6px; }
   td { padding: 8px 6px; font-size: 12px; }
 }
+
+/* ── Portfolio Distribution pie charts ────────────────────── */
+.pie-charts-section {
+  padding: 32px 0 8px;
+}
+
+.pie-charts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.pie-charts-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.pie-group-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.pie-group-btn {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  padding: 5px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-family: var(--font);
+}
+
+.pie-group-btn:last-child { border-right: none; }
+.pie-group-btn:hover { background: var(--hover); color: var(--text); }
+.pie-group-btn.active { background: var(--surface3); color: var(--text); font-weight: 600; }
+
+.pie-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.pie-chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px 8px;
+}
+
+.pie-chart-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.pie-empty {
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pie-tooltip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.pie-tooltip-name {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+@media (max-width: 960px) {
+  .pie-charts-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .pie-charts-header { flex-wrap: wrap; gap: 10px; }
+}
