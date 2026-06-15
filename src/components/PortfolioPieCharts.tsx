@@ -80,7 +80,7 @@ function PieChartCard({ data, title, displayCurrency, emptyLabel = 'No data' }: 
         <div className="pie-empty">{emptyLabel}</div>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
-          <PieChart>
+          <PieChart margin={{ top: 30, left: 20, right: 20, bottom: 0 }}>
             <Pie
               data={nonZero}
               cx="50%"
