@@ -44,7 +44,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 3. `useFxRates` (`src/hooks/useFxRates.ts`) — fetches USDCZK=X and EURCZK=X from Yahoo Finance on mount. Defaults `{ CZK: 1, USD: 25.0, EUR: 27.5 }` while loading. Exports `convert(amount, from, to)` — converts via CZK as base; all cross-rates go through CZK.
 
-4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first (`/api/yahoo/*`), Stooq CSV fallback (`/api/stooq/*` — also proxied to avoid CORS). Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message.
+4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first (`/api/yahoo/*`), Stooq CSV fallback (`/api/stooq/*` — also proxied to avoid CORS). Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message. For FX-converted tickers, `fetchFxConvertedQuote` uses `range=5d&interval=1d` so that bar data is available as a fallback for the previous-close computation — `meta.previousClose` is often `null` for 24/7 FX pairs like `EURCZK=X`; the fallback chain is `previousClose → chartPreviousClose → penultimate daily bar close`.
 
 5. `useDividends` (`src/hooks/useDividends.ts`) — fetches dividend events from Yahoo Finance `range=max&events=div`. Module-level cache (only on success — errors are not cached, allowing retry). `DIVIDEND_TICKER_ALIASES` maps renamed tickers (e.g. `COLT.PR → CZG.PR`).
 
@@ -52,7 +52,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 7. `useManualDividendTaxes(portfolioId)` (`src/hooks/useManualDividendTaxes.ts`) — stores per-event dividend tax overrides. Storage key: `stock_tracker_div_tax_${portfolioId}`. Type: `Record<string, number>` where key = `TICKER::YYYY-MM-DD`. Same two-phase init + dual-persist pattern. Exports `{ taxOverrides, setDivTax, clearDivTax }`.
 
-8. `PortfolioContent` (`src/components/PortfolioContent.tsx`) — extracted from App.tsx; mounts once per portfolio (via `key={portfolioId}`). Runs hooks 2, 4, 5, 6, 7 above and derives `PortfolioRow[]` via `useMemo`, merging lots with quotes, manual prices, and dividends. Renders `PortfolioTable`, `PortfolioPnLChart`, and `AddPositionModal`. `App.tsx` passes `displayCurrency` + `convert` down as props.
+8. `PortfolioContent` (`src/components/PortfolioContent.tsx`) — extracted from App.tsx; mounts once per portfolio (via `key={portfolioId}`). Runs hooks 2, 4, 5, 6, 7 above and derives `PortfolioRow[]` via `useMemo`, merging lots with quotes, manual prices, and dividends. Renders `PortfolioTable`, `PortfolioPnLChart`, `PortfolioPieCharts`, and `AddPositionModal`. `App.tsx` passes `displayCurrency` + `convert` down as props.
 
 ### Storage layer (`src/utils/storage.ts`)
 
@@ -97,7 +97,8 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 
 ### Components
 
-- `PortfolioContent` — per-portfolio state container; mounts fresh on portfolio switch via `key`; owns all hooks and row computation; renders PortfolioTable + PortfolioPnLChart + AddPositionModal.
+- `PortfolioContent` — per-portfolio state container; mounts fresh on portfolio switch via `key`; owns all hooks and row computation; renders PortfolioTable + PortfolioPnLChart + PortfolioPieCharts + AddPositionModal.
+- `PortfolioPieCharts` (`src/components/PortfolioPieCharts.tsx`) — three donut charts rendered below the P&L line chart: **Cost Basis**, **Current Value**, and **Total Return incl. Dividends**. Props: `rows: PortfolioRow[]`, `displayCurrency`, `convert`. A **By Type / By Ticker** toggle (state: `GroupBy`) aggregates slices by asset class or by individual ticker. Type colours are fixed (`stock` blue, `etf` green, `fund` purple, `commodity` gold); ticker colours cycle through a 15-entry palette with stable assignment per ticker index. Negative total-return entries appear as red (`#e05555`) slices sized by absolute value, with a `(loss)` suffix in the legend name. Zero-value slices are always filtered out before rendering. Uses Recharts `PieChart` + `Pie` + `Cell` + `Tooltip` + `Legend` + `ResponsiveContainer`; three charts collapse from 3-column to 1-column at ≤ 960 px.
 - `PortfolioTable` — 17-column aggregated position table (expand btn + 15 data cols + actions). Props include `showClosed` / `onToggleClosed`, `displayCurrency`, `convert`, `onSellPositions`, `onUpdatePosition`, `dividendsByTicker`, `taxOverrides`, `onSetDivTax`, `onClearDivTax`. Each row has a `▶` expand button that reveals individual-lots mini-table, dividend event panel with editable tax rates, and `PriceChart`. Sell buttons on main rows and individual open lots open `SellPositionModal`. Manual price editing (Set / M badge / ×) lives in the Cur. Value cell. Delete buttons show a confirmation modal before removing. Toolbar has ↓ Export (JSON download) and **✎ Edit / ✓ Done** toggle for edit mode. Summary section uses a CSS grid of 7 `.summary-card` elements. Row fragments use `<Fragment key={r.ticker}>`.
 
   **Edit mode** (toolbar toggle): the Ticker cell expands into a block with an editable ticker input, a **▶ Test** button (live Yahoo fetch bypassing the 60 s cache — shows price + currency on success, HTTP status / error on failure), an ISIN input (stored as `isin` on all lots of the ticker), and a **⟲** lookup button (Yahoo search to resolve ticker+name from an ISIN). The Name cell becomes an editable input. The Type badge becomes a `<select>`. In the expanded lot view, each lot shows a **✎** button that replaces the row with inline inputs for: Buy Date, Qty, Buy Price + Currency mini-select, Broker, and (for sold lots) Sell Date + Sell Price. Committing calls `onUpdatePosition(id, updates)` from `PortfolioContent` → `usePortfolio`. In view mode, if a position has an `isin` stored it is shown below the name as a small monospace `.isin-display` label.
@@ -173,6 +174,7 @@ Single flat `src/App.css`. CSS custom properties on `:root`. Dark theme (`--bg: 
 - Import modal: `.import-summary`, `.import-summary-row`
 - Edit mode: `.ticker-edit-block`, `.ticker-edit-row`, `.ticker-edit-input`, `.isin-edit-input`, `.fetch-test-btn`, `.fetch-test-result`, `.name-edit-input`, `.type-edit-select`, `.edit-lot-btn`, `.lot-draft-input`, `.currency-mini-select`, `.isin-display`
 - Column panel: `.col-panel-backdrop` (mobile overlay), `.col-panel-wrap`, `.col-panel`, `.col-panel-item`, `.col-panel-arrows`, `.col-panel-reset`
+- Pie charts: `.pie-charts-section`, `.pie-charts-header`, `.pie-charts-title`, `.pie-group-toggle`, `.pie-group-btn`, `.pie-group-btn.active`, `.pie-charts-grid`, `.pie-chart-card`, `.pie-chart-title`, `.pie-empty`, `.pie-tooltip`, `.pie-tooltip-name`
 
 ### Responsive breakpoints (`src/App.css`)
 
@@ -182,8 +184,8 @@ Three `@media` blocks handle non-column layout adjustments:
 
 | Breakpoint | Changes |
 |---|---|
-| ≤ 960 px | summary-grid → 4 cols; reduced padding |
-| ≤ 640 px | summary-grid → 2 cols; toolbar `flex-wrap`; column panel → fixed bottom sheet; modal form-row stacks |
+| ≤ 960 px | summary-grid → 4 cols; reduced padding; pie-charts-grid → 1 col |
+| ≤ 640 px | summary-grid → 2 cols; toolbar `flex-wrap`; column panel → fixed bottom sheet; modal form-row stacks; pie-charts-header wraps |
 | ≤ 400 px | reduced padding / font sizes |
 
 Default column visibility by viewport (matches former CSS behaviour):

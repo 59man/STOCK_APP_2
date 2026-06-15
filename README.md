@@ -13,13 +13,14 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Custom dividend tax rates** — override the default withholding rate for any individual dividend event (click the % in the expanded row); custom rates are highlighted in amber and included in all P&L and IRR calculations
 - **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
 - **Broker / platform column** — optionally record which broker each lot was bought through (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212); shown as a badge per row with "Mixed" when lots differ
-- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change
+- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change; FX-converted assets (4GLD.DE, EXUS.DE, XAU) compute the previous close via a `previousClose → chartPreviousClose → penultimate daily bar` fallback chain to handle 24/7 FX pairs that don't always populate `meta.previousClose`
 - **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any of the 15 data columns and reorder them with ↑ ↓ arrows; config saved to localStorage; opens as a bottom sheet on mobile; responsive defaults match the former CSS breakpoints but the user's choices always win
 - **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
 - **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
 - **ISIN support** — optional ISIN field stored per position; displayed below the ticker name in the table; editable in edit mode with a **⟲ Lookup** button that resolves ticker + name from an ISIN via Yahoo Finance search
 - **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur
 - **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
+- **Portfolio distribution charts** — three donut charts below the P&L line chart showing **Cost Basis**, **Current Value**, and **Total Return incl. Dividends** breakdown; toggle between **By Type** (Stocks / ETFs / Funds / Commodities) and **By Ticker** grouping; losing positions appear as red slices in the Total Return chart
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
 - **Manual price override** — for funds with no public price feed: enter the current total value from your bank report; the app divides by quantity to derive the per-unit price; invalid input shows an inline error
 - **Enhanced JSON export** — ↓ Export bundles positions, custom dividend tax rates, and manual prices into a single versioned JSON file (`version: 1`)
@@ -152,7 +153,7 @@ React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state 
 | `usePortfolios` | Manages the list of portfolios and active selection; two-phase init; legacy key migration on first load |
 | `usePortfolio(portfolioId)` | Owns positions list for one portfolio; two-phase init; persists to server + localStorage under `stock_tracker_positions_${id}` |
 | `useFxRates` | Fetches USDCZK=X and EURCZK=X from Yahoo Finance; provides `convert(amount, from, to)` helper; defaults while loading |
-| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE |
+| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE; uses `range=5d` for FX-converted tickers so bar data can serve as a previous-close fallback when `meta.previousClose` is null |
 | `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache |
 | `useManualPrices(portfolioId)` | Stores user-entered current values for funds with no live feed; two-phase init; persists under `stock_tracker_manual_prices_${id}` |
 
