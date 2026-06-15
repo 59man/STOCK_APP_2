@@ -160,3 +160,79 @@ cp server/test-data.json server/data.json
 To restore: `cp server/data.json.backup server/data.json`
 
 The test portfolio uses the old single-key format (`stock_tracker_positions`) so it will be auto-migrated to a "Main Portfolio" on first load.
+
+---
+
+## Session 4 — 2026-06-15 — Today column fix + Distribution pie charts
+
+### Bug fix — Today column showing +CZK 0.00 for FX-converted tickers
+
+**File:** `src/hooks/useQuotes.ts` — `fetchFxConvertedQuote`
+
+**Root cause:** `fetchFxConvertedQuote` fetched with `range=1d&interval=1d` and computed the previous close as:
+
+```js
+const prevPrice = (pm.previousClose ?? pm.regularMarketPrice) * (fm.previousClose ?? fm.regularMarketPrice)
+```
+
+For 24/7 FX pairs like `EURCZK=X`, `meta.previousClose` is often `null` in the Yahoo Finance v8 chart API response. When both the price ticker and the FX ticker had `null` previousClose, both sides fell back to `regularMarketPrice`, making `prevPrice = price` and `change = 0`. This affected 4GLD.DE and EXUS.DE (both EUR-denominated and both use `EURCZK=X`).
+
+**Fix:**
+
+1. Changed `range=1d` → `range=5d` on both fetches so that 5 daily bars are returned in the response.
+2. Parsed the `indicators.quote[0].close` bar array from the chart result.
+3. Implemented a three-level fallback chain for each previous close:
+   - `meta.previousClose` (the normal case for most instruments)
+   - `meta.chartPreviousClose` (intermediate fallback — matches what `fetchFromYahooProxy` already used)
+   - **Penultimate non-null bar close** — second-to-last valid daily close from the 5-day history. This is yesterday's completed close whether the market is currently open (today's bar close is null/in-progress) or closed (last bar close = regularMarketPrice, penultimate = yesterday).
+
+```js
+const prevPriceBarClose = validPriceCloses.length >= 2
+  ? validPriceCloses[validPriceCloses.length - 2]
+  : validPriceCloses[0]
+```
+
+The resulting `change` value is now a true CZK daily change that accounts for both the asset's EUR price movement and the EUR/CZK rate movement.
+
+---
+
+### New feature — Portfolio Distribution pie charts
+
+**New file:** `src/components/PortfolioPieCharts.tsx`
+
+Three donut charts rendered below the existing portfolio P&L line chart, inside the `chart-section` div in `PortfolioContent`.
+
+**Charts:**
+
+| Chart | Data field | Notes |
+|---|---|---|
+| Cost Basis | `row.costBasis` | All rows including closed positions |
+| Current Value | `row.currentValue` | Closed positions contribute 0 and are filtered out |
+| Total Return incl. Dividends | `row.totalReturn` | `pnl + dividendIncome`; negatives shown as red slices |
+
+**Grouping toggle (By Type / By Ticker):**
+
+- **By Type** — aggregates rows into up to four buckets (Stocks, ETFs, Funds, Commodities) using fixed colours per type: stock → `#4f8ef7`, etf → `#50c878`, fund → `#c97ff5`, commodity → `#f5c842`.
+- **By Ticker** — one slice per `PortfolioRow`; colours assigned from a 15-entry palette with stable index-based assignment so the same ticker always gets the same colour across all three charts.
+
+**Loss handling (Total Return chart):**
+
+Slices with negative `totalReturn` are rendered as red (`#e05555`) and sized by absolute value. The legend name gets a `(loss)` suffix so the direction is clear without hovering.
+
+Zero-value slices are always filtered before rendering.
+
+**Tooltip:** custom Recharts `content` component (`PieTooltip`) — shows name + value formatted in the selected display currency via `Intl.NumberFormat`. Negative values are displayed as negative numbers in `var(--loss)` colour.
+
+**Responsive layout:** `.pie-charts-grid` is 3-column at > 960 px, collapses to 1-column at ≤ 960 px.
+
+**Recharts components used:** `PieChart`, `Pie`, `Cell`, `Tooltip`, `Legend`, `ResponsiveContainer`.
+
+### Modified files
+
+- `src/components/PortfolioContent.tsx` — imports and renders `PortfolioPieCharts` below `PortfolioPnLChart`, passing `rows`, `displayCurrency`, `convert`
+- `src/App.css` — added pie chart CSS block (~80 lines): `.pie-charts-section`, `.pie-charts-header`, `.pie-charts-title`, `.pie-group-toggle`, `.pie-group-btn[.active]`, `.pie-charts-grid`, `.pie-chart-card`, `.pie-chart-title`, `.pie-empty`, `.pie-tooltip`, `.pie-tooltip-name`; responsive collapse at 960 px and 640 px
+
+### Documentation
+
+- **CLAUDE.md** — updated hook 4 (`useQuotes`) with `range=5d` and fallback chain detail; updated `PortfolioContent` component list; added full `PortfolioPieCharts` component entry; added pie chart CSS classes to styling section; updated responsive breakpoints table
+- **README.md** — added "Portfolio distribution charts" feature bullet; expanded "Today" column bullet with the previousClose fallback explanation; updated `useQuotes` row in the architecture hooks table
