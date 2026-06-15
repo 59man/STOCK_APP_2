@@ -58,10 +58,14 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const closedLots = lots.filter((l) => l.sellPrice != null && l.sellDate)
       const isClosed = openLots.length === 0
 
+      const rowCurrency = lots[0].currency
+      // ponytail: converts lot amount to row currency so mixed-currency lots aggregate correctly
+      const toRow = (amount: number, lotCurrency: string) => convert(amount, lotCurrency, rowCurrency)
+
       const totalQty = lots.reduce((s, p) => s + p.quantity, 0)
       const openQty = openLots.reduce((s, p) => s + p.quantity, 0)
-      const totalCost = lots.reduce((s, p) => s + p.buyPrice * p.quantity, 0)
-      const openCost = openLots.reduce((s, p) => s + p.buyPrice * p.quantity, 0)
+      const totalCost = lots.reduce((s, p) => s + toRow(p.buyPrice * p.quantity, p.currency), 0)
+      const openCost = openLots.reduce((s, p) => s + toRow(p.buyPrice * p.quantity, p.currency), 0)
       const avgBuyPrice = totalCost / totalQty
       const firstBuyDate = [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate))[0].buyDate
 
@@ -72,7 +76,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const priceIsManual = !isClosed && !quote && !!manual
 
       const avgSellPrice = closedLots.length > 0
-        ? closedLots.reduce((s, l) => s + l.sellPrice! * l.quantity, 0) / closedLots.reduce((s, l) => s + l.quantity, 0)
+        ? closedLots.reduce((s, l) => s + toRow(l.sellPrice! * l.quantity, l.currency), 0) / closedLots.reduce((s, l) => s + l.quantity, 0)
         : 0
       const openAvgBuy = openQty > 0 ? openCost / openQty : 0
       const currentPrice = isClosed
@@ -83,7 +87,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const tickerDivs = dividends.get(ticker.toUpperCase()) ?? []
       const dividendIncome = calcNetDividends(lots, tickerDivs, ticker, taxOverrides)
 
-      const realizedPnl = closedLots.reduce((s, l) => s + (l.sellPrice! - l.buyPrice) * l.quantity, 0)
+      const realizedPnl = closedLots.reduce((s, l) => s + toRow((l.sellPrice! - l.buyPrice) * l.quantity, l.currency), 0)
       const unrealizedPnl = isClosed ? 0 : (currentPrice - openAvgBuy) * openQty
       const pricePnl = realizedPnl + unrealizedPnl
       const totalReturn = pricePnl + dividendIncome
@@ -92,8 +96,8 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const hasUsablePrice = isClosed || (!isLoading && (!!quote || !!manual))
       const irrValue = hasUsablePrice
         ? xirr([
-            ...lots.map((p) => ({ date: new Date(p.buyDate), amount: -(p.buyPrice * p.quantity) })),
-            ...closedLots.map((l) => ({ date: new Date(l.sellDate!), amount: l.sellPrice! * l.quantity })),
+            ...lots.map((p) => ({ date: new Date(p.buyDate), amount: -toRow(p.buyPrice * p.quantity, p.currency) })),
+            ...closedLots.map((l) => ({ date: new Date(l.sellDate!), amount: toRow(l.sellPrice! * l.quantity, l.currency) })),
             ...tickerDivs.flatMap((div) => {
               const shares = lots
                 .filter((l) => l.buyDate <= div.date && (!l.sellDate || l.sellDate > div.date))
@@ -135,7 +139,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         dailyChange,
       }
     })
-  }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides])
+  }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides, convert])
 
   const portfolioIrr = useMemo(() => {
     if (positions.length === 0) return null

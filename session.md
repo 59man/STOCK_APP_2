@@ -236,3 +236,43 @@ Zero-value slices are always filtered before rendering.
 
 - **CLAUDE.md** — updated hook 4 (`useQuotes`) with `range=5d` and fallback chain detail; updated `PortfolioContent` component list; added full `PortfolioPieCharts` component entry; added pie chart CSS classes to styling section; updated responsive breakpoints table
 - **README.md** — added "Portfolio distribution charts" feature bullet; expanded "Today" column bullet with the previousClose fallback explanation; updated `useQuotes` row in the architecture hooks table
+
+---
+
+## Session 5 — 2026-06-15 — Pie chart label fix + mixed-currency lot bug
+
+### Bug fix — Pie chart percentage labels clipped at container edge
+
+**File:** `src/components/PortfolioPieCharts.tsx`
+
+The percentage labels rendered by Recharts `<Pie label={...}>` were being clipped by the SVG viewport. First attempt used `style={{ overflow: 'visible' }}` on `<PieChart>` — this made labels visible but caused them to render above the SVG element, overlapping the card title.
+
+**Fix:** replaced `overflow: visible` with `margin={{ top: 30, left: 20, right: 20, bottom: 0 }}` on `<PieChart>`. The top margin pushes the chart area down 30 px inside the SVG so labels near the top of the largest slice stay within bounds. Left/right margins handle side labels (e.g. the 92 % slice in the Total Return chart).
+
+---
+
+### Bug fix — Mixed-currency lots producing wrong cost basis, P&L, and current value
+
+**Root cause:** a new 4GLD.DE lot was entered with `currency=EUR` and `buyPrice=119.53` (the raw EUR unit price), while all other 4GLD.DE lots were stored in CZK (buyPrices ~2 583–3 289). The app aggregated all lots without currency normalisation, mixing EUR amounts with CZK amounts in a single sum.
+
+Two separate places were broken:
+
+**`src/components/PortfolioContent.tsx` — row-level aggregation**
+
+`totalCost`, `openCost`, `avgBuyPrice`, `realizedPnl`, and the IRR cash flows all summed raw `buyPrice × quantity` values without converting to the row's currency first. Added a `toRow(amount, lotCurrency)` helper that calls `convert(amount, lotCurrency, rowCurrency)` and applied it to every lot cost before summing. `convert` added to the `useMemo` dependency array.
+
+**`src/components/PortfolioTable.tsx` — per-lot current value / P&L display**
+
+The per-lot `posValue` was computed as `cv(effectivePrice * qty, pos.currency)`. For FX-converted tickers, `effectivePrice` (`r.currentPrice`) is already in `r.currency` (CZK), but wrapping it with `pos.currency = EUR` double-converted the value (×25), producing e.g. CZK 72 416 instead of the correct CZK 3 001.
+
+Fixed by:
+- `posValue` → `cv(effectivePrice * qty, r.currency)` (use row currency, not lot currency)
+- `buyInRowCcy = convert(pos.buyPrice, pos.currency, r.currency)` — normalize buy price once
+- `posPnl` (unsold) → `cv((effectivePrice - buyInRowCcy) * qty, r.currency)`
+- `posPnlPct` (unsold) → `((effectivePrice - buyInRowCcy) / buyInRowCcy) * 100`
+- Sold-lot paths unchanged (both sellPrice and buyPrice are in pos.currency)
+
+### Docker
+
+**Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`  
+Digest: `sha256:4d263ab0b70d9d9c618ca7272538d13a77a736522b39ce6c69414304d0f95df4`

@@ -71,7 +71,9 @@
       "Bash(node *)",
       "Bash(pip install *)",
       "Bash(docker info *)",
-      "Bash(docker system *)"
+      "Bash(docker system *)",
+      "WebFetch(domain:casaos.local)",
+      "Bash(npx playwright *)"
     ]
   }
 }

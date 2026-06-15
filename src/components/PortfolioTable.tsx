@@ -916,12 +916,17 @@ export function PortfolioTable({
                                       // ── Normal display row ──
                                       const isSold = pos.sellPrice != null && pos.sellDate
                                       const effectivePrice = isSold ? pos.sellPrice! : r.currentPrice
-                                      const posValue = isSold ? 0 : cv(effectivePrice * pos.quantity, pos.currency)
+                                      // ponytail: r.currentPrice is in r.currency; normalize buyPrice when lot currency differs
+                                      const buyInRowCcy = convert(pos.buyPrice, pos.currency, r.currency)
+                                      const posValue = isSold ? 0 : cv(effectivePrice * pos.quantity, r.currency)
                                       const posCost  = cv(pos.buyPrice * pos.quantity, pos.currency)
                                       const posPnl   = cv(isSold
                                         ? (pos.sellPrice! - pos.buyPrice) * pos.quantity
-                                        : (effectivePrice - pos.buyPrice) * pos.quantity, pos.currency)
-                                      const posPnlPct = ((effectivePrice - pos.buyPrice) / pos.buyPrice) * 100
+                                        : (effectivePrice - buyInRowCcy) * pos.quantity,
+                                        isSold ? pos.currency : r.currency)
+                                      const posPnlPct = isSold
+                                        ? ((pos.sellPrice! - pos.buyPrice) / pos.buyPrice) * 100
+                                        : ((effectivePrice - buyInRowCcy) / buyInRowCcy) * 100
                                       const priceUnknown = !isSold && (r.loading || (r.error && !r.priceIsManual))
                                       return (
                                         <tr key={pos.id} className={isSold ? 'lot-closed' : ''}>

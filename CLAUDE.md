@@ -32,6 +32,17 @@ docker run -d --name stock-tracker -p 4000:8080 \
 - `server/data.json` is excluded from the image via `.dockerignore`; the bind-mount provides it at runtime.
 - In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout.
 
+### Update a running container
+
+```bash
+docker pull 59man/stock-tracker:latest
+docker stop stock-tracker && docker rm stock-tracker
+docker run -d --name stock-tracker -p 4000:8080 \
+  -v /absolute/path/to/server/data.json:/app/server/data.json \
+  --restart unless-stopped \
+  59man/stock-tracker:latest
+```
+
 ## Architecture
 
 **React 18 + Vite + TypeScript** SPA, no routing. `App.tsx` manages global state (portfolios, active portfolio, display currency). Per-portfolio state lives in `PortfolioContent`.
