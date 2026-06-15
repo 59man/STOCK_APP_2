@@ -17,18 +17,36 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
   const { priceTicker, fxTicker, fallbackName = ticker.toUpperCase() } = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   const [priceRes, fxRes] = await Promise.all([
-    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=1d`), 9000),
-    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=1d`), 9000),
+    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=5d`), 9000),
+    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=5d`), 9000),
   ])
   if (priceRes.status === 429 || fxRes.status === 429) throw new Error('Yahoo rate-limited (429) — retry later')
   if (!priceRes.ok) throw new Error(`Price fetch ${priceRes.status}`)
   if (!fxRes.ok) throw new Error(`FX fetch ${fxRes.status}`)
   const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
-  const pm = priceJson?.chart?.result?.[0]?.meta
-  const fm = fxJson?.chart?.result?.[0]?.meta
+  const priceResult = priceJson?.chart?.result?.[0]
+  const fxResult = fxJson?.chart?.result?.[0]
+  const pm = priceResult?.meta
+  const fm = fxResult?.meta
   if (!pm?.regularMarketPrice || !fm?.regularMarketPrice) throw new Error('No price data')
   const price = pm.regularMarketPrice * fm.regularMarketPrice
-  const prevPrice = (pm.previousClose ?? pm.regularMarketPrice) * (fm.previousClose ?? fm.regularMarketPrice)
+  // previousClose can be null for European/FX tickers (e.g. EURCZK=X trades 24/7).
+  // Fallback chain: previousClose → chartPreviousClose → penultimate daily bar close.
+  // We use range=5d so there are enough bars; the penultimate non-null close is
+  // yesterday's completed close regardless of whether the market is currently open.
+  const priceBarCloses: (number | null)[] = priceResult?.indicators?.quote?.[0]?.close ?? []
+  const fxBarCloses: (number | null)[] = fxResult?.indicators?.quote?.[0]?.close ?? []
+  const validPriceCloses = priceBarCloses.filter((v): v is number => v != null && isFinite(v))
+  const validFxCloses = fxBarCloses.filter((v): v is number => v != null && isFinite(v))
+  const prevPriceBarClose = validPriceCloses.length >= 2
+    ? validPriceCloses[validPriceCloses.length - 2]
+    : validPriceCloses[0]
+  const prevFxBarClose = validFxCloses.length >= 2
+    ? validFxCloses[validFxCloses.length - 2]
+    : validFxCloses[0]
+  const prevPriceClose = pm.previousClose ?? pm.chartPreviousClose ?? prevPriceBarClose ?? pm.regularMarketPrice
+  const prevFxClose = fm.previousClose ?? fm.chartPreviousClose ?? prevFxBarClose ?? fm.regularMarketPrice
+  const prevPrice = prevPriceClose * prevFxClose
   return {
     ticker: ticker.toUpperCase(),
     price,
