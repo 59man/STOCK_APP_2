@@ -268,7 +268,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         pnl: Math.round(pricePnl + divPnl),
       }
     })
-  }, [effectiveHistories, positions, dividends, range, firstBuyDate, taxOverrides])
+  }, [effectiveHistories, positions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
 
   const values = chartData.map((d) => d.pnl)
   const minVal = values.length ? Math.min(...values) : 0
