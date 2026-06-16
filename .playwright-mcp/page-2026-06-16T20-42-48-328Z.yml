@@ -1,0 +1,375 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - heading "📈 Stock Tracker" [level=1] [ref=e6]
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - button "CZK" [ref=e9] [cursor=pointer]
+            - button "USD" [active] [ref=e10] [cursor=pointer]
+            - button "EUR" [ref=e11] [cursor=pointer]
+          - button "+ Add Position" [ref=e12] [cursor=pointer]
+      - generic [ref=e13]:
+        - generic [ref=e19] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e20]: Main Portfolio
+          - button "✎" [ref=e21]
+          - button "×" [ref=e22]
+        - generic [ref=e23] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e24]: data_test_1
+          - button "×" [ref=e25]
+        - generic [ref=e26] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e27]: portfolio_2026-06-15
+          - button "×" [ref=e28]
+        - generic [ref=e29] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e30]: 2024-01
+          - button "×" [ref=e31]
+        - button "+ New" [ref=e14] [cursor=pointer]
+        - button "↑ Import" [ref=e15] [cursor=pointer]
+    - main [ref=e16]:
+      - generic [ref=e32]:
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: Total Value
+            - generic [ref=e37]: $15,690.44
+          - generic [ref=e38]:
+            - generic [ref=e39]: Cost Basis
+            - generic [ref=e40]: $15,314.00
+          - generic [ref=e41]:
+            - generic [ref=e42]: Today's Change
+            - generic [ref=e43]:
+              - text: +$32.39
+              - generic [ref=e44]: +0.21%
+          - generic [ref=e45]:
+            - generic [ref=e46]: Price P&L
+            - generic [ref=e47]: +$4,000.44
+          - generic [ref=e48]:
+            - generic [ref=e49]: Net Dividends
+            - generic [ref=e50]: +$413.29
+          - generic [ref=e51]:
+            - generic [ref=e52]: Total Return
+            - generic [ref=e53]:
+              - text: +$4,413.73
+              - generic [ref=e54]: +28.82%
+          - generic [ref=e55]:
+            - generic [ref=e56]: IRR p.a.
+            - generic [ref=e57]: +7.92%
+        - generic [ref=e59]:
+          - button "Show closed (2)" [ref=e60] [cursor=pointer]
+          - button "✎ Edit" [ref=e61] [cursor=pointer]
+          - button "↻ Refresh" [ref=e62] [cursor=pointer]
+          - button "↓ Export" [ref=e63] [cursor=pointer]
+          - button "⚙ Columns" [ref=e65] [cursor=pointer]
+        - table [ref=e67]:
+          - rowgroup [ref=e68]:
+            - row "Ticker Type Qty Avg Buy First Buy Lots Broker Cur. Price Today Cost Basis Cur. Value Price P&L Divid. (net) Total Return Return % IRR p.a." [ref=e69]:
+              - columnheader [ref=e70]
+              - columnheader "Ticker" [ref=e71]
+              - columnheader "Type" [ref=e72]
+              - columnheader "Qty" [ref=e73]
+              - columnheader "Avg Buy" [ref=e74]
+              - columnheader "First Buy" [ref=e75]
+              - columnheader "Lots" [ref=e76]
+              - columnheader "Broker" [ref=e77]
+              - columnheader "Cur. Price" [ref=e78]
+              - columnheader "Today" [ref=e79]
+              - columnheader "Cost Basis" [ref=e80]
+              - columnheader "Cur. Value" [ref=e81]
+              - columnheader "Price P&L" [ref=e82]
+              - columnheader "Divid. (net)" [ref=e83]
+              - columnheader "Total Return" [ref=e84]
+              - columnheader "Return %" [ref=e85]
+              - columnheader "IRR p.a." [ref=e86]
+              - columnheader [ref=e87]
+          - rowgroup [ref=e88]:
+            - row "▶ AAPL Apple Inc. STOCK 15 $153.00 2022-03-15 2 lots — $299.24 +$28.20 +0.95% $2,295.00 $2,992.40 $1,447.40 $50.49 $1,497.89 +65.27% +13.69% Sell ✕" [ref=e434]:
+              - cell "▶" [ref=e90]:
+                - button "▶" [ref=e91] [cursor=pointer]
+              - cell "AAPL Apple Inc." [ref=e92]:
+                - text: AAPL
+                - generic [ref=e93]: Apple Inc.
+              - cell "STOCK" [ref=e94]:
+                - generic [ref=e95]: STOCK
+              - cell "15" [ref=e96]
+              - cell "$153.00" [ref=e435]
+              - cell "2022-03-15" [ref=e98]
+              - cell "2 lots" [ref=e99]:
+                - generic [ref=e100]: 2 lots
+              - cell "—" [ref=e101]
+              - cell "$299.24" [ref=e436]
+              - cell "+$28.20 +0.95%" [ref=e437]:
+                - text: +$28.20
+                - generic [ref=e104]: +0.95%
+              - cell "$2,295.00" [ref=e438]
+              - cell "$2,992.40" [ref=e439]
+              - cell "$1,447.40" [ref=e440]
+              - cell "$50.49" [ref=e441]
+              - cell "$1,497.89" [ref=e442]
+              - cell "+65.27%" [ref=e110]
+              - cell "+13.69%" [ref=e111]
+              - cell "Sell ✕" [ref=e112]:
+                - generic [ref=e113]:
+                  - button "Sell" [ref=e114] [cursor=pointer]
+                  - button "✕" [ref=e115] [cursor=pointer]
+            - row "▶ KO The Coca-Cola Company STOCK 20 $60.50 2022-06-01 — — $80.28 -$12.60 -0.78% $1,210.00 $1,605.60 $395.60 $9.01 $404.61 +33.44% +7.40% Sell ✕" [ref=e443]:
+              - cell "▶" [ref=e117]:
+                - button "▶" [ref=e118] [cursor=pointer]
+              - cell "KO The Coca-Cola Company" [ref=e119]:
+                - text: KO
+                - generic [ref=e120]: The Coca-Cola Company
+              - cell "STOCK" [ref=e121]:
+                - generic [ref=e122]: STOCK
+              - cell "20" [ref=e123]
+              - cell "$60.50" [ref=e444]
+              - cell "2022-06-01" [ref=e125]
+              - cell "—" [ref=e126]
+              - cell "—" [ref=e127]
+              - cell "$80.28" [ref=e445]
+              - cell "-$12.60 -0.78%" [ref=e446]:
+                - text: "-$12.60"
+                - generic [ref=e130]: "-0.78%"
+              - cell "$1,210.00" [ref=e447]
+              - cell "$1,605.60" [ref=e448]
+              - cell "$395.60" [ref=e449]
+              - cell "$9.01" [ref=e450]
+              - cell "$404.61" [ref=e451]
+              - cell "+33.44%" [ref=e136]
+              - cell "+7.40%" [ref=e137]
+              - cell "Sell ✕" [ref=e138]:
+                - generic [ref=e139]:
+                  - button "Sell" [ref=e140] [cursor=pointer]
+                  - button "✕" [ref=e141] [cursor=pointer]
+            - row "▶ JNJ Johnson & Johnson STOCK 13 $169.31 2022-04-20 2 lots — $235.18 -$6.24 -0.20% $2,201.00 $3,057.34 $856.34 $14.81 $871.15 +39.58% +9.25% Sell ✕" [ref=e452]:
+              - cell "▶" [ref=e143]:
+                - button "▶" [ref=e144] [cursor=pointer]
+              - cell "JNJ Johnson & Johnson" [ref=e145]:
+                - text: JNJ
+                - generic [ref=e146]: Johnson & Johnson
+              - cell "STOCK" [ref=e147]:
+                - generic [ref=e148]: STOCK
+              - cell "13" [ref=e149]
+              - cell "$169.31" [ref=e453]
+              - cell "2022-04-20" [ref=e151]
+              - cell "2 lots" [ref=e152]:
+                - generic [ref=e153]: 2 lots
+              - cell "—" [ref=e154]
+              - cell "$235.18" [ref=e454]
+              - cell "-$6.24 -0.20%" [ref=e455]:
+                - text: "-$6.24"
+                - generic [ref=e157]: "-0.20%"
+              - cell "$2,201.00" [ref=e456]
+              - cell "$3,057.34" [ref=e457]
+              - cell "$856.34" [ref=e458]
+              - cell "$14.81" [ref=e459]
+              - cell "$871.15" [ref=e460]
+              - cell "+39.58%" [ref=e163]
+              - cell "+9.25%" [ref=e164]
+              - cell "Sell ✕" [ref=e165]:
+                - generic [ref=e166]:
+                  - button "Sell" [ref=e167] [cursor=pointer]
+                  - button "✕" [ref=e168] [cursor=pointer]
+            - row "▶ PG Procter & Gamble Co. STOCK 12 $148.00 2022-09-12 — — $152.49 +$24.36 +1.35% $1,776.00 $1,829.88 $53.88 $11.11 $64.99 +3.66% +0.96% Sell ✕" [ref=e461]:
+              - cell "▶" [ref=e170]:
+                - button "▶" [ref=e171] [cursor=pointer]
+              - cell "PG Procter & Gamble Co." [ref=e172]:
+                - text: PG
+                - generic [ref=e173]: Procter & Gamble Co.
+              - cell "STOCK" [ref=e174]:
+                - generic [ref=e175]: STOCK
+              - cell "12" [ref=e176]
+              - cell "$148.00" [ref=e462]
+              - cell "2022-09-12" [ref=e178]
+              - cell "—" [ref=e179]
+              - cell "—" [ref=e180]
+              - cell "$152.49" [ref=e463]
+              - cell "+$24.36 +1.35%" [ref=e464]:
+                - text: +$24.36
+                - generic [ref=e183]: +1.35%
+              - cell "$1,776.00" [ref=e465]
+              - cell "$1,829.88" [ref=e466]
+              - cell "$53.88" [ref=e467]
+              - cell "$11.11" [ref=e468]
+              - cell "$64.99" [ref=e469]
+              - cell "+3.66%" [ref=e189]
+              - cell "+0.96%" [ref=e190]
+              - cell "Sell ✕" [ref=e191]:
+                - generic [ref=e192]:
+                  - button "Sell" [ref=e193] [cursor=pointer]
+                  - button "✕" [ref=e194] [cursor=pointer]
+            - row "▶ MCD McDonald's Corp. STOCK 6 $252.00 2022-07-08 — — $287.93 +$10.86 +0.63% $1,512.00 $1,727.58 $215.58 $47.53 $263.11 +17.40% +4.24% Sell ✕" [ref=e470]:
+              - cell "▶" [ref=e196]:
+                - button "▶" [ref=e197] [cursor=pointer]
+              - cell "MCD McDonald's Corp." [ref=e198]:
+                - text: MCD
+                - generic [ref=e199]: McDonald's Corp.
+              - cell "STOCK" [ref=e200]:
+                - generic [ref=e201]: STOCK
+              - cell "6" [ref=e202]
+              - cell "$252.00" [ref=e471]
+              - cell "2022-07-08" [ref=e204]
+              - cell "—" [ref=e205]
+              - cell "—" [ref=e206]
+              - cell "$287.93" [ref=e472]
+              - cell "+$10.86 +0.63%" [ref=e473]:
+                - text: +$10.86
+                - generic [ref=e209]: +0.63%
+              - cell "$1,512.00" [ref=e474]
+              - cell "$1,727.58" [ref=e475]
+              - cell "$215.58" [ref=e476]
+              - cell "$47.53" [ref=e477]
+              - cell "$263.11" [ref=e478]
+              - cell "+17.40%" [ref=e215]
+              - cell "+4.24%" [ref=e216]
+              - cell "Sell ✕" [ref=e217]:
+                - generic [ref=e218]:
+                  - button "Sell" [ref=e219] [cursor=pointer]
+                  - button "✕" [ref=e220] [cursor=pointer]
+            - row "▶ XOM Exxon Mobil Corp. STOCK 15 $89.00 2022-11-03 — — $141.86 +$14.10 +0.67% $1,335.00 $2,127.90 $792.90 $13.13 $806.03 +60.38% +13.94% Sell ✕" [ref=e479]:
+              - cell "▶" [ref=e222]:
+                - button "▶" [ref=e223] [cursor=pointer]
+              - cell "XOM Exxon Mobil Corp." [ref=e224]:
+                - text: XOM
+                - generic [ref=e225]: Exxon Mobil Corp.
+              - cell "STOCK" [ref=e226]:
+                - generic [ref=e227]: STOCK
+              - cell "15" [ref=e228]
+              - cell "$89.00" [ref=e480]
+              - cell "2022-11-03" [ref=e230]
+              - cell "—" [ref=e231]
+              - cell "—" [ref=e232]
+              - cell "$141.86" [ref=e481]
+              - cell "+$14.10 +0.67%" [ref=e482]:
+                - text: +$14.10
+                - generic [ref=e235]: +0.67%
+              - cell "$1,335.00" [ref=e483]
+              - cell "$2,127.90" [ref=e484]
+              - cell "$792.90" [ref=e485]
+              - cell "$13.13" [ref=e486]
+              - cell "$806.03" [ref=e487]
+              - cell "+60.38%" [ref=e241]
+              - cell "+13.94%" [ref=e242]
+              - cell "Sell ✕" [ref=e243]:
+                - generic [ref=e244]:
+                  - button "Sell" [ref=e245] [cursor=pointer]
+                  - button "✕" [ref=e246] [cursor=pointer]
+            - row "▶ VZ Verizon Communications STOCK 25 $44.00 2023-02-14 — — $46.73 -$8.50 -0.72% $1,100.00 $1,168.25 $68.25 $186.28 $254.53 +23.14% +6.96% Sell ✕" [ref=e488]:
+              - cell "▶" [ref=e248]:
+                - button "▶" [ref=e249] [cursor=pointer]
+              - cell "VZ Verizon Communications" [ref=e250]:
+                - text: VZ
+                - generic [ref=e251]: Verizon Communications
+              - cell "STOCK" [ref=e252]:
+                - generic [ref=e253]: STOCK
+              - cell "25" [ref=e254]
+              - cell "$44.00" [ref=e489]
+              - cell "2023-02-14" [ref=e256]
+              - cell "—" [ref=e257]
+              - cell "—" [ref=e258]
+              - cell "$46.73" [ref=e490]
+              - cell "-$8.50 -0.72%" [ref=e491]:
+                - text: "-$8.50"
+                - generic [ref=e261]: "-0.72%"
+              - cell "$1,100.00" [ref=e492]
+              - cell "$1,168.25" [ref=e493]
+              - cell "$68.25" [ref=e494]
+              - cell "$186.28" [ref=e495]
+              - cell "$254.53" [ref=e496]
+              - cell "+23.14%" [ref=e267]
+              - cell "+6.96%" [ref=e268]
+              - cell "Sell ✕" [ref=e269]:
+                - generic [ref=e270]:
+                  - button "Sell" [ref=e271] [cursor=pointer]
+                  - button "✕" [ref=e272] [cursor=pointer]
+            - row "▶ MSFT Microsoft Corp. STOCK 8 $297.50 2022-02-01 2 lots — $393.83 -$17.79 -1.48% $2,380.00 $1,181.49 $401.49 $40.23 $441.72 +18.56% +9.19% Sell ✕" [ref=e497]:
+              - cell "▶" [ref=e274]:
+                - button "▶" [ref=e275] [cursor=pointer]
+              - cell "MSFT Microsoft Corp." [ref=e276]:
+                - text: MSFT
+                - generic [ref=e277]: Microsoft Corp.
+              - cell "STOCK" [ref=e278]:
+                - generic [ref=e279]: STOCK
+              - cell "8" [ref=e280]
+              - cell "$297.50" [ref=e498]
+              - cell "2022-02-01" [ref=e282]
+              - cell "2 lots" [ref=e283]:
+                - generic [ref=e284]: 2 lots
+              - cell "—" [ref=e285]
+              - cell "$393.83" [ref=e499]
+              - cell "-$17.79 -1.48%" [ref=e500]:
+                - text: "-$17.79"
+                - generic [ref=e288]: "-1.48%"
+              - cell "$2,380.00" [ref=e501]
+              - cell "$1,181.49" [ref=e502]
+              - cell "$401.49" [ref=e503]
+              - cell "$40.23" [ref=e504]
+              - cell "$441.72" [ref=e505]
+              - cell "+18.56%" [ref=e294]
+              - cell "+9.19%" [ref=e295]
+              - cell "Sell ✕" [ref=e296]:
+                - generic [ref=e297]:
+                  - button "Sell" [ref=e298] [cursor=pointer]
+                  - button "✕" [ref=e299] [cursor=pointer]
+      - generic [ref=e300]:
+        - generic [ref=e301]:
+          - generic [ref=e302]:
+            - generic [ref=e303]:
+              - heading "Portfolio Total Return" [level=3] [ref=e304]
+              - text: price P&L + net dividends (after withholding tax)
+            - generic [ref=e305]:
+              - generic [ref=e306]: $4,414
+              - generic [ref=e307]:
+                - button "1M" [ref=e308] [cursor=pointer]
+                - button "3M" [ref=e309] [cursor=pointer]
+                - button "6M" [ref=e310] [cursor=pointer]
+                - button "1Y" [ref=e311] [cursor=pointer]
+                - button "3Y" [ref=e312] [cursor=pointer]
+                - button "5Y" [ref=e313] [cursor=pointer]
+                - button "All" [ref=e314] [cursor=pointer]
+          - img [ref=e317]:
+            - generic [ref=e322]:
+              - generic [ref=e324]: Sep 1, 21
+              - generic [ref=e411]: Jun 1, 22
+              - generic [ref=e413]: Mar 1, 23
+              - generic [ref=e415]: Dec 1, 23
+              - generic [ref=e417]: Sep 1, 24
+              - generic [ref=e419]: Jun 1, 25
+              - generic [ref=e421]: Mar 1, 26
+            - generic [ref=e338]:
+              - generic [ref=e507]: "-803.52"
+              - generic [ref=e509]: 1k
+              - generic [ref=e511]: 3k
+              - generic [ref=e513]: 6k
+        - generic [ref=e351]:
+          - generic [ref=e352]:
+            - heading "Portfolio Distribution" [level=3] [ref=e353]
+            - generic [ref=e354]:
+              - button "By Type" [ref=e355] [cursor=pointer]
+              - button "By Ticker" [ref=e356] [cursor=pointer]
+          - generic [ref=e357]:
+            - generic [ref=e358]:
+              - generic [ref=e359]: Cost Basis
+              - generic [ref=e361]:
+                - img [ref=e362]:
+                  - img [ref=e519]
+                - list [ref=e370]:
+                  - listitem [ref=e371]:
+                    - img [ref=e372]
+                    - generic [ref=e374]: Stocks
+            - generic [ref=e375]:
+              - generic [ref=e376]: Current Value
+              - generic [ref=e378]:
+                - img [ref=e379]:
+                  - img [ref=e522]
+                - list [ref=e387]:
+                  - listitem [ref=e388]:
+                    - img [ref=e389]
+                    - generic [ref=e391]: Stocks
+            - generic [ref=e392]:
+              - generic [ref=e393]: Total Return incl. Dividends
+              - generic [ref=e395]:
+                - img [ref=e396]:
+                  - img [ref=e525]
+                - list [ref=e404]:
+                  - listitem [ref=e405]:
+                    - img [ref=e406]
+                    - generic [ref=e408]: Stocks
+  - generic [ref=e409]: "-803.52"

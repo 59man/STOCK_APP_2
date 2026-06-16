@@ -409,3 +409,123 @@ Generic column-mapping wizard for unknown tabular formats.
 - xlsx library is 429 KB — also deferred via dynamic import, only loaded on first XLSX/CSV import
 - Generic PDF heuristic is intentionally conservative; it marks results with `broker: 'Unknown (verify)'` so the user knows to review prices and quantities
 - Revolut Stocks PDF not implemented — no sample file available; XAU (gold purchases) is handled
+
+---
+
+## Session 8 — 2026-06-16 — Code audit & bug fixes (static analysis)
+
+Playwright browser testing was attempted but failed: the MCP Playwright server expects Google Chrome at `/opt/google/chrome/chrome`; only Chromium (at `~/.cache/ms-playwright/chromium-1228/`) and Brave Browser (`/opt/brave-bin/brave-browser`) are installed. Fix for future sessions:
+
+```bash
+sudo mkdir -p /opt/google/chrome
+sudo ln -sf /opt/brave-bin/brave-browser /opt/google/chrome/chrome
+```
+
+All bugs were found via static code analysis instead.
+
+### Bug 1 — Portfolio IRR mixes currencies (HIGH)
+
+**File:** `src/components/PortfolioContent.tsx`
+
+`portfolioIrr` summed `r.currentValue`, `p.buyPrice * p.quantity`, sell proceeds, and dividend inflows directly across positions without currency conversion. For a mixed-currency portfolio (e.g. USD stocks + CZK stocks) the XIRR input was meaningless.
+
+**Fix:** added `toDC(amount, currency)` helper calling `convert(amount, currency, displayCurrency)` and applied it to every cash flow. Added `convert` and `displayCurrency` to the `useMemo` dependency array so IRR recalculates when FX rates update.
+
+### Bug 2 — Non-CZK/USD/EUR currencies silently treated as 1:1 with CZK (HIGH)
+
+**File:** `src/hooks/useFxRates.ts`
+
+`rates[from as keyof Rates] ?? 1` fell back to `1` for any currency not in `{ CZK, USD, EUR }`. `AddPositionModal` and the lot editor both offer GBP, CHF, JPY, CAD, AUD — any position stored in those currencies had completely wrong P&L and value calculations.
+
+**Fix:** expanded `Rates` type to include GBP, CHF, JPY, CAD, AUD with sensible defaults. Added `FX_PAIRS` constant and fetched all 7 pairs in parallel; individual pair failures fall back to defaults without failing the others.
+
+### Bug 3 — Sell price 0 silently erased in lot editor (MEDIUM)
+
+**File:** `src/components/PortfolioTable.tsx:888`
+
+`parseFloat(e.target.value) || undefined` — `parseFloat("0") === 0 → falsy → undefined`. Typing `0` in the sell price field cleared the value instead of saving it.
+
+**Fix:** `e.target.value !== '' ? parseFloat(e.target.value) : undefined`.
+
+### Bug 4 — ISIN entry in Add Position modal didn't resolve ticker (MEDIUM)
+
+**File:** `src/components/AddPositionModal.tsx`
+
+`handleTickerBlur` fetched Yahoo Finance search and only copied the resolved `longname`/`shortname` into the name field. If the user entered an ISIN (e.g. `US0378331005`) in the ticker field the position was stored with the ISIN as its ticker, which broke price fetching until the user manually fixed it in edit mode.
+
+**Fix:** added `if (hit.symbol) set('ticker', hit.symbol)` so the ticker field is also updated with the resolved symbol.
+
+### Bug 5 — Dead export `cumNetDividendsAt` (LOW)
+
+**File:** `src/utils/dividends.ts`
+
+`cumNetDividendsAt` was exported but had zero callers. `CLAUDE.md` documentation said it was used by `PortfolioPnLChart` but the chart was refactored in a previous session to use its own inline per-date dividend loop.
+
+**Fix:** deleted the function.
+
+---
+
+## Session 9 — 2026-06-16 — Playwright feature testing + two bug fixes
+
+### Testing methodology
+
+Full Playwright browser test run via the MCP Playwright server (Brave symlinked to `/opt/google/chrome/chrome` from session 8). Tested: summary card math, individual lot calculations, currency switching (CZK/USD/EUR), closed position toggle, row expand + lot detail, chart range buttons, By Ticker pie charts, Add Position modal, Export, Import (new portfolio + append), and data_test_1 portfolio (Czech stocks, XAU, 4GLD.DE, EXUS.DE, manual-price funds).
+
+### Verified correct
+
+- **Summary math**: Today's Change, Total Value, Cost Basis, Price P&L, Net Dividends, Total Return all reconcile to the cent across open and closed rows (2 closed positions: T and PFE).
+- **Lot calculations**: cost, P&L, P&L%, avg buy price all exact (within 1–2 cents of float rounding).
+- **Currency switching**: CZK → USD → EUR updates all values and symbols everywhere including summary cards, table cells, chart labels, and pie chart tooltips. IRR p.a. and Return % stay consistent (percentage, currency-agnostic).
+- **Export**: produces valid `{ version: 1, positions, manualPrices }` JSON with all 13 positions (open + closed) and manual prices.
+- **Import → new portfolio**: correct 7 total / 5 open / 2 closed count, filename pre-filled as portfolio name, today's change math matched after import.
+- **Import → append to current**: reads existing positions from server, appends with fresh UUIDs, merges tax overrides and manual prices (imported wins on key conflict), force-remounts via `setContentKey`. No deduplication by design.
+- **Add Position modal**: Closed Position checkbox reveals Sell Date + Sell Price fields.
+- **data_test_1**: all Czech stocks, FX-converted commodities, and ETF calculations correct.
+- **Console errors**: only expected 404s for manual-price tickers (FIOG.PR, 3× LU ISINs) — Yahoo + Stooq both 404 on unlisted funds.
+
+### Bug 1 — Dividend panel showed raw native currency (`$`) regardless of display currency (FIXED)
+
+**File:** `src/components/PortfolioTable.tsx` lines 1010, 1019
+
+The expanded dividend detail panel's Gross and Net columns used `fmt(gross, r.currency)` and `fmt(net, r.currency)` — i.e., the native asset currency (USD for US stocks). The main table `Divid. (net)` cell was correctly converted via `cv()`, but the detail panel was not.
+
+**Fix:**
+```tsx
+// Before
+<td>{fmt(gross, r.currency)}</td>
+<td className="gain">{fmt(net, r.currency)}</td>
+
+// After
+<td>{fmt(cv(gross, r.currency), displayCurrency)}</td>
+<td className="gain">{fmt(cv(net, r.currency), displayCurrency)}</td>
+```
+
+`cv` (the `convert` shorthand bound to `displayCurrency`) was already available in scope at that render location.
+
+### Bug 2 — Y-axis labels all showed same rounded value on tight chart ranges (FIXED)
+
+**File:** `src/components/PortfolioPnLChart.tsx` line 332
+
+`tickFormatter` used `.toFixed(0)` for k-values, so values like €2,769 and €3,100 both displayed as `3k`. On any 1M or short-range view where the total return moved less than ±500, all y-axis ticks were identical.
+
+**Fix:**
+```tsx
+// Before
+tickFormatter={(v) =>
+  Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+}
+
+// After
+tickFormatter={(v) =>
+  Math.abs(v) >= 1000
+    ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k`
+    : parseFloat(v.toFixed(2)).toString()
+}
+```
+
+`.toFixed(1)` with trailing-`.0` strip: large round values like `63k` stay as `63k`; tight ranges like 2 700–3 100 now show `2.7k`, `3.1k`. Small values use `parseFloat(…toFixed(2))` to avoid float noise (`String(950.7600000001)`).
+
+### Docker
+
+**Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`  
+Digest: `sha256:617005f7736a6186648b621824c4c9aab2f35dda14a7f35ee48a7cbf0ccc1d2a`

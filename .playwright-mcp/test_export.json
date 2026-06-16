@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "positions": [
+    {"id":"test-aapl-0000-0000-0000-000000000001","ticker":"AAPL","name":"Apple Inc.","type":"stock","quantity":10,"buyPrice":145,"buyDate":"2022-03-15","currency":"USD"},
+    {"id":"test-aapl-0000-0000-0000-000000000002","ticker":"AAPL","name":"Apple Inc.","type":"stock","quantity":5,"buyPrice":169,"buyDate":"2023-01-10","currency":"USD","sellPrice":150,"sellDate":"2026-05-15"},
+    {"id":"test-ko00-0000-0000-0000-000000000003","ticker":"KO","name":"The Coca-Cola Company","type":"stock","quantity":20,"buyPrice":60.5,"buyDate":"2022-06-01","currency":"USD"},
+    {"id":"test-jnj0-0000-0000-0000-000000000004","ticker":"JNJ","name":"Johnson & Johnson","type":"stock","quantity":8,"buyPrice":172,"buyDate":"2022-04-20","currency":"USD"},
+    {"id":"test-jnj0-0000-0000-0000-000000000005","ticker":"JNJ","name":"Johnson & Johnson","type":"stock","quantity":5,"buyPrice":165,"buyDate":"2023-05-15","currency":"USD"},
+    {"id":"test-msft-0000-0000-0000-000000000012","ticker":"MSFT","name":"Microsoft Corp.","type":"stock","quantity":5,"buyPrice":290,"buyDate":"2022-02-01","currency":"USD","sellPrice":320,"sellDate":"2023-03-15"},
+    {"id":"test-msft-0000-0000-0000-000000000013","ticker":"MSFT","name":"Microsoft Corp.","type":"stock","quantity":3,"buyPrice":310,"buyDate":"2023-04-05","currency":"USD"}
+  ],
+  "manualPrices": {}
+}

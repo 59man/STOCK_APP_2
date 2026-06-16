@@ -329,7 +329,9 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) =>
-                Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                Math.abs(v) >= 1000
+                  ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k`
+                  : parseFloat(v.toFixed(2)).toString()
               }
               width={42}
             />

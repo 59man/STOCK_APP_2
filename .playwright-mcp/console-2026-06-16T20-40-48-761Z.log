@@ -1,0 +1,21 @@
+[      33ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/chunk-PJEEZAML.js?v=e1c7a608:21550
+[  598289ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/FIOG.PR?interval=1d&range=max:0
+[  598471ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2595011649?interval=1d&range=max:0
+[  598505ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606422355?interval=1d&range=max:0
+[  598518ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606421548?interval=1d&range=max:0
+[  598648ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/FIOG.PR?interval=1d&range=1d:0
+[  598743ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606422355?interval=1d&range=1d:0
+[  598785ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606421548?interval=1d&range=1d:0
+[  598848ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2595011649?interval=1d&range=1d:0
+[  598909ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/FIOG.PR?range=max&interval=1d&events=div:0
+[  599044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606422355?range=max&interval=1d&events=div:0
+[  599044ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606421548?range=max&interval=1d&events=div:0
+[  599167ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/FIOG.PR?interval=1d&range=max:0
+[  599167ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2595011649?interval=1d&range=max:0
+[  599178ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2595011649?range=max&interval=1d&events=div:0
+[  599215ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606421548?interval=1d&range=max:0
+[  599215ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/yahoo/v8/finance/chart/LU2606422355?interval=1d&range=max:0
+[  599264ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/stooq/q/l/?s=lu2606421548&f=sd2t2ohlcv&h&e=csv:0
+[  599278ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/stooq/q/l/?s=lu2595011649&f=sd2t2ohlcv&h&e=csv:0
+[  599278ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/stooq/q/l/?s=lu2606422355&f=sd2t2ohlcv&h&e=csv:0
+[  599278ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5173/api/stooq/q/l/?s=fiog.pr&f=sd2t2ohlcv&h&e=csv:0

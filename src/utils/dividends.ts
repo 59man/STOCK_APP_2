@@ -91,25 +91,3 @@ export function calcNetDividends(
   }, 0)
 }
 
-// Cumulative net dividends received for a set of positions up to a given ISO date.
-// taxOverrides: optional map of `${TICKER}::${date}` → custom rate (0–1).
-export function cumNetDividendsAt(
-  positions: Array<{ ticker: string; buyDate: string; quantity: number }>,
-  dividendsByTicker: Map<string, DividendEvent[]>,
-  upToDate: string,
-  taxOverrides?: Record<string, number>,
-): number {
-  let total = 0
-  for (const pos of positions) {
-    const defaultRate = getDividendTaxRate(pos.ticker)
-    const divs = dividendsByTicker.get(pos.ticker.toUpperCase()) ?? []
-    for (const div of divs) {
-      if (div.date > upToDate) break
-      if (pos.buyDate <= div.date) {
-        const rate = taxOverrides?.[`${pos.ticker.toUpperCase()}::${div.date}`] ?? defaultRate
-        total += pos.quantity * div.amount * (1 - rate)
-      }
-    }
-  }
-  return total
-}

@@ -6,7 +6,7 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 
 - **Multiple portfolios** — create, rename, and delete portfolios; switch via a tab bar; each portfolio's positions and manual prices are stored independently
 - **Multi-asset portfolio** — stocks, ETFs, funds, commodities; any currency
-- **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates
+- **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates (GBP, CHF, JPY, CAD, AUD positions are also correctly converted — all 7 FX pairs fetched at startup)
 - **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback — both sources routed through a server-side proxy to avoid CORS
 - **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
 - **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. COLT.PR → CZG.PR)
@@ -18,7 +18,7 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
 - **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
 - **ISIN support** — optional ISIN field stored per position; displayed below the ticker name in the table; editable in edit mode with a **⟲ Lookup** button that resolves ticker + name from an ISIN via Yahoo Finance search
-- **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur
+- **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur; if an ISIN is entered the ticker field is also updated with the resolved symbol so price fetching works immediately
 - **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; the chart's final data point uses the live intraday quote so it always matches the table's Total Return; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
 - **Portfolio distribution charts** — three solid pie charts below the P&L line chart showing **Cost Basis**, **Current Value**, and **Total Return incl. Dividends** breakdown; toggle between **By Type** (Stocks / ETFs / Funds / Commodities) and **By Ticker** grouping; negative-return tickers are excluded from the Total Return chart; percentage labels rendered inside each slice
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
@@ -152,7 +152,7 @@ React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state 
 |---|---|
 | `usePortfolios` | Manages the list of portfolios and active selection; two-phase init; legacy key migration on first load |
 | `usePortfolio(portfolioId)` | Owns positions list for one portfolio; two-phase init; persists to server + localStorage under `stock_tracker_positions_${id}` |
-| `useFxRates` | Fetches USDCZK=X and EURCZK=X from Yahoo Finance; provides `convert(amount, from, to)` helper; defaults while loading |
+| `useFxRates` | Fetches 7 FX pairs (USD, EUR, GBP, CHF, JPY, CAD, AUD vs CZK) from Yahoo Finance in parallel; provides `convert(amount, from, to)` helper; per-pair fallback to defaults if a rate fetch fails |
 | `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE; uses `range=5d` for FX-converted tickers so bar data can serve as a previous-close fallback when `meta.previousClose` is null |
 | `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache |
 | `useManualPrices(portfolioId)` | Stores user-entered current values for funds with no live feed; two-phase init; persists under `stock_tracker_manual_prices_${id}` |

@@ -39,6 +39,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
         const data = await res.json()
         const hit = data?.quotes?.[0]
         if (hit) {
+          if (hit.symbol) set('ticker', hit.symbol as string)
           const fetchedName = hit.longname || hit.shortname || ''
           if (fetchedName) set('name', fetchedName)
         }

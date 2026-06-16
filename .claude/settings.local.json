@@ -73,7 +73,10 @@
       "Bash(docker info *)",
       "Bash(docker system *)",
       "WebFetch(domain:casaos.local)",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_evaluate"
     ]
   }
 }

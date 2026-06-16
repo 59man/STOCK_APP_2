@@ -147,7 +147,8 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
     const anyMissingPrice = rows.some((r) => !r.error && r.irr === null && !r.loading)
     if (anyLoading || anyMissingPrice) return null
 
-    const totalCurrentValue = rows.reduce((s, r) => s + r.currentValue, 0)
+    const toDC = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
+    const totalCurrentValue = rows.reduce((s, r) => s + toDC(r.currentValue, r.currency), 0)
 
     const divCashFlows: { date: Date; amount: number }[] = []
     positions.forEach((pos) => {
@@ -155,22 +156,22 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       divs.forEach((div) => {
         if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
           const rate = taxOverrides[`${pos.ticker.toUpperCase()}::${div.date}`] ?? getDividendTaxRate(pos.ticker)
-          divCashFlows.push({ date: new Date(div.date), amount: pos.quantity * div.amount * (1 - rate) })
+          divCashFlows.push({ date: new Date(div.date), amount: toDC(pos.quantity * div.amount * (1 - rate), pos.currency) })
         }
       })
     })
 
     const sellCashFlows = positions
       .filter((p) => p.sellPrice != null && p.sellDate)
-      .map((p) => ({ date: new Date(p.sellDate!), amount: p.sellPrice! * p.quantity }))
+      .map((p) => ({ date: new Date(p.sellDate!), amount: toDC(p.sellPrice! * p.quantity, p.currency) }))
 
     return xirr([
-      ...positions.map((p) => ({ date: new Date(p.buyDate), amount: -(p.buyPrice * p.quantity) })),
+      ...positions.map((p) => ({ date: new Date(p.buyDate), amount: -toDC(p.buyPrice * p.quantity, p.currency) })),
       ...sellCashFlows,
       ...divCashFlows,
       { date: new Date(), amount: totalCurrentValue },
     ])
-  }, [positions, rows, dividends, taxOverrides])
+  }, [positions, rows, dividends, taxOverrides, convert, displayCurrency])
 
   return (
     <>

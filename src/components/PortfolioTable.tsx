@@ -885,7 +885,7 @@ export function PortfolioTable({
                                                 <input
                                                   className="lot-draft-input" type="number" step="any" min="0"
                                                   value={String(lotDraft.sellPrice ?? '')}
-                                                  onChange={e => setLotDraft(d => ({ ...d, sellPrice: parseFloat(e.target.value) || undefined }))}
+                                                  onChange={e => setLotDraft(d => ({ ...d, sellPrice: e.target.value !== '' ? parseFloat(e.target.value) : undefined }))}
                                                 />
                                               </td>
                                             )}
@@ -1007,7 +1007,7 @@ export function PortfolioTable({
                                           <td>{div.date}</td>
                                           <td>{div.amount.toFixed(4)}</td>
                                           <td>{fmtQty(shares)}</td>
-                                          <td>{fmt(gross, r.currency)}</td>
+                                          <td>{fmt(cv(gross, r.currency), displayCurrency)}</td>
                                           <td>
                                             <DivTaxCell
                                               ticker={r.ticker} date={div.date}
@@ -1016,7 +1016,7 @@ export function PortfolioTable({
                                               onClear={() => onClearDivTax(r.ticker, div.date)}
                                             />
                                           </td>
-                                          <td className="gain">{fmt(net, r.currency)}</td>
+                                          <td className="gain">{fmt(cv(net, r.currency), displayCurrency)}</td>
                                         </tr>
                                       )
                                     })}

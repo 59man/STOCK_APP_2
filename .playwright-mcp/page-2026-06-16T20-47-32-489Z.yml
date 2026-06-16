@@ -1,0 +1,273 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - heading "📈 Stock Tracker" [level=1] [ref=e6]
+        - generic [ref=e7]:
+          - generic [ref=e8]:
+            - button "CZK" [ref=e9] [cursor=pointer]
+            - button "USD" [ref=e10] [cursor=pointer]
+            - button "EUR" [ref=e11] [cursor=pointer]
+          - button "+ Add Position" [ref=e12] [cursor=pointer]
+      - generic [ref=e13]:
+        - generic [ref=e19] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e20]: Main Portfolio
+          - button "×" [ref=e22]
+        - generic [ref=e23] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e24]: data_test_1
+          - button "×" [ref=e25]
+        - generic [ref=e26] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e27]: portfolio_2026-06-15
+          - button "×" [ref=e28]
+        - generic [ref=e29] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e30]: 2024-01
+          - button "×" [ref=e31]
+        - generic [ref=e1146] [cursor=pointer]:
+          - generic "Double-click to rename" [ref=e1147]: test_export
+          - button "✎" [ref=e1148]
+          - button "×" [ref=e1149]
+        - button "+ New" [ref=e14] [cursor=pointer]
+        - button "↑ Import" [ref=e15] [cursor=pointer]
+    - main [ref=e16]:
+      - generic [ref=e1150]:
+        - generic [ref=e1152]:
+          - generic [ref=e1153]:
+            - generic [ref=e1154]: Total Value
+            - generic [ref=e1155]: CZK 183,814.90
+          - generic [ref=e1156]:
+            - generic [ref=e1157]: Cost Basis
+            - generic [ref=e1158]: CZK 168,196.89
+          - generic [ref=e1159]:
+            - generic [ref=e1160]: Today's Change
+            - generic [ref=e1161]:
+              - text: "-CZK 175.35"
+              - generic [ref=e1162]: "-0.10%"
+          - generic [ref=e1163]:
+            - generic [ref=e1164]: Price P&L
+            - generic [ref=e1165]: +CZK 64,500.36
+          - generic [ref=e1166]:
+            - generic [ref=e1167]: Net Dividends
+            - generic [ref=e1168]: +CZK 2,382.49
+          - generic [ref=e1169]:
+            - generic [ref=e1170]: Total Return
+            - generic [ref=e1171]:
+              - text: +CZK 66,882.86
+              - generic [ref=e1172]: +39.76%
+          - generic [ref=e1173]:
+            - generic [ref=e1174]: IRR p.a.
+            - generic [ref=e1175]: +10.48%
+        - generic [ref=e1177]:
+          - button "✎ Edit" [ref=e1178] [cursor=pointer]
+          - button "↻ Refresh" [ref=e1179] [cursor=pointer]
+          - button "↓ Export" [ref=e1180] [cursor=pointer]
+          - button "⚙ Columns" [ref=e1182] [cursor=pointer]
+        - table [ref=e1184]:
+          - rowgroup [ref=e1185]:
+            - row "Ticker Type Qty Avg Buy First Buy Lots Broker Cur. Price Today Cost Basis Cur. Value Price P&L Divid. (net) Total Return Return % IRR p.a." [ref=e1186]:
+              - columnheader [ref=e1187]
+              - columnheader "Ticker" [ref=e1188]
+              - columnheader "Type" [ref=e1189]
+              - columnheader "Qty" [ref=e1190]
+              - columnheader "Avg Buy" [ref=e1191]
+              - columnheader "First Buy" [ref=e1192]
+              - columnheader "Lots" [ref=e1193]
+              - columnheader "Broker" [ref=e1194]
+              - columnheader "Cur. Price" [ref=e1195]
+              - columnheader "Today" [ref=e1196]
+              - columnheader "Cost Basis" [ref=e1197]
+              - columnheader "Cur. Value" [ref=e1198]
+              - columnheader "Price P&L" [ref=e1199]
+              - columnheader "Divid. (net)" [ref=e1200]
+              - columnheader "Total Return" [ref=e1201]
+              - columnheader "Return %" [ref=e1202]
+              - columnheader "IRR p.a." [ref=e1203]
+              - columnheader [ref=e1204]
+          - rowgroup [ref=e1205]:
+            - row "▶ AAPL Apple Inc. STOCK 15 CZK 3,182.55 2022-03-15 2 lots — CZK 6,224.49 +CZK 586.59 +0.95% CZK 47,738.30 CZK 62,244.91 CZK 30,107.37 CZK 1,050.24 CZK 31,157.61 +65.27% +13.69% Sell ✕" [ref=e1206]:
+              - cell "▶" [ref=e1207]:
+                - button "▶" [ref=e1208] [cursor=pointer]
+              - cell "AAPL Apple Inc." [ref=e1209]:
+                - text: AAPL
+                - generic [ref=e1210]: Apple Inc.
+              - cell "STOCK" [ref=e1211]:
+                - generic [ref=e1212]: STOCK
+              - cell "15" [ref=e1213]
+              - cell "CZK 3,182.55" [ref=e1214]
+              - cell "2022-03-15" [ref=e1215]
+              - cell "2 lots" [ref=e1216]:
+                - generic [ref=e1217]: 2 lots
+              - cell "—" [ref=e1218]
+              - cell "CZK 6,224.49" [ref=e1219]
+              - cell "+CZK 586.59 +0.95%" [ref=e1220]:
+                - text: +CZK 586.59
+                - generic [ref=e1221]: +0.95%
+              - cell "CZK 47,738.30" [ref=e1222]
+              - cell "CZK 62,244.91" [ref=e1223]
+              - cell "CZK 30,107.37" [ref=e1224]
+              - cell "CZK 1,050.24" [ref=e1225]
+              - cell "CZK 31,157.61" [ref=e1226]
+              - cell "+65.27%" [ref=e1227]
+              - cell "+13.69%" [ref=e1228]
+              - cell "Sell ✕" [ref=e1229]:
+                - generic [ref=e1230]:
+                  - button "Sell" [ref=e1231] [cursor=pointer]
+                  - button "✕" [ref=e1232] [cursor=pointer]
+            - row "▶ KO The Coca-Cola Company STOCK 20 CZK 1,258.46 2022-06-01 — — CZK 1,669.90 -CZK 262.09 -0.78% CZK 25,169.21 CZK 33,398.09 CZK 8,228.88 CZK 187.42 CZK 8,416.29 +33.44% +7.40% Sell ✕" [ref=e1233]:
+              - cell "▶" [ref=e1234]:
+                - button "▶" [ref=e1235] [cursor=pointer]
+              - cell "KO The Coca-Cola Company" [ref=e1236]:
+                - text: KO
+                - generic [ref=e1237]: The Coca-Cola Company
+              - cell "STOCK" [ref=e1238]:
+                - generic [ref=e1239]: STOCK
+              - cell "20" [ref=e1240]
+              - cell "CZK 1,258.46" [ref=e1241]
+              - cell "2022-06-01" [ref=e1242]
+              - cell "—" [ref=e1243]
+              - cell "—" [ref=e1244]
+              - cell "CZK 1,669.90" [ref=e1245]
+              - cell "-CZK 262.09 -0.78%" [ref=e1246]:
+                - text: "-CZK 262.09"
+                - generic [ref=e1247]: "-0.78%"
+              - cell "CZK 25,169.21" [ref=e1248]
+              - cell "CZK 33,398.09" [ref=e1249]
+              - cell "CZK 8,228.88" [ref=e1250]
+              - cell "CZK 187.42" [ref=e1251]
+              - cell "CZK 8,416.29" [ref=e1252]
+              - cell "+33.44%" [ref=e1253]
+              - cell "+7.40%" [ref=e1254]
+              - cell "Sell ✕" [ref=e1255]:
+                - generic [ref=e1256]:
+                  - button "Sell" [ref=e1257] [cursor=pointer]
+                  - button "✕" [ref=e1258] [cursor=pointer]
+            - row "▶ JNJ Johnson & Johnson STOCK 13 CZK 3,521.77 2022-04-20 2 lots — CZK 4,891.98 -CZK 129.80 -0.20% CZK 45,783.00 CZK 63,595.73 CZK 17,812.73 CZK 308.00 CZK 18,120.73 +39.58% +9.25% Sell ✕" [ref=e1259]:
+              - cell "▶" [ref=e1260]:
+                - button "▶" [ref=e1261] [cursor=pointer]
+              - cell "JNJ Johnson & Johnson" [ref=e1262]:
+                - text: JNJ
+                - generic [ref=e1263]: Johnson & Johnson
+              - cell "STOCK" [ref=e1264]:
+                - generic [ref=e1265]: STOCK
+              - cell "13" [ref=e1266]
+              - cell "CZK 3,521.77" [ref=e1267]
+              - cell "2022-04-20" [ref=e1268]
+              - cell "2 lots" [ref=e1269]:
+                - generic [ref=e1270]: 2 lots
+              - cell "—" [ref=e1271]
+              - cell "CZK 4,891.98" [ref=e1272]
+              - cell "-CZK 129.80 -0.20%" [ref=e1273]:
+                - text: "-CZK 129.80"
+                - generic [ref=e1274]: "-0.20%"
+              - cell "CZK 45,783.00" [ref=e1275]
+              - cell "CZK 63,595.73" [ref=e1276]
+              - cell "CZK 17,812.73" [ref=e1277]
+              - cell "CZK 308.00" [ref=e1278]
+              - cell "CZK 18,120.73" [ref=e1279]
+              - cell "+39.58%" [ref=e1280]
+              - cell "+9.25%" [ref=e1281]
+              - cell "Sell ✕" [ref=e1282]:
+                - generic [ref=e1283]:
+                  - button "Sell" [ref=e1284] [cursor=pointer]
+                  - button "✕" [ref=e1285] [cursor=pointer]
+            - row "▶ MSFT Microsoft Corp. STOCK 8 CZK 6,188.30 2022-02-01 2 lots — CZK 8,192.06 -CZK 370.05 -1.48% CZK 49,506.38 CZK 24,576.17 CZK 8,351.39 CZK 836.83 CZK 9,188.23 +18.56% +9.19% Sell ✕" [ref=e1286]:
+              - cell "▶" [ref=e1287]:
+                - button "▶" [ref=e1288] [cursor=pointer]
+              - cell "MSFT Microsoft Corp." [ref=e1289]:
+                - text: MSFT
+                - generic [ref=e1290]: Microsoft Corp.
+              - cell "STOCK" [ref=e1291]:
+                - generic [ref=e1292]: STOCK
+              - cell "8" [ref=e1293]
+              - cell "CZK 6,188.30" [ref=e1294]
+              - cell "2022-02-01" [ref=e1295]
+              - cell "2 lots" [ref=e1296]:
+                - generic [ref=e1297]: 2 lots
+              - cell "—" [ref=e1298]
+              - cell "CZK 8,192.06" [ref=e1299]
+              - cell "-CZK 370.05 -1.48%" [ref=e1300]:
+                - text: "-CZK 370.05"
+                - generic [ref=e1301]: "-1.48%"
+              - cell "CZK 49,506.38" [ref=e1302]
+              - cell "CZK 24,576.17" [ref=e1303]
+              - cell "CZK 8,351.39" [ref=e1304]
+              - cell "CZK 836.83" [ref=e1305]
+              - cell "CZK 9,188.23" [ref=e1306]
+              - cell "+18.56%" [ref=e1307]
+              - cell "+9.19%" [ref=e1308]
+              - cell "Sell ✕" [ref=e1309]:
+                - generic [ref=e1310]:
+                  - button "Sell" [ref=e1311] [cursor=pointer]
+                  - button "✕" [ref=e1312] [cursor=pointer]
+      - generic [ref=e1313]:
+        - generic [ref=e1314]:
+          - generic [ref=e1315]:
+            - generic [ref=e1316]:
+              - heading "Portfolio Total Return" [level=3] [ref=e1317]
+              - text: price P&L + net dividends (after withholding tax)
+            - generic [ref=e1318]:
+              - generic [ref=e1319]: CZK 66,883
+              - generic [ref=e1320]:
+                - button "1M" [ref=e1321] [cursor=pointer]
+                - button "3M" [ref=e1322] [cursor=pointer]
+                - button "6M" [ref=e1323] [cursor=pointer]
+                - button "1Y" [ref=e1324] [cursor=pointer]
+                - button "3Y" [ref=e1325] [cursor=pointer]
+                - button "5Y" [ref=e1326] [cursor=pointer]
+                - button "All" [ref=e1327] [cursor=pointer]
+          - generic [ref=e1329]:
+            - img [ref=e1330]:
+              - generic [ref=e1335]:
+                - generic [ref=e1337]: Mar 1, 22
+                - generic [ref=e1339]: Dec 1, 22
+                - generic [ref=e1341]: Sep 1, 23
+                - generic [ref=e1343]: Jun 1, 24
+                - generic [ref=e1345]: Mar 1, 25
+                - generic [ref=e1347]: Dec 1, 25
+              - generic [ref=e1349]:
+                - generic [ref=e1351]: "-13k"
+                - generic [ref=e1353]: 17k
+                - generic [ref=e1355]: 47k
+                - generic [ref=e1357]: 97k
+            - generic:
+              - generic:
+                - paragraph: Oct 1, 24
+                - list:
+                  - listitem: "Total Return : CZK 31,655"
+        - generic [ref=e1364]:
+          - generic [ref=e1365]:
+            - heading "Portfolio Distribution" [level=3] [ref=e1366]
+            - generic [ref=e1367]:
+              - button "By Type" [ref=e1368] [cursor=pointer]
+              - button "By Ticker" [ref=e1369] [cursor=pointer]
+          - generic [ref=e1370]:
+            - generic [ref=e1371]:
+              - generic [ref=e1372]: Cost Basis
+              - generic [ref=e1374]:
+                - img [ref=e1375]:
+                  - generic [ref=e1376]:
+                    - img [ref=e1378]
+                    - generic [ref=e1380]:
+                      - generic: 100%
+                - list [ref=e1382]:
+                  - listitem [ref=e1383]:
+                    - img [ref=e1384]
+                    - generic [ref=e1386]: Stocks
+            - generic [ref=e1387]:
+              - generic [ref=e1388]: Current Value
+              - generic [ref=e1390]:
+                - img [ref=e1391]:
+                  - img [ref=e1395]
+                - list [ref=e1397]:
+                  - listitem [ref=e1398]:
+                    - img [ref=e1399]
+                    - generic [ref=e1401]: Stocks
+            - generic [ref=e1402]:
+              - generic [ref=e1403]: Total Return incl. Dividends
+              - generic [ref=e1405]:
+                - img [ref=e1406]:
+                  - img [ref=e1410]
+                - list [ref=e1412]:
+                  - listitem [ref=e1413]:
+                    - img [ref=e1414]
+                    - generic [ref=e1416]: Stocks
+  - generic [ref=e409]: "-13k"
