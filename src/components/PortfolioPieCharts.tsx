@@ -39,8 +39,6 @@ const PALETTE = [
   '#8338ec', '#ffbe0b', '#f15bb5', '#00f5d4',
 ]
 
-const LOSS_COLOR = '#e05555'
-
 function fmtCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat('cs-CZ', {
     style: 'currency',
@@ -166,12 +164,14 @@ export function PortfolioPieCharts({ rows, displayCurrency, convert }: Props) {
           isLoss: false,
           color: TYPE_COLORS[type] ?? '#888',
         })),
-        totalReturn: types.map(([type, v]) => ({
-          name: v.totalReturn < 0 ? `${TYPE_LABELS[type] ?? type} (loss)` : (TYPE_LABELS[type] ?? type),
-          value: Math.abs(v.totalReturn),
-          isLoss: v.totalReturn < 0,
-          color: v.totalReturn < 0 ? LOSS_COLOR : (TYPE_COLORS[type] ?? '#888'),
-        })),
+        totalReturn: types
+          .filter(([, v]) => v.totalReturn > 0)
+          .map(([type, v]) => ({
+            name: TYPE_LABELS[type] ?? type,
+            value: v.totalReturn,
+            isLoss: false,
+            color: TYPE_COLORS[type] ?? '#888',
+          })),
       }
     }
 
@@ -189,15 +189,14 @@ export function PortfolioPieCharts({ rows, displayCurrency, convert }: Props) {
         isLoss: false,
         color: tickerColors[row.ticker] ?? '#888',
       })),
-      totalReturn: rows.map((row) => {
-        const val = cv(row.totalReturn, row.currency)
-        return {
-          name: val < 0 ? `${row.ticker} (loss)` : row.ticker,
-          value: Math.abs(val),
-          isLoss: val < 0,
-          color: val < 0 ? LOSS_COLOR : (tickerColors[row.ticker] ?? '#888'),
-        }
-      }),
+      totalReturn: rows
+        .filter((row) => cv(row.totalReturn, row.currency) > 0)
+        .map((row) => ({
+          name: row.ticker,
+          value: cv(row.totalReturn, row.currency),
+          isLoss: false,
+          color: tickerColors[row.ticker] ?? '#888',
+        })),
     }
   }, [rows, groupBy, displayCurrency, convert, tickerColors])
 
