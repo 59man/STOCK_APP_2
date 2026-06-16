@@ -69,9 +69,9 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const avgBuyPrice = totalCost / totalQty
       const firstBuyDate = [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate))[0].buyDate
 
-      const quote = isClosed ? undefined : quotes.get(ticker)
+      const quote = isClosed ? undefined : quotes.get(ticker.toUpperCase())
       const isLoading = !isClosed && loadingSet.has(ticker)
-      const error = isClosed ? null : (errors.get(ticker) ?? null)
+      const error = isClosed ? null : (errors.get(ticker.toUpperCase()) ?? null)
       const manual = isClosed ? undefined : manualPrices[ticker.toUpperCase()]
       const priceIsManual = !isClosed && !quote && !!manual
 

@@ -163,14 +163,19 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
   const effectiveHistories = useMemo(() => {
     const map = new Map(histories)
     const today = new Date().toISOString().slice(0, 10)
+    // Skip live-price injection on weekends: markets are closed, quotes hold
+    // Friday's stale close, and injecting today's date would create a phantom
+    // non-trading-day bar on the chart.
+    const dow = new Date().getDay()
+    const isWeekend = dow === 0 || dow === 6
     tickers.forEach((t) => {
       const existing = map.get(t)
       if (existing && existing.length > 0) {
-        // Inject live quote price as today's final point so chart matches table
-        const liveQuote = quotes?.get(t)
-        if (liveQuote) {
+        // Inject live quote price as today's final point so chart matches table.
+        const liveQuote = !isWeekend ? quotes?.get(t.toUpperCase()) : undefined
+        if (liveQuote && liveQuote.price > 0 && isFinite(liveQuote.price)) {
           const hist = [...existing]
-          if (hist.length > 0 && hist[hist.length - 1][0] === today) {
+          if (hist[hist.length - 1][0] === today) {
             hist[hist.length - 1] = [today, liveQuote.price]
           } else {
             hist.push([today, liveQuote.price])

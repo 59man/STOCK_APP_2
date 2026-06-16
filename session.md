@@ -276,3 +276,59 @@ Fixed by:
 
 **Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`  
 Digest: `sha256:4d263ab0b70d9d9c618ca7272538d13a77a736522b39ce6c69414304d0f95df4`
+
+---
+
+## Session 6 — 2026-06-16 — Chart/table alignment + bug fixes
+
+### Feature — Portfolio P&L chart aligned with table Total Return
+
+**Problem:** The "Portfolio Total Return" chart header value differed from the table's "Total Return" summary (e.g. +CZK 31,651 vs +CZK 28,808) even with no closed positions.
+
+**Root cause:** The chart fetched historical closing prices separately (Yahoo Finance chart API). During intraday trading, today's bar has no closing price yet, so the chart's final point was yesterday's close. The table used `quote.price = meta.regularMarketPrice` (live intraday). The difference equalled today's portfolio price move.
+
+**Fix (`src/components/PortfolioPnLChart.tsx`):**
+- Added `quotes?: Map<string, Quote>` prop to `PortfolioPnLChart`
+- In `effectiveHistories` useMemo, for each ticker with real historical data, injected `quotes.get(ticker.toUpperCase()).price` as today's final bar (replacing or appending), so the chart's last data point always matches the live price the table uses.
+
+**`src/components/PortfolioContent.tsx`:** passes `quotes={quotes}` to `<PortfolioPnLChart>`.
+
+### Bug fixes (code review findings)
+
+#### Bug 1 — Weekend phantom data point (CONFIRMED)
+
+**File:** `src/components/PortfolioPnLChart.tsx`
+
+On weekends/holidays, `quotes` holds Friday's stale close and `new Date().toISOString().slice(0,10)` is a Saturday/Sunday date. The live-price injection unconditionally pushed `["2026-06-21", fridayPrice]` into the history, which then appeared in `chartData`'s `dateSet` as a phantom non-trading-day bar on the X-axis.
+
+**Fix:** compute `dayOfWeek = new Date().getDay()` and skip injection entirely if `dow === 0 || dow === 6`.
+
+#### Bug 2 — Ticker casing mismatch (PLAUSIBLE)
+
+**Files:** `src/components/PortfolioPnLChart.tsx`, `src/components/PortfolioContent.tsx`
+
+`useQuotes` stores all map entries under `ticker.toUpperCase()` (line 155 of `useQuotes.ts`). The chart's `quotes?.get(t)` and the table's `quotes.get(ticker)` / `errors.get(ticker)` used raw ticker casing. `Map.get` is case-sensitive: a position stored with any non-uppercase ticker would silently miss the quote.
+
+**Fixes:**
+- `PortfolioPnLChart.tsx`: `quotes?.get(t)` → `quotes?.get(t.toUpperCase())`
+- `PortfolioContent.tsx`: `quotes.get(ticker)` → `quotes.get(ticker.toUpperCase())`, `errors.get(ticker)` → `errors.get(ticker.toUpperCase())`
+- Note: `loadingSet.has(ticker)` is correct as-is — `useQuotes` stores the loading `Set` with raw (non-uppercased) ticker keys.
+
+#### Bug 3 — No price validation before injection (PLAUSIBLE)
+
+**File:** `src/components/PortfolioPnLChart.tsx`
+
+`parseHistory` filters bad prices with `price && isFinite(price) && price > 0` but the live-quote injection path bypassed this guard. A structurally corrupt quote (NaN from unexpected API response) could have been injected directly.
+
+**Fix:** added `&& liveQuote.price > 0 && isFinite(liveQuote.price)` to the injection condition.
+
+#### Bug 4 — Redundant `hist.length > 0` guard (Simplification)
+
+**File:** `src/components/PortfolioPnLChart.tsx`
+
+Inside the injection block, `hist` was `[...existing]` where `existing.length > 0` had already been checked at the enclosing `if`. The inner `hist.length > 0 &&` was always true. Removed.
+
+### Modified files
+
+- `src/components/PortfolioPnLChart.tsx` — live-quote injection with weekend guard, casing fix, price validation, redundant guard removed
+- `src/components/PortfolioContent.tsx` — passes `quotes` prop to chart; `quotes.get` and `errors.get` now use `.toUpperCase()` for consistent map key lookup
