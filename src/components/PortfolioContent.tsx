@@ -197,6 +197,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
             positions={positions}
             dividends={dividends}
             manualPrices={manualPrices}
+            quotes={quotes}
             displayCurrency={displayCurrency}
             convert={convert}
             taxOverrides={taxOverrides}
