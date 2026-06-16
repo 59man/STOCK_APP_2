@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
-import { Position } from '../types'
+import { Position, Quote } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 
@@ -116,12 +116,13 @@ interface Props {
   positions: Position[]
   dividends: Map<string, DividendEvent[]>
   manualPrices?: Record<string, { price: number }>
+  quotes?: Map<string, Quote>
   displayCurrency: string
   convert: (amount: number, from: string, to: string) => number
   taxOverrides?: Record<string, number>
 }
 
-export function PortfolioPnLChart({ positions, dividends, manualPrices, displayCurrency, convert, taxOverrides }: Props) {
+export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, displayCurrency, convert, taxOverrides }: Props) {
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions])
   const [range, setRange] = useState<Range>(
     () => (localStorage.getItem('chart_range_portfolio') as Range | null) ?? 'All'
@@ -157,12 +158,27 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
   // For tickers with no Yahoo history but a manual price, build a synthetic history
   // using the actual buy-date prices as anchors (each lot starts at P&L = 0) and
   // today's manual price as the final point.
+  // Also injects live quote prices as today's final bar so the chart matches the
+  // table's live intraday total return (rather than lagging behind at yesterday's close).
   const effectiveHistories = useMemo(() => {
     const map = new Map(histories)
     const today = new Date().toISOString().slice(0, 10)
     tickers.forEach((t) => {
       const existing = map.get(t)
-      if (existing && existing.length > 0) return      // real data exists, keep it
+      if (existing && existing.length > 0) {
+        // Inject live quote price as today's final point so chart matches table
+        const liveQuote = quotes?.get(t)
+        if (liveQuote) {
+          const hist = [...existing]
+          if (hist.length > 0 && hist[hist.length - 1][0] === today) {
+            hist[hist.length - 1] = [today, liveQuote.price]
+          } else {
+            hist.push([today, liveQuote.price])
+          }
+          map.set(t, hist)
+        }
+        return
+      }
       const mp = manualPrices?.[t.toUpperCase()]
       if (!mp) return                                   // no manual price either
 
@@ -183,7 +199,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
       map.set(t, synth)
     })
     return map
-  }, [histories, manualPrices, positions, tickers])
+  }, [histories, manualPrices, quotes, positions, tickers])
 
   const firstBuyDate = useMemo(() =>
     positions.length === 0 ? '0000-00-00'
