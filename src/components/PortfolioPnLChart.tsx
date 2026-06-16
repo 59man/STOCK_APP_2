@@ -205,6 +205,14 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
       let pricePnl = 0
       positions.forEach((pos) => {
         if (pos.buyDate > date) return
+
+        // If this lot was sold on or before this date, use the frozen realized gain
+        // so the chart matches the table's realizedPnl (not live market price).
+        if (pos.sellDate && pos.sellDate <= date && pos.sellPrice != null) {
+          pricePnl += convert((pos.sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency)
+          return
+        }
+
         const h = effectiveHistories.get(pos.ticker)
         if (!h || h.length === 0) return
         const price = priceAt(h, date)
@@ -220,7 +228,8 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, displayC
         const defaultRate = getDividendTaxRate(pos.ticker)
         for (const div of divs) {
           if (div.date > date) break
-          if (pos.buyDate <= div.date) {
+          // Only count dividends received while the lot was held (matches calcNetDividends)
+          if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
             const rate = taxOverrides?.[`${pos.ticker.toUpperCase()}::${div.date}`] ?? defaultRate
             divPnl += convert(pos.quantity * div.amount * (1 - rate), pos.currency, displayCurrency)
           }
