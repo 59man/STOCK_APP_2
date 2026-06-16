@@ -239,7 +239,10 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         const price = priceAt(h, date)
         if (price === null) return
         const hCurrency = histCurrency(pos.ticker, pos.currency)
-        pricePnl += convert((price - pos.buyPrice) * pos.quantity, hCurrency, displayCurrency)
+        // Normalise buy price to history currency so mixed-currency lots don't mix units.
+        // Matches the toRow() normalisation applied in PortfolioContent's row useMemo.
+        const buyInHistCurrency = convert(pos.buyPrice, pos.currency, hCurrency)
+        pricePnl += convert((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency)
       })
 
       // Dividend P&L — convert from each position's native currency
