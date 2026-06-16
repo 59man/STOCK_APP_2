@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxOverrides, hasManualPrices, onConfirm, onClose }: Props) {
-  const baseName = fileName.replace(/\.json$/i, '')
+  const baseName = fileName.replace(/\.(json|xlsx|pdf)$/i, '')
   const [mode, setMode] = useState<'new' | 'current'>('new')
   const [newName, setNewName] = useState(baseName)
 

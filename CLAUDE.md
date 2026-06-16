@@ -116,7 +116,8 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 
   **Column config**: `COLUMN_DEFS` now has a `hideBelow?: number` field per column. `loadColConfig()` uses `window.innerWidth` to set responsive defaults on first visit (no stored config). Column visibility is JS-only — the CSS breakpoints no longer hide columns by class. The column panel opens as a bottom sheet on ≤ 640 px screens (`.col-panel-backdrop` + fixed positioning).
 - `SellPositionModal` — enter sell date + sell price for one ticker's open lots; shows a live P&L preview; calls `onSellPositions(ids, sellPrice, sellDate)`.
-- `ImportModal` — shows file summary (position count, open/closed breakdown, up to 8 tickers); radio to import into a new portfolio (name pre-filled from filename) or append to current; calls `onConfirm(mode, newPortfolioName?)`.
+- `ImportModal` — shows file summary (position count, open/closed breakdown, up to 8 tickers); radio to import into a new portfolio (name pre-filled from filename, strips `.json`/`.xlsx`/`.pdf`/`.csv`) or append to current; calls `onConfirm(mode, newPortfolioName?)`.
+- `ColumnMappingModal` — generic column-mapping wizard shown for unknown tabular files (`NeedsMapping` result from `parseFile`). Props: `fileName`, `rows`, `onConfirm(mapping, defaults)`, `onClose`. Shows preview table (first 3 data rows), 10 column dropdowns (4 required, 6 optional), skip-rows control, default currency/broker inputs. `autoDetectMapping` pre-fills dropdowns. Import button disabled until all required fields are mapped.
 - `AddPositionModal` — controlled form; calls `onAdd` / `onClose`. On ticker blur, fetches `/api/yahoo/v1/finance/search?q=…` and auto-fills the Name field (works for both ticker symbols and ISINs). Has a "Closed position" checkbox that reveals Sell Date + Sell Price fields. Has a **Broker / Platform** field with a datalist (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212).
 - `PriceChart` — self-contained; fetches history from Yahoo Finance proxy with range selector (1M–All); handles FX conversion for EUR/USD assets via `FX_CONVERTED_TICKERS` (imported from `src/data/fxConvertedTickers.ts`); respects `displayCurrency` prop (converts chart values via `convert`); selected range persisted to `localStorage` key `chart_range_price`.
 - `PortfolioPnLChart` — portfolio total return chart (price P&L + net dividends) in the selected display currency. Fetches per-ticker daily history; uses `FX_CONVERTED_TICKERS` from `src/data/fxConvertedTickers.ts`; builds synthetic history for manual-priced tickers from buy-date price anchors + current manual price; selected range persisted to `localStorage` key `chart_range_portfolio`. Accepts optional `taxOverrides` and `quotes` props. **Live-price injection**: on weekdays, injects `quotes.get(ticker.toUpperCase()).price` as today's final history bar in `effectiveHistories`, ensuring the chart's last data point matches the table's live intraday total return instead of lagging at yesterday's close. Skipped on weekends (no phantom non-trading-day bars). Price is validated (`> 0 && isFinite`) before injection.
@@ -133,9 +134,38 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 
 **When adding a new foreign-currency asset:** add one entry to `FX_CONVERTED_TICKERS` in `src/data/fxConvertedTickers.ts` only — all three consumers pick it up automatically.
 
-### Import parsing (`src/utils/importParser.ts`)
+### Import parsing
 
-`parsePositionsFromJson(raw)` — handles three import formats and returns `{ valid: Position[], skipped: number } | null`. Validates each candidate with `isValidPosition` (checks ticker string, quantity > 0, buyPrice ≥ 0, buyDate string). Callers warn if `skipped > 0`. Used by `App.tsx`; replaces the old inline parsing function.
+**`src/utils/importParser.ts`** — dispatcher and shared types:
+- `ParseResult { valid, skipped, dividendTaxOverrides?, manualPrices? }` — success result
+- `NeedsMapping { type: 'needs-mapping'; rows: unknown[][] }` — returned for unknown tabular formats
+- `ParseFileResult = ParseResult | NeedsMapping`
+- `ColumnMapping` — 10 optional column indices (ticker, date, quantity, buyPrice, name, isin, currency, broker, sellDate, sellPrice)
+- `MappingDefaults { currency, broker, skipRows }`
+- `parseFile(file)` — dispatcher: PDF→`parsePdf`, XTB XLSX→`parseXtbXlsx`, T212→`parseT212`, Degiro→`parseDegiro`, unknown tabular→`{ type:'needs-mapping', rows }`, other→`parsePositionsFromJson`
+- `parseWithMapping(rows, mapping, defaults)` — extracts columns by index, calls `batchTickers` for type enrichment
+- `autoDetectMapping(header)` — keyword-matches header names (multilingual) to pre-fill the wizard
+- `parsePositionsFromJson(raw)` — handles three JSON formats: `Position[]` array, `{ stock_tracker_positions: "..." }`, multi-portfolio `{ stock_tracker_positions_uuid: "..." }`
+
+**`src/utils/yahooLookup.ts`** — shared Yahoo Finance ISIN/ticker → type lookup used by all parsers:
+- `batchIsins(isins)` / `batchTickers(tickers)` → `Record<string, { ticker, type }>`
+- Maps `quoteType`: `ETF→'etf'`, `MUTUALFUND→'fund'`, `COMMODITY→'commodity'`, else `'stock'`
+
+**`src/utils/fifoMatcher.ts`** — FIFO lot matching:
+- `RawLot { ticker, name, qty, price, date, currency, broker, isin?, type, isSell }` — intermediate struct
+- `applyFifo(lots)` — groups by ticker, sorts chronologically, consumes sells from oldest buys; partial sells split a lot; returns `Position[]`
+
+**`src/utils/xlsxParser.ts`** — XTB Cash Operations XLSX: `Stock purchase`/`Stock sale` rows, fill qty from comment, `.CZ`→`.PR` ticker conversion, calls `applyFifo` + `batchTickers`.
+
+**`src/utils/pdfParser.ts`** — PDF parsers (pdfjs-dist loaded dynamically for code-splitting):
+- Text extraction groups pdfjs items by Y/X into lines (±3 unit threshold)
+- **Fio banka** (`"Fio banka"`/`"FIOBCZPP"`): date, ISIN, `Nákup`/`Prodej`, Czech numbers; calls `batchIsins` + `applyFifo`
+- **Revolut XAU** (`"Revolut"` + `"XAU"`): `"Exchanged to XAU"` pattern, extracts qty and CZK amount
+- **Generic heuristic**: ISIN + multilingual buy keyword + date + numbers; `broker: 'Unknown (verify)'`
+
+**`src/utils/csvParser.ts`** — CSV/XLSX parsers:
+- **Trading 212**: `"No. of shares"` + `"Price / share"` header fingerprint; `"Market buy"` rows
+- **Degiro**: `"Order ID"` + `"ISIN"` + `"Description"` fingerprint; extracts qty/price from Description; calls `batchIsins`
 
 ### Dividend utilities (`src/utils/dividends.ts`)
 
@@ -168,6 +198,8 @@ Three UniCredit onemarkets funds (ISINs LU2606422355, LU2606421548, LU2595011649
 - `/api/persist/*` → `http://localhost:3001` (Express persist server).
 
 All three only active during `npm run dev`. In production/Docker, Express handles all routes directly via a shared `proxyRequest()` helper.
+
+`optimizeDeps: { exclude: ['pdfjs-dist'] }` — prevents Vite from pre-bundling pdfjs-dist, which breaks the dynamic `import('pdfjs-dist')` code-split inside `parsePdf()`. Without this, pdfjs lands in the main bundle (~1.1 MB); with it, it splits into a lazy 472 KB async chunk loaded only when a PDF is imported.
 
 ### Styling
 

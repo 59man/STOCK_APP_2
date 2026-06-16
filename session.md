@@ -332,3 +332,80 @@ Inside the injection block, `hist` was `[...existing]` where `existing.length > 
 
 - `src/components/PortfolioPnLChart.tsx` — live-quote injection with weekend guard, casing fix, price validation, redundant guard removed
 - `src/components/PortfolioContent.tsx` — passes `quotes` prop to chart; `quotes.get` and `errors.get` now use `.toUpperCase()` for consistent map key lookup
+
+---
+
+## Session 7 — 2026-06-16 — Multi-format import (XLSX, PDF, CSV) + column mapping wizard
+
+### What was built
+
+The import function was upgraded from JSON-only to a multi-format dispatcher that handles broker export files directly, resolves ISINs and asset types via Yahoo Finance, and applies FIFO matching for sell transactions.
+
+### New files
+
+**`src/utils/yahooLookup.ts`**  
+Shared Yahoo Finance lookup utility used by all parsers.
+- `lookupIsin(isin)` / `lookupTicker(ticker)` — single ISIN or ticker → `{ ticker, type }`
+- `batchIsins(isins)` / `batchTickers(tickers)` — deduplicated batch lookup
+- Maps Yahoo `quoteType`: `ETF→'etf'`, `MUTUALFUND→'fund'`, `COMMODITY→'commodity'`, else `'stock'`
+
+**`src/utils/fifoMatcher.ts`**  
+FIFO matching of buy/sell lots per ticker.
+- `RawLot` — intermediate struct with `isSell: boolean`
+- `applyFifo(lots)` — groups by ticker, sorts chronologically, consumes sells from the oldest buys first; partial sells split buy lots; returns `Position[]` with `sellDate`/`sellPrice` on fully-closed lots
+
+**`src/utils/xlsxParser.ts`**  
+Parses XTB Cash Operations XLSX.
+- Detects buy (`Stock purchase`) and sell (`Stock sale`) rows
+- Extracts fill qty from comment string: `OPEN BUY 3/3.4281 @ 37.185` → `3`
+- Converts `.CZ` → `.PR` suffix for Prague exchange tickers
+- `buyPrice = |Amount| / qty` (amount is already CZK)
+- Calls `applyFifo` then `batchTickers` for type enrichment
+
+**`src/utils/pdfParser.ts`**  
+Three parsers dispatched by PDF content fingerprint:
+- **Fio banka** (fingerprint: `"Fio banka"` or `"FIOBCZPP"`) — parses Czech date+time, ISIN, qty, and unit price; handles `Nákup` (buy) and `Prodej` (sell); Czech number format (`1 228,00`); calls `batchIsins` + `applyFifo`
+- **Revolut XAU** (fingerprint: `"Revolut"` + `"XAU"`) — finds `"Exchanged to XAU"` lines, extracts net XAU quantity and CZK amount; produces commodity lots directly (no FIFO needed)
+- **Generic heuristic** — scans every line for ISIN + buy keyword (multilingual) + date + numbers; `broker: 'Unknown (verify)'`; best-effort fallback for unsupported broker PDFs
+- Text extraction: sorts pdfjs items by Y descending (top of page first) then X ascending, groups within ±3 PDF units as one line
+- pdfjs-dist imported dynamically inside `parsePdf()` for code-splitting (Vite splits it into a 472 KB async chunk, keeping the main bundle at 633 KB)
+
+**`src/utils/csvParser.ts`**  
+Two CSV/XLSX format parsers:
+- **Trading 212** — detected by `"No. of shares"` + `"Price / share"` headers; parses `"Market buy"` rows
+- **Degiro** — detected by `"Order ID"` + `"ISIN"` + `"Description"` headers; extracts qty/price from Description field (`"Buy N @ PRICE CURRENCY"`); calls `batchIsins`
+
+**`src/components/ColumnMappingModal.tsx`**  
+Generic column-mapping wizard for unknown tabular formats.
+- Shows file info + preview table (first 3 data rows)
+- 10 column-mapping dropdowns (Ticker, Buy Date, Quantity, Buy Price required; Name, ISIN, Currency, Broker, Sell Date, Sell Price optional)
+- Skip header rows control (default 1), default currency (default CZK), default broker
+- Import button disabled until all four required fields are mapped
+- `autoDetectMapping` pre-fills dropdowns by matching header names against keywords in multiple languages
+
+### Modified files
+
+**`src/utils/importParser.ts`** — extended significantly:
+- New types: `NeedsMapping { type: 'needs-mapping'; rows }`, `ParseFileResult = ParseResult | NeedsMapping`, `ColumnMapping`, `MappingDefaults`
+- New exports: `parseWithMapping(rows, mapping, defaults)`, `autoDetectMapping(header)`, `parseFile(file)`
+- `parseFile` dispatcher: PDF → `parsePdf`; XTB XLSX → `parseXtbXlsx`; T212 → `parseT212`; Degiro → `parseDegiro`; unknown tabular → `{ type:'needs-mapping', rows }`; other → `parsePositionsFromJson`
+- `parseAnyDate` — flexible date parser (ISO, D.M.YYYY, D/M/YYYY, Month DD YYYY)
+- `parseWithMapping` — extracts columns by index, validates required fields, calls `batchTickers` for type enrichment
+
+**`src/App.tsx`** — wires up the new flow:
+- Imports `ColumnMappingModal`, `NeedsMapping`, `parseWithMapping`, `ColumnMapping`, `MappingDefaults`
+- New state: `columnMapData: { fileName, rows } | null`
+- `handleFileSelected` — now checks for `NeedsMapping` result and routes to the column wizard instead of `ImportModal`
+- `handleColumnMappingConfirm` — calls `parseWithMapping` then `setImportData`; clears wizard state
+- `<ColumnMappingModal>` rendered in JSX when `columnMapData` is set
+
+**`vite.config.ts`** — added `optimizeDeps: { exclude: ['pdfjs-dist'] }` to prevent Vite pre-bundling the PDF worker (causes chunk splitting to fail otherwise).
+
+**`src/components/ImportModal.tsx`** — `baseName` now strips `.xlsx`, `.pdf`, `.csv` extensions in addition to `.json` when pre-filling the new portfolio name.
+
+### Notes
+
+- pdfjs-dist pdf.worker.min.mjs is 1.2 MB — unavoidable for client-side PDF parsing; it loads as a separate async chunk only when a PDF is imported
+- xlsx library is 429 KB — also deferred via dynamic import, only loaded on first XLSX/CSV import
+- Generic PDF heuristic is intentionally conservative; it marks results with `broker: 'Unknown (verify)'` so the user knows to review prices and quantities
+- Revolut Stocks PDF not implemented — no sample file available; XAU (gold purchases) is handled

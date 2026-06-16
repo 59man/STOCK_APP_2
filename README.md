@@ -24,7 +24,7 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
 - **Manual price override** — for funds with no public price feed: enter the current total value from your bank report; the app divides by quantity to derive the per-unit price; invalid input shows an inline error
 - **Enhanced JSON export** — ↓ Export bundles positions, custom dividend tax rates, and manual prices into a single versioned JSON file (`version: 1`)
-- **Enhanced JSON import** — ↑ Import restores positions, tax overrides, and manual prices from an enhanced export; the import modal shows which extras are included; appending to an existing portfolio merges overrides
+- **Multi-format import** — ↑ Import accepts JSON (enhanced export), **XTB XLSX** (Cash Operations sheet), **Fio banka PDF**, **Revolut XAU PDF**, **Trading 212 CSV**, **Degiro CSV**, and any unknown tabular file via a **column-mapping wizard**; broker sells are FIFO-matched against buys to produce correct open/closed lots; asset types (stock/ETF/fund/commodity) are auto-detected from Yahoo Finance; ISINs are resolved to tickers automatically; import modal shows detected position count before confirming
 - **Delete confirmation** — removing a row or lot shows a confirmation dialog; cannot be accidentally triggered
 - **Persistent file storage** — all data is saved to `server/data.json` via a local Express server with atomic writes (`.tmp` → rename + `.bak` backup); survives browser clears and restarts
 - **Docker support** — single-container production image; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
@@ -285,6 +285,6 @@ Configured in `src/utils/dividends.ts`. Rates reflect what is typically withheld
 - The persist server must be running (`npm run dev`) for changes to be saved to disk. If unreachable, data is saved to localStorage only.
 - To sell an open position, click the amber **Sell** button on the row or on any individual lot in the expanded view; enter a sell date and sell price, then confirm.
 - To record a position that was already sold in the past, click **+ Add Position**, fill in the buy details, check **Closed position (already sold)**, and enter the sell date and sell price.
-- Use **↑ Import** in the portfolio tab bar to load positions from a JSON file — either into a new portfolio or appended to the current one.
+- Use **↑ Import** in the portfolio tab bar to load positions from a JSON export, XTB XLSX, Fio banka PDF, Revolut XAU PDF, Trading 212 CSV, Degiro CSV, or any tabular file (a column-mapping wizard appears for unknown formats). Sells are FIFO-matched; types are auto-detected via Yahoo Finance.
 - Use **↓ Export** in the toolbar to download a JSON backup of all positions at any time.
 - To switch between CZK, USD, and EUR display, use the currency buttons in the top-right of the header — all values and charts update immediately.

@@ -3,10 +3,11 @@ import { usePortfolios } from './hooks/usePortfolios'
 import { useFxRates, DisplayCurrency } from './hooks/useFxRates'
 import { PortfolioContent } from './components/PortfolioContent'
 import { ImportModal } from './components/ImportModal'
+import { ColumnMappingModal } from './components/ColumnMappingModal'
 import { Position } from './types'
 import { getItem, setItem } from './utils/storage'
 import { randomUUID } from './utils/uuid'
-import { parsePositionsFromJson } from './utils/importParser'
+import { parseFile, parseWithMapping, ColumnMapping, MappingDefaults, NeedsMapping } from './utils/importParser'
 import './App.css'
 
 const CURRENCIES: DisplayCurrency[] = ['CZK', 'USD', 'EUR']
@@ -23,6 +24,7 @@ export default function App() {
     taxOverrides?: Record<string, number>
     manualPrices?: Record<string, { price: number; updatedAt: string }>
   } | null>(null)
+  const [columnMapData, setColumnMapData] = useState<{ fileName: string; rows: unknown[][] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Inline rename state for the portfolio tab bar
@@ -43,33 +45,55 @@ export default function App() {
   }
 
   // ── Import ────────────────────────────────────────────
-  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    e.target.value = ''  // reset so same file can be re-selected
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      try {
-        const raw = JSON.parse(ev.target?.result as string)
-        const result = parsePositionsFromJson(raw)
-        if (!result || result.valid.length === 0) {
-          alert('No valid positions found in this file.')
-          return
-        }
-        if (result.skipped > 0) {
-          console.warn(`[import] ${result.skipped} position(s) skipped — missing required fields`)
-        }
-        setImportData({
-          fileName: file.name,
-          positions: result.valid,
-          taxOverrides: result.dividendTaxOverrides,
-          manualPrices: result.manualPrices,
-        })
-      } catch {
-        alert('Could not parse file — make sure it is a valid JSON file.')
+    e.target.value = ''
+    try {
+      const result = await parseFile(file)
+      if (!result) {
+        alert('Could not parse file — unsupported format or corrupted file.')
+        return
       }
+      // Unknown tabular format → show column mapping wizard
+      if ((result as NeedsMapping).type === 'needs-mapping') {
+        setColumnMapData({ fileName: file.name, rows: (result as NeedsMapping).rows })
+        return
+      }
+      const parsed = result as Exclude<typeof result, NeedsMapping>
+      if (parsed.valid.length === 0) {
+        alert('No valid positions found in this file.')
+        return
+      }
+      if (parsed.skipped > 0) {
+        console.warn(`[import] ${parsed.skipped} row(s) skipped`)
+      }
+      setImportData({
+        fileName: file.name,
+        positions: parsed.valid,
+        taxOverrides: parsed.dividendTaxOverrides,
+        manualPrices: parsed.manualPrices,
+      })
+    } catch (err) {
+      console.error('[import]', err)
+      alert('Could not parse file — unsupported format or corrupted file.')
     }
-    reader.readAsText(file)
+  }
+
+  const handleColumnMappingConfirm = async (mapping: ColumnMapping, defaults: MappingDefaults) => {
+    if (!columnMapData) return
+    try {
+      const result = await parseWithMapping(columnMapData.rows, mapping, defaults)
+      setColumnMapData(null)
+      if (!result || result.valid.length === 0) {
+        alert('No valid positions found with this mapping.')
+        return
+      }
+      setImportData({ fileName: columnMapData.fileName, positions: result.valid })
+    } catch (err) {
+      console.error('[import mapping]', err)
+      alert('Error applying column mapping.')
+    }
   }
 
   const handleImportConfirm = async (mode: 'new' | 'current', newPortfolioName?: string) => {
@@ -215,7 +239,7 @@ export default function App() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".json"
+            accept=".json,.xlsx,.csv,.pdf"
             style={{ display: 'none' }}
             onChange={handleFileSelected}
           />
@@ -249,6 +273,14 @@ export default function App() {
           hasManualPrices={!!importData.manualPrices && Object.keys(importData.manualPrices).length > 0}
           onConfirm={handleImportConfirm}
           onClose={() => setImportData(null)}
+        />
+      )}
+      {columnMapData && (
+        <ColumnMappingModal
+          fileName={columnMapData.fileName}
+          rows={columnMapData.rows}
+          onConfirm={handleColumnMappingConfirm}
+          onClose={() => setColumnMapData(null)}
         />
       )}
     </div>
