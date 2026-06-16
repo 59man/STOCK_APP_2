@@ -32,9 +32,11 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const PALETTE = [
-  '#4f8ef7', '#50c878', '#f5c842', '#ff9f40', '#c97ff5',
-  '#4bc0c0', '#ff6384', '#36a2eb', '#ffcd56', '#9966ff',
-  '#7ec8e3', '#f4a460', '#ff6b6b', '#c9cbcf', '#a8e6cf',
+  '#e63946', '#2ec4b6', '#ff9f1c', '#4361ee', '#57cc99',
+  '#f72585', '#4cc9f0', '#f4a261', '#7b2d8b', '#b5e48c',
+  '#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#ff6b6b',
+  '#9b5de5', '#00bbf9', '#fee440', '#fb5607', '#3a86ff',
+  '#8338ec', '#ffbe0b', '#f15bb5', '#00f5d4',
 ]
 
 const LOSS_COLOR = '#e05555'
@@ -71,6 +73,23 @@ interface ChartCardProps {
   emptyLabel?: string
 }
 
+const RADIAN = Math.PI / 180
+
+function InsideLabel({ cx, cy, midAngle, outerRadius, percent }: {
+  cx: number; cy: number; midAngle: number; outerRadius: number; percent: number
+}) {
+  if (percent < 0.05) return null
+  const r = outerRadius * 0.65
+  const x = cx + r * Math.cos(-midAngle * RADIAN)
+  const y = cy + r * Math.sin(-midAngle * RADIAN)
+  return (
+    <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central"
+      fontSize={11} fontWeight={700} style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  )
+}
+
 function PieChartCard({ data, title, displayCurrency, emptyLabel = 'No data' }: ChartCardProps) {
   const nonZero = data.filter((d) => d.value > 0)
   return (
@@ -79,19 +98,18 @@ function PieChartCard({ data, title, displayCurrency, emptyLabel = 'No data' }: 
       {nonZero.length === 0 ? (
         <div className="pie-empty">{emptyLabel}</div>
       ) : (
-        <ResponsiveContainer width="100%" height={280}>
-          <PieChart margin={{ top: 30, left: 20, right: 20, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
             <Pie
               data={nonZero}
               cx="50%"
-              cy="42%"
-              outerRadius={85}
-              innerRadius={38}
+              cy="44%"
+              outerRadius={95}
               dataKey="value"
               nameKey="name"
               paddingAngle={1}
-              label={({ percent }: { percent: number }) => percent > 0.06 ? `${(percent * 100).toFixed(0)}%` : ''}
               labelLine={false}
+              label={(props) => <InsideLabel {...props} />}
             >
               {nonZero.map((entry, i) => (
                 <Cell key={i} fill={entry.color} stroke="var(--surface)" strokeWidth={2} />
