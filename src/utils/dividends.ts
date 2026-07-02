@@ -52,24 +52,44 @@ export function getDividendTaxRate(ticker: string): number {
 }
 
 // Some tickers on the Prague Exchange were renamed; Yahoo Finance keeps dividend history
-// under the old ticker symbol. Map display ticker → Yahoo dividend ticker.
+// under one symbol only. Map display ticker → Yahoo dividend ticker.
 const DIVIDEND_TICKER_ALIASES: Record<string, string> = {
-  'COLT.PR': 'CZG.PR',  // Česká zbrojovka Group renamed to Colt CZ Group SE
+  'CZG.PR': 'COLT.PR',  // Česká zbrojovka renamed to Colt CZ Group SE — Yahoo moved all data to COLT.PR and delisted CZG.PR
+}
+
+// Dividend events Yahoo no longer has. When Yahoo delisted CZG.PR and moved the
+// data to COLT.PR, all pre-rename dividend history was lost — these are the known
+// gross amounts per share (source: coltczgroup.com IR, cross-checked digrin/divvydiary).
+// Merged with the Yahoo response, deduped by ex-date (Yahoo wins).
+const STATIC_DIVIDENDS: Record<string, DividendEvent[]> = {
+  'COLT.PR': [
+    { date: '2021-06-25', amount: 7.5 },
+    { date: '2022-06-01', amount: 25 },
+    { date: '2023-06-16', amount: 30 },
+    { date: '2024-07-03', amount: 30 },
+    { date: '2025-07-03', amount: 15 },
+  ],
 }
 
 export async function fetchDividendEvents(ticker: string): Promise<DividendEvent[]> {
-  const lookupTicker = DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker
+  const lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker).toUpperCase()
+  const statics = STATIC_DIVIDENDS[lookupTicker] ?? []
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?range=max&interval=1d&events=div`
   const res = await fetch(path)
-  if (!res.ok) return []
-  const json = await res.json()
-  const raw = json?.chart?.result?.[0]?.events?.dividends
-  if (!raw) return []
-  return (Object.values(raw) as Array<{ date: number; amount: number }>)
-    .map(({ date, amount }) => ({
-      date: new Date(date * 1000).toISOString().slice(0, 10),
-      amount,
-    }))
+  let fetched: DividendEvent[] = []
+  if (res.ok) {
+    const json = await res.json()
+    const raw = json?.chart?.result?.[0]?.events?.dividends
+    if (raw) {
+      fetched = (Object.values(raw) as Array<{ date: number; amount: number }>)
+        .map(({ date, amount }) => ({
+          date: new Date(date * 1000).toISOString().slice(0, 10),
+          amount,
+        }))
+    }
+  }
+  const fetchedDates = new Set(fetched.map((e) => e.date))
+  return [...fetched, ...statics.filter((e) => !fetchedDates.has(e.date))]
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 

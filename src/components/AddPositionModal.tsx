@@ -23,6 +23,8 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
     sellDate: new Date().toISOString().slice(0, 10),
   })
   const [nameLoading, setNameLoading] = useState(false)
+  // Buy price entry mode: per-share, or total paid for the whole lot (divided by qty on save)
+  const [totalMode, setTotalMode] = useState(false)
 
   const set = (key: string, value: string | boolean) =>
     setForm((f) => ({ ...f, [key]: value }))
@@ -53,12 +55,14 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    const quantity = parseFloat(form.quantity)
+    const rawBuy = parseFloat(form.buyPrice)
     const base = {
       ticker: form.ticker.toUpperCase().trim(),
       name: form.name.trim() || form.ticker.toUpperCase().trim(),
       type: form.type,
-      quantity: parseFloat(form.quantity),
-      buyPrice: parseFloat(form.buyPrice),
+      quantity,
+      buyPrice: totalMode ? rawBuy / quantity : rawBuy,
       buyDate: form.buyDate,
       currency: form.currency,
       ...(form.broker.trim() ? { broker: form.broker.trim() } : {}),
@@ -122,16 +126,35 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
               />
             </label>
             <label>
-              Buy Price *
+              <span>
+                Buy Price *
+                <span className="pie-group-toggle price-mode-toggle">
+                  <button
+                    type="button"
+                    className={`pie-group-btn${!totalMode ? ' active' : ''}`}
+                    onClick={() => setTotalMode(false)}
+                  >/ share</button>
+                  <button
+                    type="button"
+                    className={`pie-group-btn${totalMode ? ' active' : ''}`}
+                    onClick={() => setTotalMode(true)}
+                  >total</button>
+                </span>
+              </span>
               <input
                 required
                 type="number"
                 min="0"
                 step="any"
-                placeholder="0.00"
+                placeholder={totalMode ? 'Total paid' : '0.00'}
                 value={form.buyPrice}
                 onChange={(e) => set('buyPrice', e.target.value)}
               />
+              {totalMode && parseFloat(form.quantity) > 0 && parseFloat(form.buyPrice) > 0 && (
+                <span className="muted" style={{ fontSize: 11, textTransform: 'none' }}>
+                  = {(parseFloat(form.buyPrice) / parseFloat(form.quantity)).toFixed(4).replace(/\.?0+$/, '')} {form.currency} / share
+                </span>
+              )}
             </label>
           </div>
           <div className="form-row">

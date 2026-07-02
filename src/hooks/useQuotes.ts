@@ -14,6 +14,34 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   ])
 }
 
+// Last completed daily close strictly before the day of the latest bar.
+// With range=5d, meta.previousClose is null for European/FX tickers and
+// chartPreviousClose is the close before the whole 5d window (~a week old),
+// so neither can be trusted for the daily change. FX pairs also append a
+// live extra bar for today, so "penultimate bar" is unreliable too — we
+// compare bar dates (in exchange-local time via gmtoffset) instead.
+function prevDailyClose(result: {
+  timestamp?: number[]
+  indicators?: { quote?: Array<{ close?: (number | null)[] }> }
+  meta?: { gmtoffset?: number }
+}): number | null {
+  const ts = result?.timestamp ?? []
+  const closes = result?.indicators?.quote?.[0]?.close ?? []
+  const off = result?.meta?.gmtoffset ?? 0
+  const day = (t: number) => new Date((t + off) * 1000).toISOString().slice(0, 10)
+  const valid: Array<{ d: string; c: number }> = []
+  ts.forEach((t, i) => {
+    const c = closes[i]
+    if (c != null && isFinite(c)) valid.push({ d: day(t), c })
+  })
+  if (valid.length === 0) return null
+  const lastDay = valid[valid.length - 1].d
+  for (let i = valid.length - 1; i >= 0; i--) {
+    if (valid[i].d !== lastDay) return valid[i].c
+  }
+  return null
+}
+
 async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
   const { priceTicker, fxTicker, fallbackName = ticker.toUpperCase() } = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   const [priceRes, fxRes] = await Promise.all([
@@ -30,22 +58,8 @@ async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
   const fm = fxResult?.meta
   if (!pm?.regularMarketPrice || !fm?.regularMarketPrice) throw new Error('No price data')
   const price = pm.regularMarketPrice * fm.regularMarketPrice
-  // previousClose can be null for European/FX tickers (e.g. EURCZK=X trades 24/7).
-  // Fallback chain: previousClose → chartPreviousClose → penultimate daily bar close.
-  // We use range=5d so there are enough bars; the penultimate non-null close is
-  // yesterday's completed close regardless of whether the market is currently open.
-  const priceBarCloses: (number | null)[] = priceResult?.indicators?.quote?.[0]?.close ?? []
-  const fxBarCloses: (number | null)[] = fxResult?.indicators?.quote?.[0]?.close ?? []
-  const validPriceCloses = priceBarCloses.filter((v): v is number => v != null && isFinite(v))
-  const validFxCloses = fxBarCloses.filter((v): v is number => v != null && isFinite(v))
-  const prevPriceBarClose = validPriceCloses.length >= 2
-    ? validPriceCloses[validPriceCloses.length - 2]
-    : validPriceCloses[0]
-  const prevFxBarClose = validFxCloses.length >= 2
-    ? validFxCloses[validFxCloses.length - 2]
-    : validFxCloses[0]
-  const prevPriceClose = pm.previousClose ?? pm.chartPreviousClose ?? prevPriceBarClose ?? pm.regularMarketPrice
-  const prevFxClose = fm.previousClose ?? fm.chartPreviousClose ?? prevFxBarClose ?? fm.regularMarketPrice
+  const prevPriceClose = prevDailyClose(priceResult) ?? pm.previousClose ?? pm.regularMarketPrice
+  const prevFxClose = prevDailyClose(fxResult) ?? fm.previousClose ?? fm.regularMarketPrice
   const prevPrice = prevPriceClose * prevFxClose
   return {
     ticker: ticker.toUpperCase(),

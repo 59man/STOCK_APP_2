@@ -997,6 +997,10 @@ input::placeholder { color: var(--faint); }
 .pie-group-btn:hover { background: var(--hover); color: var(--text); }
 .pie-group-btn.active { background: var(--surface3); color: var(--text); font-weight: 600; }
 
+/* Buy price per-share/total switch in Add Position modal (reuses pie-group-btn) */
+.price-mode-toggle { display: inline-flex; margin-left: 8px; vertical-align: middle; }
+.price-mode-toggle .pie-group-btn { padding: 1px 7px; font-size: 10px; }
+
 .pie-charts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

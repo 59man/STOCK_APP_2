@@ -3,3 +3,5 @@ dist/
 Transactions_folder/
 server/*.json
 audits/
+server/*.bak
+.playwright-mcp/

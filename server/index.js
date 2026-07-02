@@ -10,6 +10,10 @@ const DATA_BAK  = join(__dirname, 'data.json.bak')
 const DIST_DIR  = join(__dirname, '../dist')
 const IS_PROD   = process.env.NODE_ENV === 'production'
 
+// Timestamped stdout/stderr logging — visible via `docker logs stock-tracker`
+const log    = (...args) => console.log(`[${new Date().toISOString()}]`, ...args)
+const logErr = (...args) => console.error(`[${new Date().toISOString()}]`, ...args)
+
 // ── In-memory store ──────────────────────────────────────────────────────────
 // Load once at startup; all reads/writes go through this object.
 // Flushed to disk asynchronously with a debounced atomic write.
@@ -20,7 +24,7 @@ function loadStore() {
   try {
     store = JSON.parse(readFileSync(DATA_FILE, 'utf8'))
   } catch (err) {
-    console.warn('[stock-tracker] data.json unreadable — starting with empty store:', err.message)
+    logErr('data.json unreadable — starting with empty store:', err.message)
   }
 }
 
@@ -39,7 +43,7 @@ function flushToDisk() {
     writeFileSync(DATA_TMP, JSON.stringify(store, null, 2))
     renameSync(DATA_TMP, DATA_FILE)
   } catch (err) {
-    console.error('[stock-tracker] failed to flush data.json:', err.message)
+    logErr('failed to flush data.json:', err.message)
   }
 }
 
@@ -67,6 +71,7 @@ async function proxyRequest(res, url, extraHeaders = {}) {
   } catch (err) {
     clearTimeout(timer)
     const isTimeout = err.name === 'AbortError'
+    logErr(`proxy ${isTimeout ? 'timeout' : 'failure'}: ${url}`, isTimeout ? '' : err.message)
     res.status(isTimeout ? 504 : 502).json({ error: isTimeout ? 'Upstream timeout' : 'Upstream request failed' })
   }
 }
@@ -94,6 +99,19 @@ app.post('/api/persist/:key', (req, res, next) => {
   if (typeof req.body?.value !== 'string') {
     return res.status(400).json({ error: 'body.value must be a string' })
   }
+  if (req.params.key === 'stock_tracker_portfolios') {
+    try {
+      const before = new Map(JSON.parse(store[req.params.key] ?? '[]').map((p) => [p.id, p.name]))
+      const after  = new Map(JSON.parse(req.body.value).map((p) => [p.id, p.name]))
+      for (const [id, name] of after) {
+        if (!before.has(id)) log(`portfolio created: "${name}" (${id})`)
+        else if (before.get(id) !== name) log(`portfolio renamed: "${before.get(id)}" → "${name}" (${id})`)
+      }
+      for (const [id, name] of before) {
+        if (!after.has(id)) log(`portfolio deleted: "${name}" (${id})`)
+      }
+    } catch { /* malformed JSON — persist anyway, just skip the diff logging */ }
+  }
   store[req.params.key] = req.body.value
   scheduleFlush()
   res.json({ ok: true })
@@ -102,7 +120,7 @@ app.post('/api/persist/:key', (req, res, next) => {
 // ── Error middleware (must be last, 4-arg signature required by Express) ──────
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
-  console.error('[stock-tracker] unhandled error:', err)
+  logErr('unhandled error:', err)
   res.status(500).json({ error: 'Internal server error' })
 })
 
@@ -113,4 +131,4 @@ if (IS_PROD) {
 }
 
 const PORT = Number(process.env.PORT ?? 3001)
-app.listen(PORT, () => console.log(`[stock-tracker] listening on http://localhost:${PORT}`))
+app.listen(PORT, () => log(`listening on http://localhost:${PORT}`))
