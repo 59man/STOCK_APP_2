@@ -5,3 +5,4 @@ server/*.json
 audits/
 server/*.bak
 .playwright-mcp/
+server/backups/

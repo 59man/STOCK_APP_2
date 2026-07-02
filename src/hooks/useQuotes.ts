@@ -7,6 +7,20 @@ const CACHE_TTL = 60_000
 interface CacheEntry { quote: Quote; ts: number }
 const cache = new Map<string, CacheEntry>()
 
+// Shared backoff: after a Yahoo 429, skip Yahoo entirely for a while instead of
+// hammering it once per ticker (Stooq fallback and stale cache still apply).
+const YAHOO_COOLDOWN_MS = 120_000
+let yahooCooldownUntil = 0
+
+function checkYahooCooldown() {
+  if (Date.now() < yahooCooldownUntil) throw new Error('Yahoo rate-limited (429) — retry later')
+}
+
+function noteYahoo429(): never {
+  yahooCooldownUntil = Date.now() + YAHOO_COOLDOWN_MS
+  throw new Error('Yahoo rate-limited (429) — retry later')
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     p,
@@ -43,12 +57,13 @@ function prevDailyClose(result: {
 }
 
 async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
+  checkYahooCooldown()
   const { priceTicker, fxTicker, fallbackName = ticker.toUpperCase() } = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   const [priceRes, fxRes] = await Promise.all([
     withTimeout(fetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=5d`), 9000),
     withTimeout(fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=5d`), 9000),
   ])
-  if (priceRes.status === 429 || fxRes.status === 429) throw new Error('Yahoo rate-limited (429) — retry later')
+  if (priceRes.status === 429 || fxRes.status === 429) noteYahoo429()
   if (!priceRes.ok) throw new Error(`Price fetch ${priceRes.status}`)
   if (!fxRes.ok) throw new Error(`FX fetch ${fxRes.status}`)
   const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
@@ -73,9 +88,10 @@ async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
 }
 
 async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
+  checkYahooCooldown()
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`
   const res = await withTimeout(fetch(path), 9000)
-  if (res.status === 429) throw new Error('Yahoo rate-limited (429) — retry later')
+  if (res.status === 429) noteYahoo429()
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()
   const meta = json?.chart?.result?.[0]?.meta
@@ -121,30 +137,36 @@ const SOURCES: Array<(t: string) => Promise<Quote>> = [
   (t) => fetchFromStooq(t),
 ]
 
+async function fetchFromSources(ticker: string): Promise<Quote> {
+  let lastErr: Error = new Error('All sources failed')
+  for (const source of SOURCES) {
+    try {
+      return await source(ticker)
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e))
+    }
+  }
+  throw lastErr
+}
+
 async function fetchQuote(ticker: string): Promise<Quote> {
   const key = ticker.toUpperCase()
   const now = Date.now()
   const cached = cache.get(key)
   if (cached && now - cached.ts < CACHE_TTL) return cached.quote
 
-  // Tickers needing FX conversion (stored in CZK in the portfolio)
-  if (FX_CONVERTED_SET.has(key)) {
-    const quote = await fetchFxConvertedQuote(ticker)
+  try {
+    // FX-converted tickers are stored in CZK in the portfolio
+    const quote = FX_CONVERTED_SET.has(key)
+      ? await fetchFxConvertedQuote(ticker)
+      : await fetchFromSources(ticker)
     cache.set(key, { quote, ts: now })
     return quote
+  } catch (e) {
+    // All sources failed — a stale quote (lastUpdated shows its age) beats nothing
+    if (cached) return cached.quote
+    throw e
   }
-
-  let lastErr: Error = new Error('All sources failed')
-  for (const source of SOURCES) {
-    try {
-      const quote = await source(ticker)
-      cache.set(key, { quote, ts: now })
-      return quote
-    } catch (e) {
-      lastErr = e instanceof Error ? e : new Error(String(e))
-    }
-  }
-  throw lastErr
 }
 
 export function useQuotes() {

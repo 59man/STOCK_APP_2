@@ -1,5 +1,5 @@
 import express from 'express'
-import { readFileSync, writeFileSync, existsSync, renameSync, copyFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, renameSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
@@ -7,6 +7,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = join(__dirname, 'data.json')
 const DATA_TMP  = join(__dirname, 'data.json.tmp')
 const DATA_BAK  = join(__dirname, 'data.json.bak')
+const BACKUP_DIR = join(__dirname, 'backups')
+const BACKUP_KEEP = 7
 const DIST_DIR  = join(__dirname, '../dist')
 const IS_PROD   = process.env.NODE_ENV === 'production'
 
@@ -42,8 +44,29 @@ function flushToDisk() {
     if (existsSync(DATA_FILE)) copyFileSync(DATA_FILE, DATA_BAK)
     writeFileSync(DATA_TMP, JSON.stringify(store, null, 2))
     renameSync(DATA_TMP, DATA_FILE)
+    dailyBackup()
   } catch (err) {
     logErr('failed to flush data.json:', err.message)
+  }
+}
+
+// One dated copy per day on the first flush of that day, keeping the last
+// BACKUP_KEEP days — the single .bak alone can't recover from a bad write
+// that itself gets flushed again.
+function dailyBackup() {
+  const target = join(BACKUP_DIR, `data-${new Date().toISOString().slice(0, 10)}.json`)
+  if (existsSync(target)) return
+  try {
+    mkdirSync(BACKUP_DIR, { recursive: true })
+    copyFileSync(DATA_FILE, target)
+    readdirSync(BACKUP_DIR)
+      .filter((f) => /^data-\d{4}-\d{2}-\d{2}\.json$/.test(f))
+      .sort()
+      .slice(0, -BACKUP_KEEP)
+      .forEach((f) => unlinkSync(join(BACKUP_DIR, f)))
+    log(`daily backup written: backups/${target.split('/').pop()}`)
+  } catch (err) {
+    logErr('daily backup failed:', err.message)
   }
 }
 

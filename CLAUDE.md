@@ -9,11 +9,12 @@ npm run dev       # starts Vite (http://localhost:5173) + persist server (port 3
 npm run build     # type-check + production build to dist/
 npm run preview   # serve the production build locally
 npm start         # runs server/index.js directly (production mode, requires prior npm run build)
+npm test          # vitest run — money-math unit tests (src/utils/money.test.ts: xirr, applyFifo, calcNetDividends)
 ```
 
 If port 3001 is already in use: `kill $(lsof -ti:3001)`
 
-No test suite or linter configured.
+No linter configured.
 
 ## Docker
 
@@ -24,12 +25,16 @@ docker push 59man/stock-tracker:latest
 # Run locally on port 4000
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /absolute/path/to/server/data.json:/app/server/data.json \
+  -v /absolute/path/to/backups:/app/server/backups \
+  --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
 
 - Always use an **absolute path** for the volume mount — `~/...` resolves relative to the shell user and often points to a different file.
 - `server/data.json` is excluded from the image via `.dockerignore`; the bind-mount provides it at runtime.
+- The backups mount is optional but recommended — without it the daily backups stay inside the container and vanish on `docker rm`.
+- The image has a `HEALTHCHECK` hitting `/api/persist/...` every 60 s; `docker ps` shows healthy/unhealthy.
 - In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout.
 
 ### Update a running container
@@ -39,6 +44,8 @@ docker pull 59man/stock-tracker:latest
 docker stop stock-tracker && docker rm stock-tracker
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /absolute/path/to/server/data.json:/app/server/data.json \
+  -v /absolute/path/to/backups:/app/server/backups \
+  --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
@@ -55,7 +62,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 3. `useFxRates` (`src/hooks/useFxRates.ts`) — fetches 7 FX pairs (USD, EUR, GBP, CHF, JPY, CAD, AUD vs CZK) from Yahoo Finance in parallel on mount. Per-pair fallback to hardcoded defaults if a fetch fails, so one bad pair doesn't wipe the rest. `Rates` type includes all 7 currencies. Exports `convert(amount, from, to)` — converts via CZK as base; all cross-rates go through CZK. The `?? 1` fallback in `convert` now only triggers for currencies truly unknown to the app (should not happen with the expanded set).
 
-4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first (`/api/yahoo/*`), Stooq CSV fallback (`/api/stooq/*` — also proxied to avoid CORS). Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message. For FX-converted tickers, `fetchFxConvertedQuote` uses `range=5d&interval=1d` and computes the previous close via `prevDailyClose()` — the last bar close whose exchange-local date (via `meta.gmtoffset`) differs from the latest bar's date. This is needed because with `range=5d` Yahoo returns `meta.previousClose = null` and `meta.chartPreviousClose` = the close *before the 5d window* (~a week old), and FX pairs append an extra live bar for today so a naive "penultimate bar" is wrong too. Fallback chain: `prevDailyClose → previousClose → regularMarketPrice`.
+4. `useQuotes` (`src/hooks/useQuotes.ts`) — fetches live prices. Yahoo Finance v8 proxy first (`/api/yahoo/*`), Stooq CSV fallback (`/api/stooq/*` — also proxied to avoid CORS). Module-level 60 s cache; `inFlight` ref prevents duplicate concurrent requests. A Yahoo 429 sets a shared 120 s cooldown (`yahooCooldownUntil`) so subsequent tickers skip Yahoo instead of hammering it; if all sources fail, a stale cache entry is served instead of throwing. Tickers in `NO_FEED_TICKERS` (`src/data/noFeedTickers.ts` — the three LU funds + FIOG.PR) are never fetched at all (quotes, dividends, or chart history) — they 404 everywhere and are manual-priced only; `PortfolioContent` filters them out via `feedTickers`. Tickers in `FX_CONVERTED_SET` (XAU, 4GLD.DE, EXUS.DE) fetch a price ticker + FX pair from `FX_CONVERTED_TICKERS` and multiply to produce a CZK value. HTTP 429 is detected and surfaced with a specific error message. For FX-converted tickers, `fetchFxConvertedQuote` uses `range=5d&interval=1d` and computes the previous close via `prevDailyClose()` — the last bar close whose exchange-local date (via `meta.gmtoffset`) differs from the latest bar's date. This is needed because with `range=5d` Yahoo returns `meta.previousClose = null` and `meta.chartPreviousClose` = the close *before the 5d window* (~a week old), and FX pairs append an extra live bar for today so a naive "penultimate bar" is wrong too. Fallback chain: `prevDailyClose → previousClose → regularMarketPrice`.
 
 5. `useDividends` (`src/hooks/useDividends.ts`) — fetches dividend events from Yahoo Finance `range=max&events=div`. Module-level cache (only on success — errors are not cached, allowing retry). `DIVIDEND_TICKER_ALIASES` maps renamed tickers (e.g. `CZG.PR → COLT.PR` — Yahoo delisted `CZG.PR` and moved all data, including dividends, to `COLT.PR`).
 
@@ -72,7 +79,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 - `GET /api/persist/:key` → `{ value: string | null }`
 - `POST /api/persist/:key` body `{ value: string }` → `{ ok: true }`
 
-The Express server (`server/index.js`) maintains an **in-memory store** loaded from `server/data.json` at startup. Writes are debounced (500 ms) and flushed atomically: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. Express error middleware and process signal handlers (`SIGINT`/`SIGTERM`) flush before exit. In dev, Vite proxies `/api/persist/*` → `http://localhost:3001`. In production/Docker, Express handles both the API and static file serving on a single port.
+The Express server (`server/index.js`) maintains an **in-memory store** loaded from `server/data.json` at startup. Writes are debounced (500 ms) and flushed atomically: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. The first flush of each day also writes a dated copy to `server/backups/data-YYYY-MM-DD.json` (last 7 kept, older pruned). All server events (portfolio create/rename/delete, proxy failures, flush errors) are logged to stdout with ISO timestamps — visible via `docker logs`. Express error middleware and process signal handlers (`SIGINT`/`SIGTERM`) flush before exit. In dev, Vite proxies `/api/persist/*` → `http://localhost:3001`. In production/Docker, Express handles both the API and static file serving on a single port.
 
 **Storage key schema:**
 - `stock_tracker_portfolios` — JSON array of `{ id, name }` objects

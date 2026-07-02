@@ -6,6 +6,7 @@ import {
 import { Position, Quote } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
+import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 
 interface ChartPoint {
   label: string
@@ -145,9 +146,11 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     setError(null)
     Promise.all(
       tickers.map((t) =>
-        fetchYahooHistory(t, yahooRange)
-          .then((h) => [t, h] as [string, TickerHistory])
-          .catch(() => [t, []] as [string, TickerHistory])
+        NO_FEED_TICKERS.has(t.toUpperCase())
+          ? Promise.resolve([t, []] as [string, TickerHistory])
+          : fetchYahooHistory(t, yahooRange)
+              .then((h) => [t, h] as [string, TickerHistory])
+              .catch(() => [t, []] as [string, TickerHistory])
       )
     )
       .then((entries) => { setHistories(new Map(entries)); setLoading(false) })

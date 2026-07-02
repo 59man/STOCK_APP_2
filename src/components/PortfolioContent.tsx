@@ -11,6 +11,7 @@ import { AddPositionModal } from './AddPositionModal'
 import { PortfolioRow } from '../types'
 import { xirr } from '../utils/xirr'
 import { calcNetDividends, getDividendTaxRate } from '../utils/dividends'
+import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 
 interface Props {
   portfolioId: string
@@ -32,17 +33,22 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
     () => [...new Set(positions.map((p) => p.ticker))],
     [positions]
   )
+  // No-feed tickers are manual-priced only — fetching them just produces 404 noise
+  const feedTickers = useMemo(
+    () => tickers.filter((t) => !NO_FEED_TICKERS.has(t.toUpperCase())),
+    [tickers]
+  )
 
   useEffect(() => {
-    if (tickers.length > 0) {
-      fetchQuotes(tickers)
-      fetchDividends(tickers)
+    if (feedTickers.length > 0) {
+      fetchQuotes(feedTickers)
+      fetchDividends(feedTickers)
     }
-  }, [tickers, fetchQuotes, fetchDividends])
+  }, [feedTickers, fetchQuotes, fetchDividends])
 
   const refresh = () => {
-    fetchQuotes(tickers)
-    fetchDividends(tickers)
+    fetchQuotes(feedTickers)
+    fetchDividends(feedTickers)
   }
 
   const rows: PortfolioRow[] = useMemo(() => {
