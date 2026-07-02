@@ -116,7 +116,7 @@ function rangeStartDate(range: Range): string {
 interface Props {
   positions: Position[]
   dividends: Map<string, DividendEvent[]>
-  manualPrices?: Record<string, { price: number }>
+  manualPrices?: Record<string, { price: number; updatedAt?: string }>
   quotes?: Map<string, Quote>
   displayCurrency: string
   convert: (amount: number, from: string, to: string) => number
@@ -160,7 +160,9 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
 
   // For tickers with no Yahoo history but a manual price, build a synthetic history
   // using the actual buy-date prices as anchors (each lot starts at P&L = 0) and
-  // today's manual price as the final point.
+  // the manual price anchored at the date it was entered (updatedAt), forward-filled
+  // from there by priceAt(). Anchoring at "today" would make the funds' entire P&L
+  // appear as a fake one-day jump on the final chart bar, drifting forward every day.
   // Also injects live quote prices as today's final bar so the chart matches the
   // table's live intraday total return (rather than lagging behind at yesterday's close).
   const effectiveHistories = useMemo(() => {
@@ -196,14 +198,11 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         .filter((p) => p.ticker.toUpperCase() === t.toUpperCase())
         .forEach((p) => { if (!knots.has(p.buyDate)) knots.set(p.buyDate, p.buyPrice) })
 
+      // Manual price knot at its entry date (wins over a same-day buy knot);
+      // lots bought after that date still start at P&L = 0 via their own knot.
+      knots.set(mp.updatedAt?.slice(0, 10) ?? today, mp.price)
       const synth: TickerHistory = [...knots.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-      // Append today's manual price (replaces any same-day knot)
-      if (synth.length === 0 || synth[synth.length - 1][0] !== today) {
-        synth.push([today, mp.price])
-      } else {
-        synth[synth.length - 1] = [today, mp.price]
-      }
       map.set(t, synth)
     })
     return map

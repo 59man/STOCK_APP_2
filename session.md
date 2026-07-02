@@ -564,3 +564,11 @@ With `range=5d`, Yahoo returns `meta.previousClose = null` and `meta.chartPrevio
 **Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`
 Digest: `sha256:3e3c1b9dc3518196a95595e66e2c786dabff91cc2044d5d774cc33e3436df57b`
 (Build note: the image build initially failed — the local npm fork wrote a package-lock missing esbuild platform entries; regenerated the lock with standard npm via `node:22-alpine`.)
+
+### Post-release fix — manual-fund P&L jump on last chart day
+
+**File:** `src/components/PortfolioPnLChart.tsx`
+
+User noticed the chart's total return stepping +9,331 CZK between Jul 1 and Jul 2 while the market only moved +3,835. Root cause: synthetic histories for manual-priced funds anchored the manual price at **today**, so with the step-lookup `priceAt` (no interpolation) their entire accumulated P&L (~5,460 CZK) rendered as a one-day jump on the final chart bar — drifting forward every day and deflating yesterday's points on each reload.
+
+**Fix:** anchor the manual price at `manualPrices[t].updatedAt` (the date it was entered, e.g. 2026-06-02) instead of today; `priceAt` forward-fills from there. Lots bought after that date still start at P&L = 0 via their own buy knot. Verified in the browser: final-day step now matches the real intraday move.
