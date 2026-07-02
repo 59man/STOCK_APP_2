@@ -562,3 +562,5 @@ With `range=5d`, Yahoo returns `meta.previousClose = null` and `meta.chartPrevio
 ### Docker
 
 **Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`
+Digest: `sha256:3e3c1b9dc3518196a95595e66e2c786dabff91cc2044d5d774cc33e3436df57b`
+(Build note: the image build initially failed — the local npm fork wrote a package-lock missing esbuild platform entries; regenerated the lock with standard npm via `node:22-alpine`.)
