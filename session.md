@@ -529,3 +529,36 @@ tickFormatter={(v) =>
 
 **Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`  
 Digest: `sha256:617005f7736a6186648b621824c4c9aab2f35dda14a7f35ee48a7cbf0ccc1d2a`
+
+---
+
+## Session 10 — 2026-07-02 — COLT.PR dividends, 4GLD Today fix, total-price entry, server logging, hardening
+
+### Bug fixes
+
+**COLT.PR dividends missing** (`src/utils/dividends.ts`)
+Yahoo delisted `CZG.PR` and moved all data to `COLT.PR` — the alias pointed the wrong way (`COLT.PR → CZG.PR`, hitting the dead symbol). Reversed to `CZG.PR → COLT.PR`. Yahoo also lost all pre-rename dividend history, so a `STATIC_DIVIDENDS` table now hardcodes the known events (2021: 7.50, 2022: 25, 2023: 30, 2024: 30, 2025: 15 CZK gross; verified against coltczgroup.com IR / digrin / divvydiary) and merges them with the live response, deduped by ex-date (Yahoo wins). The rodice portfolio's `CZG.PR` position was renamed to `COLT.PR` via the persist API (Yahoo 404s and Stooq has no symbol — it could never price).
+
+**4GLD.DE wrong Today change** (`src/hooks/useQuotes.ts`)
+With `range=5d`, Yahoo returns `meta.previousClose = null` and `meta.chartPreviousClose` = the close *before the whole 5-day window* (~a week old). The fallback chain used chartPreviousClose, so the Today column compared against a week-old price (+1.84% shown vs +0.53% real). FX pairs also append an extra live bar, so "penultimate bar" was wrong too. New `prevDailyClose()` picks the last bar close from a prior exchange-local day (via `meta.gmtoffset`); chain is now `prevDailyClose → previousClose → regularMarketPrice`. Affects 4GLD.DE, XAU, EXUS.DE.
+
+**Pie chart** — loss slices were briefly restored (matching a stale CLAUDE.md description), then reverted on request: negative total-return groups stay excluded by design (commit 5903d41 behaviour). CLAUDE.md corrected.
+
+### Features
+
+**Total-price entry** (`src/components/AddPositionModal.tsx`) — Buy Price gains a **/ share | total** toggle. In total mode the amount paid for the whole lot is divided by quantity on save, with a live "= X / share" hint. Verified via Playwright.
+
+**Server logging** (`server/index.js`) — timestamped stdout/stderr logging visible via `docker logs`: portfolio created/renamed/deleted (diffed on each `stock_tracker_portfolios` write), proxy failures/timeouts, flush errors, startup. Verified end-to-end with an isolated server instance.
+
+### Hardening
+
+- **Daily backups** — first flush of each day writes `server/backups/data-YYYY-MM-DD.json`, keeps last 7. Verified with isolated instance.
+- **Money-math tests** — vitest added (`npm test`); `src/utils/money.test.ts` covers `xirr` (gain/loss/degenerate), `applyFifo` (partial-sell split, oldest-first), `calcNetDividends` (date filters, country rates, overrides). 11 tests.
+- **NO_FEED_TICKERS** (`src/data/noFeedTickers.ts`) — FIOG.PR + 3 LU funds are never fetched (quotes/dividends/history); console now loads with 0 errors (was ~20 guaranteed 404s).
+- **429 backoff** — one Yahoo 429 sets a shared 120 s cooldown; stale cached quote served when all sources fail.
+- **Dockerfile HEALTHCHECK** on the persist endpoint; docker-compose + docs gained backups volume and `--log-opt` rotation.
+- **Git hygiene** — `server/data.json.bak` (real portfolio data) untracked and gitignored (`server/*.bak`); note: old history still contains it.
+
+### Docker
+
+**Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`

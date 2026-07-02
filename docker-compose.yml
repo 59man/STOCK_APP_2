@@ -7,7 +7,14 @@ services:
       # Bind-mount the existing data file so your portfolio persists between restarts.
       # The file must exist on the host before running `docker compose up`.
       - ./server/data.json:/app/server/data.json
+      # Daily rotating backups (last 7 days) — without this mount they vanish on `docker rm`.
+      - ./server/backups:/app/server/backups
     environment:
       NODE_ENV: production
       PORT: "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     restart: unless-stopped

@@ -19,6 +19,8 @@ No linter configured.
 ## Docker
 
 ```bash
+docker compose up -d --build   # local compose run (port 8080, data + backups bind-mounted, log rotation)
+
 docker build -t 59man/stock-tracker:latest .
 docker push 59man/stock-tracker:latest
 

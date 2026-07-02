@@ -9,16 +9,17 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates (GBP, CHF, JPY, CAD, AUD positions are also correctly converted — all 7 FX pairs fetched at startup)
 - **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback — both sources routed through a server-side proxy to avoid CORS
 - **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
-- **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. COLT.PR → CZG.PR)
+- **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. `CZG.PR → COLT.PR` after Yahoo delisted the old symbol) and a static table restores the COLT.PR 2021–2025 dividend history Yahoo lost in the rename
 - **Custom dividend tax rates** — override the default withholding rate for any individual dividend event (click the % in the expanded row); custom rates are highlighted in amber and included in all P&L and IRR calculations
 - **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
 - **Broker / platform column** — optionally record which broker each lot was bought through (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212); shown as a badge per row with "Mixed" when lots differ
-- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change; FX-converted assets (4GLD.DE, EXUS.DE, XAU) compute the previous close via a `previousClose → chartPreviousClose → penultimate daily bar` fallback chain to handle 24/7 FX pairs that don't always populate `meta.previousClose`
+- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change; FX-converted assets (4GLD.DE, EXUS.DE, XAU) compute the previous close date-aware from the daily bars (`prevDailyClose` — last close from a prior exchange-local trading day), since Yahoo's `meta.previousClose` is null and `chartPreviousClose` is a week old with `range=5d`
 - **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any of the 15 data columns and reorder them with ↑ ↓ arrows; config saved to localStorage; opens as a bottom sheet on mobile; responsive defaults match the former CSS breakpoints but the user's choices always win
 - **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
 - **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
 - **ISIN support** — optional ISIN field stored per position; displayed below the ticker name in the table; editable in edit mode with a **⟲ Lookup** button that resolves ticker + name from an ISIN via Yahoo Finance search
 - **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur; if an ISIN is entered the ticker field is also updated with the resolved symbol so price fetching works immediately
+- **Total-price entry** — the Buy Price field has a **/ share | total** toggle: enter what you paid for the whole lot and the app divides by quantity on save (live per-share hint shown while typing)
 - **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; the chart's final data point uses the live intraday quote so it always matches the table's Total Return; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
 - **Portfolio distribution charts** — three solid pie charts below the P&L line chart showing **Cost Basis**, **Current Value**, and **Total Return incl. Dividends** breakdown; toggle between **By Type** (Stocks / ETFs / Funds / Commodities) and **By Ticker** grouping; negative-return tickers are excluded from the Total Return chart; percentage labels rendered inside each slice
 - **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
@@ -27,7 +28,11 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Multi-format import** — ↑ Import accepts JSON (enhanced export), **XTB XLSX** (Cash Operations sheet), **Fio banka PDF**, **Revolut XAU PDF**, **Trading 212 CSV**, **Degiro CSV**, and any unknown tabular file via a **column-mapping wizard**; broker sells are FIFO-matched against buys to produce correct open/closed lots; asset types (stock/ETF/fund/commodity) are auto-detected from Yahoo Finance; ISINs are resolved to tickers automatically; import modal shows detected position count before confirming
 - **Delete confirmation** — removing a row or lot shows a confirmation dialog; cannot be accidentally triggered
 - **Persistent file storage** — all data is saved to `server/data.json` via a local Express server with atomic writes (`.tmp` → rename + `.bak` backup); survives browser clears and restarts
-- **Docker support** — single-container production image; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
+- **Daily rotating backups** — the first write of each day also snapshots to `server/backups/data-YYYY-MM-DD.json` (last 7 days kept)
+- **Server event log** — portfolio create/rename/delete, proxy failures, and flush errors are logged to stdout with ISO timestamps (`docker logs stock-tracker`)
+- **Rate-limit resilience** — a Yahoo 429 triggers a shared 120 s cooldown instead of per-ticker hammering; when every source fails, the last cached quote is served instead of an error
+- **Docker support** — single-container production image with a built-in healthcheck; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
+- **Unit-tested money math** — `npm test` runs vitest over the XIRR solver, FIFO lot matcher, and net-dividend calculation
 - **Fully responsive** — the table adapts at three breakpoints (960 px, 640 px, 400 px) by progressively hiding non-essential columns
 
 ## Getting Started (local dev)
@@ -37,6 +42,7 @@ npm install
 npm run dev      # starts Vite (http://localhost:5173) + persist server (http://localhost:3001)
 npm run build    # type-check + production build
 npm run preview  # serve the production build locally
+npm test         # vitest — money-math unit tests (xirr, FIFO matcher, net dividends)
 ```
 
 `npm run dev` runs both servers via `concurrently`. Both must be running for data to be saved to disk.
@@ -56,6 +62,12 @@ docker build -t 59man/stock-tracker:latest .
 
 # Push to Docker Hub
 docker push 59man/stock-tracker:latest
+```
+
+Or run locally with compose (data + backups bind-mounted, log rotation configured):
+
+```bash
+docker compose up -d --build
 ```
 
 ### Deploy on a server via SSH
@@ -96,9 +108,13 @@ docker run -d \
   --name stock-tracker \
   -p 4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
+  -v /DATA/stock-tracker/backups:/app/server/backups \
+  --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
+
+The backups mount keeps the daily `data-YYYY-MM-DD.json` snapshots on the host; the log options cap `docker logs` disk usage. The image has a built-in `HEALTHCHECK` — `docker ps` shows `healthy`/`unhealthy`.
 
 The app is now at `http://your_server_ip:4000`.
 
@@ -130,6 +146,8 @@ docker pull 59man/stock-tracker:latest
 docker stop stock-tracker && docker rm stock-tracker
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
+  -v /DATA/stock-tracker/backups:/app/server/backups \
+  --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
@@ -153,8 +171,8 @@ React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state 
 | `usePortfolios` | Manages the list of portfolios and active selection; two-phase init; legacy key migration on first load |
 | `usePortfolio(portfolioId)` | Owns positions list for one portfolio; two-phase init; persists to server + localStorage under `stock_tracker_positions_${id}` |
 | `useFxRates` | Fetches 7 FX pairs (USD, EUR, GBP, CHF, JPY, CAD, AUD vs CZK) from Yahoo Finance in parallel; provides `convert(amount, from, to)` helper; per-pair fallback to defaults if a rate fetch fails |
-| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE; uses `range=5d` for FX-converted tickers so bar data can serve as a previous-close fallback when `meta.previousClose` is null |
-| `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache |
+| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE with a date-aware `prevDailyClose` for the Today column; shared 120 s cooldown after a Yahoo 429; serves stale cache when all sources fail; never fetches `NO_FEED_TICKERS` (manual-priced funds) |
+| `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache; ticker aliases for renames + static events for history Yahoo lost (COLT.PR 2021–2025) |
 | `useManualPrices(portfolioId)` | Stores user-entered current values for funds with no live feed; two-phase init; persists under `stock_tracker_manual_prices_${id}` |
 
 ### Key types
@@ -182,7 +200,7 @@ Data is stored in two layers:
 
 On startup, hooks read from localStorage immediately (no flash), then async-fetch from the server. If the server has data it takes priority.
 
-The Express server keeps an **in-memory store** loaded once at startup and flushes to disk with a debounced atomic write: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. SIGINT/SIGTERM flush before exit.
+The Express server keeps an **in-memory store** loaded once at startup and flushes to disk with a debounced atomic write: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. The first flush of each day also snapshots to `server/backups/data-YYYY-MM-DD.json` (last 7 kept). SIGINT/SIGTERM flush before exit. Portfolio create/rename/delete and all server errors are logged to stdout with ISO timestamps.
 
 **Legacy migration:** on first load, if the old single-key `stock_tracker_positions` is found it is copied to `stock_tracker_positions_${defaultId}` and a "Main Portfolio" is created automatically.
 
