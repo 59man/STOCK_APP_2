@@ -34,7 +34,7 @@ docker run -d --name stock-tracker -p 4000:8080 \
 ```
 
 - Always use an **absolute path** for the volume mount — `~/...` resolves relative to the shell user and often points to a different file.
-- `server/data.json` is excluded from the image via `.dockerignore`; the bind-mount provides it at runtime.
+- All personal files in `server/` are excluded from the image via `.dockerignore` (`server/*.json`, `server/*.bak`, `server/*.pdf`, `server/backups/`) — never weaken these, the directory holds real portfolio data and bank statements. The bind-mounts provide `data.json` and `backups/` at runtime.
 - The backups mount is optional but recommended — without it the daily backups stay inside the container and vanish on `docker rm`.
 - The image has a `HEALTHCHECK` hitting `/api/persist/...` every 60 s; `docker ps` shows healthy/unhealthy.
 - In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout.

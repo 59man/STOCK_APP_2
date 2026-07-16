@@ -572,3 +572,32 @@ Digest: `sha256:3e3c1b9dc3518196a95595e66e2c786dabff91cc2044d5d774cc33e3436df57b
 User noticed the chart's total return stepping +9,331 CZK between Jul 1 and Jul 2 while the market only moved +3,835. Root cause: synthetic histories for manual-priced funds anchored the manual price at **today**, so with the step-lookup `priceAt` (no interpolation) their entire accumulated P&L (~5,460 CZK) rendered as a one-day jump on the final chart bar — drifting forward every day and deflating yesterday's points on each reload.
 
 **Fix:** anchor the manual price at `manualPrices[t].updatedAt` (the date it was entered, e.g. 2026-06-02) instead of today; `priceAt` forward-fills from there. Lots bought after that date still start at P&L = 0 via their own buy knot. Verified in the browser: final-day step now matches the real intraday move.
+
+---
+
+## Session 11 — 2026-07-16 — Revolut trading-statement import, Docker Hub data-leak cleanup, server bind mounts
+
+### Feature — Revolut trading account statement PDF import
+
+**Files:** `src/utils/pdfParser.ts`, `src/utils/pdfParser.test.ts`
+
+`trading-account-statement_*_en-gb_*.pdf` failed with "cannot import". Root cause: the Revolut fingerprint only matched the XAU/gold statement (`'Revolut' && 'XAU'`), so stock statements fell through to the generic heuristic — which needs an ISIN on the trade line, but Revolut keeps ISINs only in the "Portfolio breakdown" table → 0 hits → `null`.
+
+New `parseRevolutTrading`: walks per-currency `XXX Transactions` sections (rows like `24 Apr 2026 14:22:15 GMT AMEW Trade - Market 0.00192301 €634.42 Buy €1.22 €0 €0`), builds a symbol → ISIN/name map from the breakdown table, resolves tickers via `batchIsins` (fallback `batchTickers` for symbols fully sold during the period, absent from the breakdown), FIFO-matches via `applyFifo`. Fingerprint `'Revolut' + 'Trade - '` runs **before** the XAU branch — verified the XAU statement contains no `Trade - `, so gold imports are unaffected. The pure row parser `parseRevolutTradingLines` is exported and unit-tested (suite now 12 tests). Verified end-to-end in the browser: the real statement imported as 5 AMEW buy lots → one CW8.PA position (ISIN LU1681043599, EUR, broker Revolut), then the test portfolio was deleted.
+
+**Decision — no embedded AI model for document parsing:** the CasaOS server (Celeron N3450, no GPU) can't run a useful local LLM, and the statement format is machine-generated and rigid; a deterministic parser is instant and exact. If truly unknown PDFs ever need AI-assisted import, the sane path is a hosted-API fallback.
+
+### Security — personal data leaked into Docker Hub images
+
+`.dockerignore` excluded only `server/data.json`, so every previously pushed image also contained `server/data.json.bak` (full portfolio data), the portfolio export JSONs, `server/backups/` — and would have included the imported bank statement PDFs. Fixed: `server/*.json`, `server/*.bak`, `server/*.pdf`, `server/backups/` are now all excluded; the rebuilt image was verified to contain only `server/index.js`.
+
+The old image digests recorded earlier in this file are **dead**: the Docker Hub repository was deleted and recreated with only the clean image (old digests were confirmed still pullable before deletion — they were also public knowledge via this committed file — and confirmed gone after).
+
+### Deployment — CasaOS server moved to bind mounts
+
+The container previously ran mount-less, so `docker rm` wiped all data on every update and portfolios were re-imported by hand from exported JSON. Migration (over SSH): live `data.json` copied out of the running container to `/DATA/stock-tracker/data.json` (+ a `.safety` copy), container backups to `/DATA/stock-tracker/backups/`, then the container recreated with both bind mounts and `--log-opt` rotation. Data verified intact after the swap (both portfolios served by the persist API). Portfolios and daily backups now survive image updates with no re-importing.
+
+### Docker
+
+**Image pushed to Docker Hub:** `docker.io/59man/stock-tracker:latest`
+Digest: `sha256:c4ec4b4283033ed34d193ae2e716557d1b13644002e497c655d549ef398cd0d1`
