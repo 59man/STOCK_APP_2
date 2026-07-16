@@ -1,7 +1,12 @@
 import { ParseResult } from './importParser'
 import { Position } from '../types'
-import { batchIsins } from './yahooLookup'
+import { batchIsins, batchTickers } from './yahooLookup'
 import { applyFifo, RawLot } from './fifoMatcher'
+
+const MONTHS: Record<string, string> = {
+  Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+  Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12',
+}
 
 type PDFItem = { str: string; transform: number[] }
 
@@ -104,10 +109,6 @@ async function parseFio(lines: string[]): Promise<ParseResult> {
 // ── Revolut XAU ──────────────────────────────────────────────────────────────
 
 function parseRevolut(lines: string[]): ParseResult {
-  const MONTHS: Record<string, string> = {
-    Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
-    Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12',
-  }
   const valid: Position[] = []
 
   for (let i = 0; i < lines.length; i++) {
@@ -138,6 +139,89 @@ function parseRevolut(lines: string[]): ParseResult {
   }
 
   return { valid, skipped: 0 }
+}
+
+// ── Revolut trading account statement ────────────────────────────────────────
+// "EUR Transactions" sections with rows like:
+//   24 Apr 2026 14:22:15 GMT AMEW Trade - Market 0.00192301 €634.42 Buy €1.22 €0 €0
+// plus "Portfolio breakdown" rows mapping Symbol → Company → ISIN.
+
+export type RevolutTx = { date: string; symbol: string; qty: number; price: number; currency: string; isSell: boolean }
+
+const REV_SECTION = /^([A-Z]{3}) Transactions$/
+const REV_TRADE = /^(\d{1,2}) ([A-Za-z]{3}) (\d{4}) \d{2}:\d{2}:\d{2} \S+ (\S+) Trade - \S+ ([\d,]*\.?\d+) [^\d\s]*([\d,]+(?:\.\d+)?) (Buy|Sell)\b/
+
+export function parseRevolutTradingLines(lines: string[]): {
+  txs: RevolutTx[]
+  bySymbol: Record<string, { isin: string; name: string }>
+  skipped: number
+} {
+  const txs: RevolutTx[] = []
+  const bySymbol: Record<string, { isin: string; name: string }> = {}
+  let currency = 'USD'
+  let skipped = 0
+
+  for (const line of lines) {
+    const sec = line.match(REV_SECTION)
+    if (sec) { currency = sec[1]; continue }
+
+    const isinM = line.match(ISIN_RE)
+    if (isinM && !line.includes('GMT')) {
+      // breakdown row: SYMBOL Company name ISIN qty price value %
+      const symbol = line.split(' ')[0]
+      const name = line.slice(symbol.length, line.indexOf(isinM[0])).trim()
+      if (symbol && name) bySymbol[symbol] = { isin: isinM[0], name }
+      continue
+    }
+
+    if (!line.includes('Trade - ')) continue
+    const m = line.match(REV_TRADE)
+    if (!m) { skipped++; continue }
+    const month = MONTHS[m[2]]
+    const qty = parseFloat(m[5].replace(/,/g, ''))
+    const price = parseFloat(m[6].replace(/,/g, ''))
+    if (!month || !(qty > 0) || !(price > 0)) { skipped++; continue }
+
+    txs.push({
+      date: `${m[3]}-${month}-${m[1].padStart(2, '0')}`,
+      symbol: m[4],
+      qty,
+      price,
+      currency,
+      isSell: m[7] === 'Sell',
+    })
+  }
+
+  return { txs, bySymbol, skipped }
+}
+
+async function parseRevolutTrading(lines: string[]): Promise<ParseResult> {
+  const { txs, bySymbol, skipped } = parseRevolutTradingLines(lines)
+  if (!txs.length) return { valid: [], skipped }
+
+  const isinMap = await batchIsins([...new Set(Object.values(bySymbol).map(x => x.isin))])
+  // symbols not in the breakdown (fully sold during the period) — resolve by ticker
+  const orphans = [...new Set(txs.map(t => t.symbol).filter(s => !bySymbol[s]))]
+  const tickerMap = orphans.length ? await batchTickers(orphans) : {}
+
+  const rawLots: RawLot[] = txs.map(tx => {
+    const info = bySymbol[tx.symbol]
+    const resolved = info ? isinMap[info.isin] : tickerMap[tx.symbol]
+    return {
+      ticker: resolved?.ticker ?? tx.symbol,
+      name: info?.name ?? tx.symbol,
+      qty: tx.qty,
+      price: tx.price,
+      date: tx.date,
+      currency: tx.currency,
+      broker: 'Revolut',
+      isin: info?.isin,
+      type: resolved?.type ?? 'stock',
+      isSell: tx.isSell,
+    }
+  })
+
+  return { valid: applyFifo(rawLots), skipped }
 }
 
 // ── Generic PDF heuristic ─────────────────────────────────────────────────────
@@ -253,6 +337,7 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<ParseResult | null>
   const flat = lines.join(' ')
 
   if (flat.includes('Fio banka') || flat.includes('FIOBCZPP')) return parseFio(lines)
+  if (flat.includes('Revolut') && flat.includes('Trade - ')) return parseRevolutTrading(lines)
   if (flat.includes('Revolut') && flat.includes('XAU')) return parseRevolut(lines)
 
   // Generic heuristic — any broker PDF

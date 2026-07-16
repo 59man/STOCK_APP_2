@@ -170,6 +170,7 @@ Fully-closed tickers are hidden by default in `PortfolioTable` — toggled by a 
 **`src/utils/pdfParser.ts`** — PDF parsers (pdfjs-dist loaded dynamically for code-splitting):
 - Text extraction groups pdfjs items by Y/X into lines (±3 unit threshold)
 - **Fio banka** (`"Fio banka"`/`"FIOBCZPP"`): date, ISIN, `Nákup`/`Prodej`, Czech numbers; calls `batchIsins` + `applyFifo`
+- **Revolut trading statement** (`"Revolut"` + `"Trade - "`): per-currency `XXX Transactions` sections with `Trade - Market … Buy/Sell` rows; symbol → ISIN resolved from the `Portfolio breakdown` table (`batchIsins`), fully-sold symbols fall back to `batchTickers`; calls `applyFifo`. Pure row parser `parseRevolutTradingLines` is exported and unit-tested in `src/utils/pdfParser.test.ts`
 - **Revolut XAU** (`"Revolut"` + `"XAU"`): `"Exchanged to XAU"` pattern, extracts qty and CZK amount
 - **Generic heuristic**: ISIN + multilingual buy keyword + date + numbers; `broker: 'Unknown (verify)'`
 

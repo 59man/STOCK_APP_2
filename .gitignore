@@ -6,3 +6,4 @@ audits/
 server/*.bak
 .playwright-mcp/
 server/backups/
+server/*.pdf

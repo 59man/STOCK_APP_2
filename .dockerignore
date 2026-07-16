@@ -3,4 +3,7 @@ dist/
 .git/
 Transactions_folder/
 session.md
-server/data.json
+server/*.json
+server/*.bak
+server/*.pdf
+server/backups/
