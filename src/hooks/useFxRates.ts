@@ -7,6 +7,9 @@ type Rates = { CZK: number; USD: number; EUR: number; GBP: number; CHF: number; 
 
 const DEFAULTS: Rates = { CZK: 1, USD: 25.0, EUR: 27.5, GBP: 29.0, CHF: 28.0, JPY: 0.16, CAD: 18.0, AUD: 16.0 }
 
+// Currencies convert() was asked about but doesn't know — warn once each, not per render
+const warnedUnknown = new Set<string>()
+
 const FX_PAIRS: [keyof Rates, string][] = [
   ['USD', 'USDCZK%3DX'],
   ['EUR', 'EURCZK%3DX'],
@@ -44,9 +47,15 @@ export function useFxRates() {
   const convert = useCallback(
     (amount: number, from: string, to: string): number => {
       if (from === to || !isFinite(amount)) return amount
-      const fromInCzk = rates[from as keyof Rates] ?? 1
-      const toInCzk = rates[to as keyof Rates] ?? 1
-      return (amount * fromInCzk) / toInCzk
+      const rateOf = (cur: string): number => {
+        const r = rates[cur as keyof Rates]
+        if (r === undefined && !warnedUnknown.has(cur)) {
+          warnedUnknown.add(cur)
+          console.warn(`[useFxRates] unknown currency "${cur}" — treating as CZK, amounts will be wrong`)
+        }
+        return r ?? 1
+      }
+      return (amount * rateOf(from)) / rateOf(to)
     },
     [rates]
   )

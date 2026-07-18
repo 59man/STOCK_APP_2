@@ -23,6 +23,7 @@ export default function App() {
     positions: Position[]
     taxOverrides?: Record<string, number>
     manualPrices?: Record<string, { price: number; updatedAt: string }>
+    currencyUncertain?: boolean
   } | null>(null)
   const [columnMapData, setColumnMapData] = useState<{ fileName: string; rows: unknown[][] } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -73,6 +74,7 @@ export default function App() {
         positions: parsed.valid,
         taxOverrides: parsed.dividendTaxOverrides,
         manualPrices: parsed.manualPrices,
+        currencyUncertain: parsed.currencyUncertain,
       })
     } catch (err) {
       console.error('[import]', err)
@@ -96,9 +98,13 @@ export default function App() {
     }
   }
 
-  const handleImportConfirm = async (mode: 'new' | 'current', newPortfolioName?: string) => {
+  const handleImportConfirm = async (mode: 'new' | 'current', newPortfolioName?: string, currencyOverride?: string) => {
     if (!importData) return
-    const positions = importData.positions.map((p) => ({ ...p, id: randomUUID() }))
+    const positions = importData.positions.map((p) => ({
+      ...p,
+      id: randomUUID(),
+      ...(currencyOverride ? { currency: currencyOverride } : {}),
+    }))
 
     if (mode === 'new' && newPortfolioName) {
       const id = addPortfolio(newPortfolioName)
@@ -271,6 +277,7 @@ export default function App() {
           currentPortfolioName={portfolios.find((p) => p.id === activeId)?.name ?? 'Current'}
           hasTaxOverrides={!!importData.taxOverrides && Object.keys(importData.taxOverrides).length > 0}
           hasManualPrices={!!importData.manualPrices && Object.keys(importData.manualPrices).length > 0}
+          currencyUncertain={importData.currencyUncertain}
           onConfirm={handleImportConfirm}
           onClose={() => setImportData(null)}
         />

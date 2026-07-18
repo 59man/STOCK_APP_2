@@ -7,14 +7,16 @@ interface Props {
   currentPortfolioName: string
   hasTaxOverrides: boolean
   hasManualPrices: boolean
-  onConfirm: (mode: 'new' | 'current', newPortfolioName?: string) => void
+  currencyUncertain?: boolean
+  onConfirm: (mode: 'new' | 'current', newPortfolioName?: string, currencyOverride?: string) => void
   onClose: () => void
 }
 
-export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxOverrides, hasManualPrices, onConfirm, onClose }: Props) {
+export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxOverrides, hasManualPrices, currencyUncertain, onConfirm, onClose }: Props) {
   const baseName = fileName.replace(/\.(json|xlsx|pdf)$/i, '')
   const [mode, setMode] = useState<'new' | 'current'>('new')
   const [newName, setNewName] = useState(baseName)
+  const [currency, setCurrency] = useState('CZK')
 
   const tickers = [...new Set(positions.map((p) => p.ticker))].slice(0, 8)
   const openCount = positions.filter((p) => !p.sellPrice || !p.sellDate).length
@@ -22,7 +24,7 @@ export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxO
 
   const handleConfirm = () => {
     if (mode === 'new' && !newName.trim()) return
-    onConfirm(mode, mode === 'new' ? newName.trim() : undefined)
+    onConfirm(mode, mode === 'new' ? newName.trim() : undefined, currencyUncertain ? currency : undefined)
   }
 
   return (
@@ -63,6 +65,22 @@ export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxO
             <div className="import-summary-row">
               <span className="muted">Manual prices</span>
               <span className="gain">✓ included</span>
+            </div>
+          )}
+          {currencyUncertain && (
+            <div className="import-summary-row">
+              <span className="muted">Account currency</span>
+              <span>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  title="The statement doesn't state its account currency (filename has no EUR_/CZK_ prefix) — pick the currency the amounts are in"
+                >
+                  {['CZK', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'CAD', 'AUD'].map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </span>
             </div>
           )}
         </div>

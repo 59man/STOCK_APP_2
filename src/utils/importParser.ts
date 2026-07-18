@@ -8,6 +8,7 @@ export interface ParseResult {
   skipped: number
   dividendTaxOverrides?: Record<string, number>
   manualPrices?: Record<string, { price: number; updatedAt: string }>
+  currencyUncertain?: boolean // parser had to guess the lot currency (e.g. XTB file without EUR_/CZK_ prefix)
 }
 
 export interface NeedsMapping {

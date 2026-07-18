@@ -97,7 +97,7 @@ async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
   const meta = json?.chart?.result?.[0]?.meta
   if (!meta?.regularMarketPrice) throw new Error('Yahoo: no data')
   const prev = meta.previousClose ?? meta.chartPreviousClose ?? meta.regularMarketPrice
-  return {
+  const quote = {
     ticker: ticker.toUpperCase(),
     price: meta.regularMarketPrice,
     change: meta.regularMarketPrice - prev,
@@ -106,6 +106,13 @@ async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
     name: meta.shortName ?? meta.longName ?? ticker,
     lastUpdated: new Date().toISOString(),
   }
+  // Yahoo reports LSE prices in pence (GBp) — normalise to GBP
+  if (quote.currency === 'GBp') {
+    quote.currency = 'GBP'
+    quote.price /= 100
+    quote.change /= 100
+  }
+  return quote
 }
 
 async function fetchFromStooq(ticker: string): Promise<Quote> {

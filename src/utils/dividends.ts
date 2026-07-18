@@ -94,6 +94,11 @@ export async function fetchDividendEvents(ticker: string): Promise<DividendEvent
           amount,
         }))
     }
+    // Yahoo reports LSE dividends in pence (GBp) — normalise to GBP
+    if (metaCurrency === 'GBp') {
+      metaCurrency = 'GBP'
+      fetched.forEach((e) => { e.amount /= 100 })
+    }
   }
   const fetchedDates = new Set(fetched.map((e) => e.date))
   return [...fetched, ...statics.filter((e) => !fetchedDates.has(e.date))]

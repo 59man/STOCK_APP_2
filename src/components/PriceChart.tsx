@@ -83,9 +83,15 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: 
   const res = await fetch(path)
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()
-  const currency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
+  let currency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
     ?.chart?.result?.[0]?.meta?.currency ?? null
-  return { pts: parseRaw(json, yahooRange), currency }
+  let pts = parseRaw(json, yahooRange)
+  // Yahoo reports LSE prices in pence (GBp) — normalise to GBP
+  if (currency === 'GBp') {
+    currency = 'GBP'
+    pts = pts.map((p) => ({ ...p, price: p.price / 100 }))
+  }
+  return { pts, currency }
 }
 
 export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }: Props) {

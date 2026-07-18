@@ -14,8 +14,11 @@ function isSellComment(comment: string): boolean {
 }
 
 export async function parseXtbXlsx(buffer: ArrayBuffer, fileName = ''): Promise<ParseResult | null> {
-  // XTB statement filenames start with the account currency: EUR_53675935_…, CZK_…
-  const accountCurrency = /^([A-Z]{3})_/.exec(fileName)?.[1] ?? 'CZK'
+  // XTB statement filenames start with the account currency: EUR_53675935_…, CZK_….
+  // The statement itself doesn't state it, so a renamed file forces a guess —
+  // currencyUncertain lets the import modal ask the user instead.
+  const prefixCurrency = /^([A-Z]{3})_/.exec(fileName)?.[1]
+  const accountCurrency = prefixCurrency ?? 'CZK'
   const XLSX = await import('xlsx')
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
   const ws = wb.Sheets['Cash Operations']
@@ -79,5 +82,5 @@ export async function parseXtbXlsx(buffer: ArrayBuffer, fileName = ''): Promise<
   const typeMap = await batchTickers([...new Set(positions.map(p => p.ticker))])
   positions.forEach(p => { p.type = typeMap[p.ticker]?.type ?? 'stock' })
 
-  return { valid: positions, skipped }
+  return { valid: positions, skipped, currencyUncertain: !prefixCurrency }
 }

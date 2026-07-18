@@ -52,6 +52,19 @@ function parseHistory(json: unknown): TickerHistory {
 // Avoids threading currency through every history map.
 const yahooHistCurrency = new Map<string, string>()
 
+// Historical FX rates (CUR → CZK daily closes, range=max) so each chart date
+// converts at that date's rate instead of today's spot. Fetched once per
+// currency per session; range-independent, so cached at module level.
+const fxHistCache = new Map<string, TickerHistory>()
+
+async function fetchFxHistory(cur: string): Promise<void> {
+  if (fxHistCache.has(cur)) return
+  try {
+    const res = await fetch(`/api/yahoo/v8/finance/chart/${cur}CZK%3DX?interval=1d&range=max`)
+    if (res.ok) fxHistCache.set(cur, parseHistory(await res.json()))
+  } catch { /* chartData falls back to spot convert() */ }
+}
+
 // Currency the fetched history is in for each ticker
 function histCurrency(ticker: string, posCurrency: string): string {
   const t = ticker.toUpperCase()
@@ -87,10 +100,16 @@ async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<Ti
   const res = await fetch(path)
   if (!res.ok) throw new Error(`Yahoo history ${res.status}`)
   const json = await res.json()
-  const metaCurrency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
+  let metaCurrency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
     ?.chart?.result?.[0]?.meta?.currency
+  let hist = parseHistory(json)
+  // Yahoo reports LSE prices in pence (GBp) — normalise to GBP
+  if (metaCurrency === 'GBp') {
+    metaCurrency = 'GBP'
+    hist = hist.map(([d, p]): [string, number] => [d, p / 100])
+  }
   if (metaCurrency) yahooHistCurrency.set(ticker.toUpperCase(), metaCurrency)
-  return parseHistory(json)
+  return hist
 }
 
 function priceAt(history: TickerHistory, date: string): number | null {
@@ -145,6 +164,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
   }
 
   const [histories, setHistories] = useState<Map<string, TickerHistory>>(new Map())
+  const [fxHistories, setFxHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -163,7 +183,21 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
               .catch(() => [t, []] as [string, TickerHistory])
       )
     )
-      .then((entries) => { setHistories(new Map(entries)); setLoading(false) })
+      .then(async (entries) => {
+        // FX histories for every currency in play (histCurrency reads the
+        // yahooHistCurrency cache the ticker fetches above just filled).
+        // USD + EUR always: they're selectable display currencies.
+        const needed = new Set(['USD', 'EUR'])
+        positions.forEach((p) => {
+          needed.add(p.currency)
+          needed.add(histCurrency(p.ticker, p.currency))
+        })
+        needed.delete('CZK')
+        await Promise.all([...needed].map(fetchFxHistory))
+        setFxHistories(new Map(fxHistCache))
+        setHistories(new Map(entries))
+        setLoading(false)
+      })
       .catch((e) => { setError(e.message); setLoading(false) })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickers.join(','), yahooRange])
@@ -187,8 +221,12 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       const existing = map.get(t)
       if (existing && existing.length > 0) {
         // Inject live quote price as today's final point so chart matches table.
+        // ponytail: skip quotes whose currency mismatches the history (rare Stooq
+        // fallback during a Yahoo cooldown) instead of converting — chart just
+        // lags at yesterday's close for that ticker until Yahoo recovers.
+        const histCur = FX_CONVERTED_SET.has(t.toUpperCase()) ? 'CZK' : yahooHistCurrency.get(t.toUpperCase())
         const liveQuote = !isWeekend ? quotes?.get(t.toUpperCase()) : undefined
-        if (liveQuote && liveQuote.price > 0 && isFinite(liveQuote.price)) {
+        if (liveQuote && (!histCur || liveQuote.currency === histCur) && liveQuote.price > 0 && isFinite(liveQuote.price)) {
           const hist = [...existing]
           if (hist[hist.length - 1][0] === today) {
             hist[hist.length - 1] = [today, liveQuote.price]
@@ -233,8 +271,22 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     const sortedDates = [...dateSet].sort()
     if (sortedDates.length === 0) return []
 
+    // Convert at the FX rate of a specific date (step-lookup, forward-filled).
+    // Falls back to today's spot convert() when a rate is missing (fetch failed
+    // or date precedes the FX series).
+    const fxAt = (cur: string, date: string): number | null =>
+      cur === 'CZK' ? 1 : priceAt(fxHistories.get(cur) ?? [], date)
+    const convertAt = (amount: number, from: string, to: string, date: string): number => {
+      if (from === to) return amount
+      const f = fxAt(from, date)
+      const t = fxAt(to, date)
+      return f !== null && t !== null ? (amount * f) / t : convert(amount, from, to)
+    }
+
     return sortedDates.map((date) => {
-      // Price-based P&L — convert each position's P&L from its native history currency
+      // Price-based P&L — convert each position's P&L from its native history
+      // currency at each date's own FX rate, so historical points don't drift
+      // with today's spot rate.
       let pricePnl = 0
       positions.forEach((pos) => {
         if (pos.buyDate > date) return
@@ -242,7 +294,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         // If this lot was sold on or before this date, use the frozen realized gain
         // so the chart matches the table's realizedPnl (not live market price).
         if (pos.sellDate && pos.sellDate <= date && pos.sellPrice != null) {
-          pricePnl += convert((pos.sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency)
+          pricePnl += convertAt((pos.sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency, pos.sellDate)
           return
         }
 
@@ -251,13 +303,13 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         const price = priceAt(h, date)
         if (price === null) return
         const hCurrency = histCurrency(pos.ticker, pos.currency)
-        // Normalise buy price to history currency so mixed-currency lots don't mix units.
-        // Matches the toRow() normalisation applied in PortfolioContent's row useMemo.
-        const buyInHistCurrency = convert(pos.buyPrice, pos.currency, hCurrency)
-        pricePnl += convert((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency)
+        // Normalise buy price to history currency at the buy date's rate — that is
+        // the actual exchange the trade settled at (e.g. EUR paid for JPY shares).
+        const buyInHistCurrency = convertAt(pos.buyPrice, pos.currency, hCurrency, pos.buyDate)
+        pricePnl += convertAt((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency, date)
       })
 
-      // Dividend P&L — convert from each position's native currency
+      // Dividend P&L — converted at the ex-date's rate (frozen thereafter)
       let divPnl = 0
       positions.forEach((pos) => {
         const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
@@ -267,7 +319,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
           // Only count dividends received while the lot was held (matches calcNetDividends)
           if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
             const rate = taxOverrides?.[`${pos.ticker.toUpperCase()}::${div.date}`] ?? defaultRate
-            divPnl += convert(pos.quantity * div.amount * (1 - rate), div.currency ?? pos.currency, displayCurrency)
+            divPnl += convertAt(pos.quantity * div.amount * (1 - rate), div.currency ?? pos.currency, displayCurrency, div.date)
           }
         }
       })
@@ -280,7 +332,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         pnl: Math.round(pricePnl + divPnl),
       }
     })
-  }, [effectiveHistories, positions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
+  }, [effectiveHistories, fxHistories, positions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
 
   const values = chartData.map((d) => d.pnl)
   const minVal = values.length ? Math.min(...values) : 0

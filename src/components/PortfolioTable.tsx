@@ -1005,7 +1005,7 @@ export function PortfolioTable({
                                       return (
                                         <tr key={div.date}>
                                           <td>{div.date}</td>
-                                          <td>{div.amount.toFixed(4)}</td>
+                                          <td>{div.amount.toFixed(4)}{div.currency ? <span className="muted"> {div.currency}</span> : null}</td>
                                           <td>{fmtQty(shares)}</td>
                                           <td>{fmt(cv(gross, div.currency ?? r.currency), displayCurrency)}</td>
                                           <td>
