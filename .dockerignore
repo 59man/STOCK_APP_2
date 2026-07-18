@@ -7,3 +7,4 @@ server/*.json
 server/*.bak
 server/*.pdf
 server/backups/
+server/*.xlsx

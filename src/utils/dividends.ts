@@ -1,6 +1,7 @@
 export interface DividendEvent {
-  date: string   // ISO YYYY-MM-DD (ex-dividend date)
-  amount: number // gross amount per share
+  date: string       // ISO YYYY-MM-DD (ex-dividend date)
+  amount: number     // gross amount per share
+  currency?: string  // currency of `amount` (Yahoo meta.currency); falls back to lot currency when absent
 }
 
 // Withholding tax rates by country (ISO 3166-1 alpha-2).
@@ -30,6 +31,7 @@ const COUNTRY_WITHHOLDING_RATES: Record<string, number> = {
   CH: 0.35,    // Switzerland (non-EU) — 35 % at source; refund to 15 % under CZ-CH DTA
   GB: 0.00,    // United Kingdom — no dividend WHT
   US: 0.15,    // USA — 15 % CZ-US DTA, enforced at source with IRS Form W-8BEN
+  JP: 0.15315, // Japan — 15.315 % non-resident withholding (15 % + 2.1 % restoration surtax)
 }
 
 const DEFAULT_DIVIDEND_TAX_RATE = COUNTRY_WITHHOLDING_RATES.CZ
@@ -43,6 +45,9 @@ const TICKER_COUNTRY: Record<string, string> = {
   '4GLD.DE': 'DE',  // Xetra-Gold ETC — Germany (no dividends in practice)
   'UCG.MI':  'IT',  // UniCredit — Italy 26 % at source
   'DTE.DE':  'DE',  // Deutsche Telekom — Germany
+  '8306.T':  'JP',  // Mitsubishi UFJ Financial — Japan
+  '8591.T':  'JP',  // ORIX — Japan
+  'CSG.AS':  'NL',  // Czechoslovak Group — Amsterdam-listed, NL 15 % WHT
 }
 
 export function getDividendTaxRate(ticker: string): number {
@@ -77,8 +82,10 @@ export async function fetchDividendEvents(ticker: string): Promise<DividendEvent
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?range=max&interval=1d&events=div`
   const res = await fetch(path)
   let fetched: DividendEvent[] = []
+  let metaCurrency: string | undefined
   if (res.ok) {
     const json = await res.json()
+    metaCurrency = json?.chart?.result?.[0]?.meta?.currency ?? undefined
     const raw = json?.chart?.result?.[0]?.events?.dividends
     if (raw) {
       fetched = (Object.values(raw) as Array<{ date: number; amount: number }>)
@@ -90,6 +97,7 @@ export async function fetchDividendEvents(ticker: string): Promise<DividendEvent
   }
   const fetchedDates = new Set(fetched.map((e) => e.date))
   return [...fetched, ...statics.filter((e) => !fetchedDates.has(e.date))]
+    .map((e) => (metaCurrency ? { ...e, currency: metaCurrency } : e))
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 

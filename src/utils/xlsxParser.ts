@@ -13,7 +13,9 @@ function isSellComment(comment: string): boolean {
   return /CLOSE\s+SELL/i.test(comment)
 }
 
-export async function parseXtbXlsx(buffer: ArrayBuffer): Promise<ParseResult | null> {
+export async function parseXtbXlsx(buffer: ArrayBuffer, fileName = ''): Promise<ParseResult | null> {
+  // XTB statement filenames start with the account currency: EUR_53675935_…, CZK_…
+  const accountCurrency = /^([A-Z]{3})_/.exec(fileName)?.[1] ?? 'CZK'
   const XLSX = await import('xlsx')
   const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
   const ws = wb.Sheets['Cash Operations']
@@ -60,7 +62,7 @@ export async function parseXtbXlsx(buffer: ArrayBuffer): Promise<ParseResult | n
       ticker, name, qty,
       price: Math.abs(amount) / qty,
       date: buyDate,
-      currency: 'CZK',
+      currency: accountCurrency,
       broker: 'XTB',
       type: 'stock',
       isSell,

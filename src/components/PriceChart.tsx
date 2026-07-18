@@ -55,7 +55,7 @@ function parseRaw(json: unknown, yahooRange: string): ChartPoint[] {
     .filter((d) => isFinite(d.price) && d.price > 0)
 }
 
-async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPoint[]> {
+async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: ChartPoint[]; currency: string | null }> {
   const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
@@ -67,7 +67,7 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPo
     const fxPts = parseRaw(fxJson, yahooRange)
     const fxByIso = new Map(fxPts.map((p) => [p.isoDate!, p.price]))
     const fxSorted = [...fxByIso.keys()].sort()
-    return pricePts.map((pt): ChartPoint | null => {
+    const pts = pricePts.map((pt): ChartPoint | null => {
       let lo = 0, hi = fxSorted.length - 1, fxDate: string | null = null
       while (lo <= hi) {
         const mid = (lo + hi) >> 1
@@ -76,12 +76,16 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<ChartPo
       const fxRate = fxDate ? fxByIso.get(fxDate) : undefined
       return fxRate ? { date: pt.date, price: pt.price * fxRate } : null
     }).filter((x): x is ChartPoint => x !== null)
+    return { pts, currency: 'CZK' }
   }
 
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
   const res = await fetch(path)
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
-  return parseRaw(await res.json(), yahooRange)
+  const json = await res.json()
+  const currency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
+    ?.chart?.result?.[0]?.meta?.currency ?? null
+  return { pts: parseRaw(json, yahooRange), currency }
 }
 
 export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }: Props) {
@@ -97,16 +101,16 @@ export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }:
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Currency the fetched data is actually in (FX-converted tickers are pre-converted to CZK)
-  const dataCurrency = FX_CONVERTED_SET.has(ticker.toUpperCase()) ? 'CZK' : tickerCurrency
+  // Fallback if the response carries no meta.currency (FX-converted tickers are pre-converted to CZK)
+  const fallbackCurrency = FX_CONVERTED_SET.has(ticker.toUpperCase()) ? 'CZK' : tickerCurrency
 
   useEffect(() => {
     if (!ticker) return
     setLoading(true)
     setError(null)
     fetchHistory(ticker, RANGE_TO_YAHOO[range])
-      .then((pts) => {
-        const factor = convert(1, dataCurrency, displayCurrency)
+      .then(({ pts, currency }) => {
+        const factor = convert(1, currency ?? fallbackCurrency, displayCurrency)
         setData(factor === 1 ? pts : pts.map((p) => ({ ...p, price: p.price * factor })))
       })
       .catch((e) => setError(e.message))

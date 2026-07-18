@@ -120,7 +120,9 @@ async function fetchFromStooq(ticker: string): Promise<Quote> {
   const openNum = parseFloat(open)
   if (!isFinite(price) || price === 0) throw new Error('Stooq: invalid price')
   const suffix = ticker.split('.').pop()?.toUpperCase() ?? ''
-  const currency = ['PR', 'CZ'].includes(suffix) ? 'CZK' : suffix === 'VI' ? 'EUR' : 'USD'
+  const currency = ['PR', 'CZ'].includes(suffix) ? 'CZK'
+    : ['VI', 'AS', 'DE'].includes(suffix) ? 'EUR'
+    : suffix === 'T' ? 'JPY' : 'USD'
   return {
     ticker: ticker.toUpperCase(),
     price,

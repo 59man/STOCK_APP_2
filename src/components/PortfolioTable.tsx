@@ -1007,7 +1007,7 @@ export function PortfolioTable({
                                           <td>{div.date}</td>
                                           <td>{div.amount.toFixed(4)}</td>
                                           <td>{fmtQty(shares)}</td>
-                                          <td>{fmt(cv(gross, r.currency), displayCurrency)}</td>
+                                          <td>{fmt(cv(gross, div.currency ?? r.currency), displayCurrency)}</td>
                                           <td>
                                             <DivTaxCell
                                               ticker={r.ticker} date={div.date}
@@ -1016,7 +1016,7 @@ export function PortfolioTable({
                                               onClear={() => onClearDivTax(r.ticker, div.date)}
                                             />
                                           </td>
-                                          <td className="gain">{fmt(cv(net, r.currency), displayCurrency)}</td>
+                                          <td className="gain">{fmt(cv(net, div.currency ?? r.currency), displayCurrency)}</td>
                                         </tr>
                                       )
                                     })}

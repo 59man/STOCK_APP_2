@@ -47,9 +47,15 @@ function parseHistory(json: unknown): TickerHistory {
     .sort(([a], [b]) => a.localeCompare(b))
 }
 
+// ponytail: module-level cache of Yahoo meta.currency per ticker — filled by
+// fetchYahooHistory before setHistories fires, so chartData always sees it.
+// Avoids threading currency through every history map.
+const yahooHistCurrency = new Map<string, string>()
+
 // Currency the fetched history is in for each ticker
 function histCurrency(ticker: string, posCurrency: string): string {
-  return FX_CONVERTED_SET.has(ticker.toUpperCase()) ? 'CZK' : posCurrency
+  const t = ticker.toUpperCase()
+  return FX_CONVERTED_SET.has(t) ? 'CZK' : yahooHistCurrency.get(t) ?? posCurrency
 }
 
 function fxMerge(priceHist: TickerHistory, fxHist: TickerHistory): TickerHistory {
@@ -80,7 +86,11 @@ async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<Ti
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
   const res = await fetch(path)
   if (!res.ok) throw new Error(`Yahoo history ${res.status}`)
-  return parseHistory(await res.json())
+  const json = await res.json()
+  const metaCurrency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })
+    ?.chart?.result?.[0]?.meta?.currency
+  if (metaCurrency) yahooHistCurrency.set(ticker.toUpperCase(), metaCurrency)
+  return parseHistory(json)
 }
 
 function priceAt(history: TickerHistory, date: string): number | null {
@@ -257,7 +267,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
           // Only count dividends received while the lot was held (matches calcNetDividends)
           if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
             const rate = taxOverrides?.[`${pos.ticker.toUpperCase()}::${div.date}`] ?? defaultRate
-            divPnl += convert(pos.quantity * div.amount * (1 - rate), pos.currency, displayCurrency)
+            divPnl += convert(pos.quantity * div.amount * (1 - rate), div.currency ?? pos.currency, displayCurrency)
           }
         }
       })

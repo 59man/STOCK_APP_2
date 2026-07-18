@@ -205,7 +205,7 @@ export async function parseFile(file: File): Promise<ParseFileResult | null> {
 
     if (wb.Sheets['Cash Operations']) {
       const { parseXtbXlsx } = await import('./xlsxParser')
-      return parseXtbXlsx(buf)
+      return parseXtbXlsx(buf, file.name)
     }
 
     const ws = wb.Sheets[wb.SheetNames[0]]

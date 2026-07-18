@@ -7,3 +7,4 @@ server/*.bak
 .playwright-mcp/
 server/backups/
 server/*.pdf
+server/*.xlsx

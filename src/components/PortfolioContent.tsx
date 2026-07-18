@@ -85,13 +85,18 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         ? closedLots.reduce((s, l) => s + toRow(l.sellPrice! * l.quantity, l.currency), 0) / closedLots.reduce((s, l) => s + l.quantity, 0)
         : 0
       const openAvgBuy = openQty > 0 ? openCost / openQty : 0
+      // Quotes arrive in the asset's native currency (JPY for .T, EUR for .AS, …),
+      // which can differ from the lot currency the broker statement was priced in.
+      const quotePrice = quote ? toRow(quote.price, quote.currency) : undefined
       const currentPrice = isClosed
         ? avgSellPrice
-        : (quote?.price ?? manual?.price ?? avgBuyPrice)
+        : (quotePrice ?? manual?.price ?? avgBuyPrice)
       const currentValue = isClosed ? 0 : currentPrice * openQty
 
       const tickerDivs = dividends.get(ticker.toUpperCase()) ?? []
-      const dividendIncome = calcNetDividends(lots, tickerDivs, ticker, taxOverrides)
+      // Dividend amounts are per-share in the ticker's native currency (Yahoo meta.currency)
+      const divCurrency = tickerDivs[0]?.currency ?? rowCurrency
+      const dividendIncome = toRow(calcNetDividends(lots, tickerDivs, ticker, taxOverrides), divCurrency)
 
       const realizedPnl = closedLots.reduce((s, l) => s + toRow((l.sellPrice! - l.buyPrice) * l.quantity, l.currency), 0)
       const unrealizedPnl = isClosed ? 0 : (currentPrice - openAvgBuy) * openQty
@@ -110,13 +115,13 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
                 .reduce((s, l) => s + l.quantity, 0)
               if (shares === 0) return []
               const rate = taxOverrides[`${ticker.toUpperCase()}::${div.date}`] ?? getDividendTaxRate(ticker)
-              return [{ date: new Date(div.date), amount: shares * div.amount * (1 - rate) }]
+              return [{ date: new Date(div.date), amount: toRow(shares * div.amount * (1 - rate), div.currency ?? rowCurrency) }]
             }),
             ...(isClosed ? [] : [{ date: today, amount: currentValue }]),
           ])
         : null
 
-      const dailyChange = isClosed ? 0 : (quote?.change ?? 0) * openQty
+      const dailyChange = isClosed || !quote ? 0 : toRow(quote.change, quote.currency) * openQty
 
       return {
         ids: lots.map((p) => p.id),
@@ -162,7 +167,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       divs.forEach((div) => {
         if (pos.buyDate <= div.date && (!pos.sellDate || pos.sellDate > div.date)) {
           const rate = taxOverrides[`${pos.ticker.toUpperCase()}::${div.date}`] ?? getDividendTaxRate(pos.ticker)
-          divCashFlows.push({ date: new Date(div.date), amount: toDC(pos.quantity * div.amount * (1 - rate), pos.currency) })
+          divCashFlows.push({ date: new Date(div.date), amount: toDC(pos.quantity * div.amount * (1 - rate), div.currency ?? pos.currency) })
         }
       })
     })
