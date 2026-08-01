@@ -76,30 +76,44 @@ export function usePortfolios() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const persist = (list: Portfolio[]) => {
-    setPortfolios(list)
-    setItem(PORTFOLIOS_KEY, JSON.stringify(list))
+  // Mutating from the in-memory `portfolios` snapshot is unsafe: if another
+  // browser tab (or a second call before this one's setState lands) wrote a
+  // newer list in the meantime, blindly persisting [...portfolios, x] clobbers
+  // it — the other portfolio's entry vanishes from the list while its
+  // position data (a separate storage key) survives untouched, orphaned.
+  // Re-fetching the server's current list right before mutating narrows that
+  // race to a single round trip instead of "until this tab reloads".
+  const mutatePortfolios = async (mutate: (current: Portfolio[]) => Portfolio[]): Promise<Portfolio[]> => {
+    let current = portfolios
+    try {
+      const raw = await getItem(PORTFOLIOS_KEY)
+      if (raw !== null) current = JSON.parse(raw)
+    } catch {}
+    const next = mutate(current)
+    setPortfolios(next)
+    await setItem(PORTFOLIOS_KEY, JSON.stringify(next))
+    return next
   }
 
   const addPortfolio = (name: string): string => {
     const id = randomUUID()
-    persist([...portfolios, { id, name }])
+    mutatePortfolios((current) => [...current, { id, name }])
     return id
   }
 
   const removePortfolio = (id: string) => {
-    if (portfolios.length <= 1) return
-    const next = portfolios.filter((p) => p.id !== id)
-    persist(next)
-    if (id === activeId) {
-      const newActive = next[0].id
-      setActiveId(newActive)
-      setItem(ACTIVE_KEY, newActive)
-    }
+    mutatePortfolios((current) => (current.length <= 1 ? current : current.filter((p) => p.id !== id)))
+      .then((next) => {
+        if (id === activeId && next[0]) {
+          const newActive = next[0].id
+          setActiveId(newActive)
+          setItem(ACTIVE_KEY, newActive)
+        }
+      })
   }
 
   const renamePortfolio = (id: string, name: string) => {
-    persist(portfolios.map((p) => (p.id === id ? { ...p, name } : p)))
+    mutatePortfolios((current) => current.map((p) => (p.id === id ? { ...p, name } : p)))
   }
 
   const switchPortfolio = (id: string) => {
