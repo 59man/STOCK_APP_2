@@ -72,16 +72,9 @@ function histCurrency(ticker: string, posCurrency: string): string {
 }
 
 function fxMerge(priceHist: TickerHistory, fxHist: TickerHistory): TickerHistory {
-  const fxMap = new Map(fxHist)
-  const fxSorted = fxHist.map(([d]) => d).sort()
   return priceHist.map(([date, price]): [string, number] | null => {
-    let lo = 0, hi = fxSorted.length - 1, fxDate: string | null = null
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1
-      if (fxSorted[mid] <= date) { fxDate = fxSorted[mid]; lo = mid + 1 } else hi = mid - 1
-    }
-    const rate = fxDate ? fxMap.get(fxDate) : undefined
-    return rate ? [date, price * rate] : null
+    const rate = priceAt(fxHist, date)
+    return rate !== null ? [date, price * rate] : null
   }).filter((x): x is [string, number] => x !== null)
 }
 
@@ -112,14 +105,26 @@ async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<Ti
   return hist
 }
 
+// Step lookup: the last entry at-or-before `date`, falling back to the first
+// entry after `date` when that's actually closer. A round-the-clock feed's
+// live/final bar (e.g. USDCZK=X) can be timestamped just past UTC midnight,
+// landing one calendar day later than a same-session bar it needs to line up
+// with (e.g. GC=F, gold futures, trading nearly 24/7) — plain forward-fill
+// would then grab the previous day's stale value instead.
 function priceAt(history: TickerHistory, date: string): number | null {
-  let lo = 0, hi = history.length - 1, found: number | null = null
+  let lo = 0, hi = history.length - 1, beforeIdx = -1
   while (lo <= hi) {
     const mid = (lo + hi) >> 1
-    if (history[mid][0] <= date) { found = history[mid][1]; lo = mid + 1 }
-    else hi = mid - 1
+    if (history[mid][0] <= date) { beforeIdx = mid; lo = mid + 1 } else hi = mid - 1
   }
-  return found
+  const before = beforeIdx >= 0 ? history[beforeIdx] : null
+  const after = lo < history.length ? history[lo] : null
+  if (!before) return after ? after[1] : null
+  if (!after) return before[1]
+  const dayMs = 86400000
+  const beforeGap = new Date(date).getTime() - new Date(before[0]).getTime()
+  const afterGap = new Date(after[0]).getTime() - new Date(date).getTime()
+  return afterGap <= dayMs && afterGap <= beforeGap ? after[1] : before[1]
 }
 
 // Linearly interpolate day-by-day between sorted (date, price) knots, so a
@@ -242,9 +247,14 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
   const effectiveHistories = useMemo(() => {
     const map = new Map(histories)
     const today = new Date().toISOString().slice(0, 10)
-    // Skip live-price injection on weekends: markets are closed, quotes hold
-    // Friday's stale close, and injecting today's date would create a phantom
-    // non-trading-day bar on the chart.
+    // Skip live-price injection on weekends for ordinary exchange-traded
+    // tickers: markets are closed, quotes hold Friday's stale close, and
+    // injecting today's date would create a phantom non-trading-day bar.
+    // FX-converted tickers (XAU/4GLD.DE/EXUS.DE) are exempt: their quote comes
+    // from a careful price×FX multiplication (fetchFxConvertedQuote) that's
+    // more reliable than the chart's raw historical fxMerge regardless of the
+    // calendar day, and XAU specifically tracks COMEX gold futures, which keep
+    // moving through the weekend — always prefer the live value for these three.
     const dow = new Date().getDay()
     const isWeekend = dow === 0 || dow === 6
     tickers.forEach((t) => {
@@ -255,7 +265,8 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         // fallback during a Yahoo cooldown) instead of converting — chart just
         // lags at yesterday's close for that ticker until Yahoo recovers.
         const histCur = FX_CONVERTED_SET.has(t.toUpperCase()) ? 'CZK' : yahooHistCurrency.get(t.toUpperCase())
-        const liveQuote = !isWeekend ? quotes?.get(t.toUpperCase()) : undefined
+        const skipWeekend = isWeekend && !FX_CONVERTED_SET.has(t.toUpperCase())
+        const liveQuote = !skipWeekend ? quotes?.get(t.toUpperCase()) : undefined
         if (liveQuote && (!histCur || liveQuote.currency === histCur) && liveQuote.price > 0 && isFinite(liveQuote.price)) {
           const hist = [...existing]
           if (hist[hist.length - 1][0] === today) {
