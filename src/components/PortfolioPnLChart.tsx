@@ -122,6 +122,33 @@ function priceAt(history: TickerHistory, date: string): number | null {
   return found
 }
 
+// Linearly interpolate day-by-day between sorted (date, price) knots, so a
+// manual-priced fund's gain accrues gradually across its whole holding period
+// instead of sitting flat then jumping on the single day the price was last
+// entered (priceAt is a step lookup — it only shows a smooth ramp if the
+// underlying series actually has a point for every day in between).
+function interpolateDaily(knots: TickerHistory): TickerHistory {
+  if (knots.length <= 1) return knots
+  const out: TickerHistory = []
+  for (let i = 0; i < knots.length - 1; i++) {
+    const [startDate, startPrice] = knots[i]
+    const [endDate, endPrice] = knots[i + 1]
+    const startMs = new Date(startDate).getTime()
+    const endMs = new Date(endDate).getTime()
+    const totalDays = Math.round((endMs - startMs) / 86400000)
+    if (totalDays <= 0) {
+      out.push([startDate, startPrice])
+      continue
+    }
+    for (let d = 0; d < totalDays; d++) {
+      const date = new Date(startMs + d * 86400000).toISOString().slice(0, 10)
+      out.push([date, startPrice + (endPrice - startPrice) * (d / totalDays)])
+    }
+  }
+  out.push(knots[knots.length - 1])
+  return out
+}
+
 function fmtCurrency(v: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency, maximumFractionDigits: 0,
@@ -204,9 +231,12 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
 
   // For tickers with no Yahoo history but a manual price, build a synthetic history
   // using the actual buy-date prices as anchors (each lot starts at P&L = 0) and
-  // the manual price anchored at the date it was entered (updatedAt), forward-filled
-  // from there by priceAt(). Anchoring at "today" would make the funds' entire P&L
-  // appear as a fake one-day jump on the final chart bar, drifting forward every day.
+  // the manual price anchored at the date it was entered (updatedAt). Anchoring
+  // at "today" would make the funds' entire P&L appear as a fake one-day jump on
+  // the final chart bar, drifting forward every day. The knots are then linearly
+  // interpolated day-by-day (interpolateDaily) so the gain ramps up smoothly
+  // across the whole holding period instead of sitting flat then jumping on the
+  // single day the price was entered.
   // Also injects live quote prices as today's final bar so the chart matches the
   // table's live intraday total return (rather than lagging behind at yesterday's close).
   const effectiveHistories = useMemo(() => {
@@ -249,9 +279,9 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       // Manual price knot at its entry date (wins over a same-day buy knot);
       // lots bought after that date still start at P&L = 0 via their own knot.
       knots.set(mp.updatedAt?.slice(0, 10) ?? today, mp.price)
-      const synth: TickerHistory = [...knots.entries()]
+      const sortedKnots: TickerHistory = [...knots.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
-      map.set(t, synth)
+      map.set(t, interpolateDaily(sortedKnots))
     })
     return map
   }, [histories, manualPrices, quotes, positions, tickers])

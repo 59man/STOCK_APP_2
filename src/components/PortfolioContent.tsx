@@ -12,6 +12,7 @@ import { PortfolioRow } from '../types'
 import { xirr } from '../utils/xirr'
 import { calcNetDividends, getDividendTaxRate } from '../utils/dividends'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
+import { FX_CONVERTED_TICKERS } from '../data/fxConvertedTickers'
 
 interface Props {
   portfolioId: string
@@ -81,6 +82,15 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
       const manual = isClosed ? undefined : manualPrices[ticker.toUpperCase()]
       const priceIsManual = !isClosed && !quote && !!manual
 
+      // The currency the instrument itself trades in — independent of what
+      // currency a given lot's buy price happened to be recorded in (e.g. a
+      // CZK brokerage statement for a EUR-denominated ETC like 4GLD.DE).
+      // FX-converted tickers (fxConvertedTickers.ts) fetch their price in a
+      // foreign currency and multiply by an FX pair to get a CZK value, so
+      // their true native currency is the fxTicker's base (e.g. EURCZK=X → EUR).
+      const fxEntry = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
+      const nativeCurrency = fxEntry ? fxEntry.fxTicker.slice(0, 3) : (quote?.currency ?? rowCurrency)
+
       const avgSellPrice = closedLots.length > 0
         ? closedLots.reduce((s, l) => s + toRow(l.sellPrice! * l.quantity, l.currency), 0) / closedLots.reduce((s, l) => s + l.quantity, 0)
         : 0
@@ -129,6 +139,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         name: lots[0].name,
         type: lots[0].type,
         currency: lots[0].currency,
+        nativeCurrency,
         lots: lots.length,
         positions: [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate)),
         totalQuantity: totalQty,

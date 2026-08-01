@@ -29,6 +29,7 @@ export interface PortfolioRow {
   name: string
   type: Position['type']
   currency: string
+  nativeCurrency: string  // currency the instrument itself trades in (e.g. EUR for 4GLD.DE), regardless of lot-recorded currency
   lots: number           // number of separate purchase lots
   positions: Position[]  // individual lots, sorted by buyDate
   totalQuantity: number

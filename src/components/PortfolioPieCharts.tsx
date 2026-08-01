@@ -8,7 +8,7 @@ interface Props {
   convert: (amount: number, from: string, to: string) => number
 }
 
-type GroupBy = 'type' | 'ticker'
+type GroupBy = 'type' | 'ticker' | 'currency'
 
 interface PieEntry {
   name: string
@@ -29,6 +29,17 @@ const TYPE_LABELS: Record<string, string> = {
   etf:       'ETFs',
   fund:      'Funds',
   commodity: 'Commodities',
+}
+
+const CURRENCY_COLORS: Record<string, string> = {
+  CZK: '#4f8ef7',
+  USD: '#50c878',
+  EUR: '#c97ff5',
+  GBP: '#f5c842',
+  CHF: '#ff9f1c',
+  JPY: '#e63946',
+  CAD: '#4cc9f0',
+  AUD: '#f4a261',
 }
 
 const PALETTE = [
@@ -175,6 +186,47 @@ export function PortfolioPieCharts({ rows, displayCurrency, convert }: Props) {
       }
     }
 
+    if (groupBy === 'currency') {
+      // Grouped by the instrument's own trading currency (row.nativeCurrency),
+      // not the currency a lot happened to be recorded/settled in — a EUR-
+      // denominated ETC like 4GLD.DE is 100% EUR exposure even if the broker
+      // statement charged the purchase in CZK.
+      const agg = new Map<string, { costBasis: number; currentValue: number; totalReturn: number }>()
+      rows.forEach((row) => {
+        const prev = agg.get(row.nativeCurrency) ?? { costBasis: 0, currentValue: 0, totalReturn: 0 }
+        agg.set(row.nativeCurrency, {
+          costBasis:    prev.costBasis    + cv(row.costBasis,    row.currency),
+          currentValue: prev.currentValue + cv(row.currentValue, row.currency),
+          totalReturn:  prev.totalReturn  + cv(row.totalReturn,  row.currency),
+        })
+      })
+
+      const currencies = Array.from(agg.entries())
+      const colorFor = (currency: string, i: number) => CURRENCY_COLORS[currency] ?? PALETTE[i % PALETTE.length]
+      return {
+        costBasis: currencies.map(([currency, v], i) => ({
+          name: currency,
+          value: v.costBasis,
+          isLoss: false,
+          color: colorFor(currency, i),
+        })),
+        currentValue: currencies.map(([currency, v], i) => ({
+          name: currency,
+          value: v.currentValue,
+          isLoss: false,
+          color: colorFor(currency, i),
+        })),
+        totalReturn: currencies
+          .filter(([, v]) => v.totalReturn > 0)
+          .map(([currency, v], i) => ({
+            name: currency,
+            value: v.totalReturn,
+            isLoss: false,
+            color: colorFor(currency, i),
+          })),
+      }
+    }
+
     // By ticker
     return {
       costBasis: rows.map((row) => ({
@@ -215,6 +267,10 @@ export function PortfolioPieCharts({ rows, displayCurrency, convert }: Props) {
             className={`pie-group-btn${groupBy === 'ticker' ? ' active' : ''}`}
             onClick={() => setGroupBy('ticker')}
           >By Ticker</button>
+          <button
+            className={`pie-group-btn${groupBy === 'currency' ? ' active' : ''}`}
+            onClick={() => setGroupBy('currency')}
+          >By Currency</button>
         </div>
       </div>
       <div className="pie-charts-grid">
