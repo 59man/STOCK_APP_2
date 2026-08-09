@@ -377,8 +377,16 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         // Normalise buy price to history currency at the buy date's rate — that is
         // the actual exchange the trade settled at (e.g. EUR paid for JPY shares).
         const buyInHistCurrency = convertAt(pos.buyPrice, pos.currency, hCurrency, pos.buyDate)
-        pricePnl += convertAt((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency, date)
-        currentValue += convertAt(price * pos.quantity, hCurrency, displayCurrency, date)
+        const lotPricePnl = convertAt((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency, date)
+        pricePnl += lotPricePnl
+        // Current Value = frozen Cost Basis + this lot's Total Return price gain,
+        // rather than an independent price(date)*qty conversion at the date's own
+        // rate. A plain re-conversion would silently include currency-translation
+        // gain/loss (buy-date rate vs. date's rate) that Total Return's pricePnl
+        // does not — the two views would then disagree on a foreign-currency lot
+        // whose native price never moved. Reusing lotPricePnl guarantees
+        // currentValue - costBasis === pricePnl for this lot, exactly, at every date.
+        currentValue += costBasisInDisplay + lotPricePnl
       })
 
       // Dividend P&L — converted at the ex-date's rate (frozen thereafter)
