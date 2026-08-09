@@ -44,7 +44,7 @@ the toggle itself.
 Per-lot, cost basis and current value are counted only while the lot is **open as
 of the chart date**:
 
-```
+```text
 included if: pos.buyDate <= date AND (!pos.sellDate || pos.sellDate > date)
 ```
 
@@ -60,7 +60,7 @@ The existing per-date loop over `positions` already branches on `buyDate`/`sellD
 to compute `pricePnl`. Two new accumulators are added alongside it, using the same
 loop (no second pass over positions):
 
-```
+```text
 for each position pos:
   if pos.buyDate > date: skip
   if pos.sellDate && pos.sellDate <= date: skip   // sold — contributes 0 to both
@@ -92,6 +92,7 @@ active view).
 green/red based on sign, `ReferenceLine` at 0.
 
 **Portfolio Value view** (new): `LineChart` (via Recharts) with two `Line`s:
+
 - Cost Basis — neutral slate (`#64748b`), matches no existing semantic color so it
   doesn't imply gain/loss on its own.
 - Current Value — blue accent (`#3b82f6`).
