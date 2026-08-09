@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis,
+  AreaChart, Area, LineChart, Line, Legend, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { Position, Quote } from '../types'
@@ -11,7 +11,11 @@ import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 interface ChartPoint {
   label: string
   pnl: number
+  costBasis: number
+  currentValue: number
 }
+
+type PnlView = 'return' | 'value'
 
 type Range = '1M' | '3M' | '6M' | '1Y' | '3Y' | '5Y' | 'All'
 
@@ -195,6 +199,15 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     localStorage.setItem('chart_range_portfolio', r)
   }
 
+  const [view, setView] = useState<PnlView>(
+    () => (localStorage.getItem('chart_view_portfolio') as PnlView | null) ?? 'return'
+  )
+
+  const handleViewChange = (v: PnlView) => {
+    setView(v)
+    localStorage.setItem('chart_view_portfolio', v)
+  }
+
   const [histories, setHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [fxHistories, setFxHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -329,11 +342,15 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       // currency at each date's own FX rate, so historical points don't drift
       // with today's spot rate.
       let pricePnl = 0
+      let costBasis = 0
+      let currentValue = 0
       positions.forEach((pos) => {
         if (pos.buyDate > date) return
 
         // If this lot was sold on or before this date, use the frozen realized gain
         // so the chart matches the table's realizedPnl (not live market price).
+        // Sold lots contribute 0 to costBasis/currentValue — those track capital
+        // currently deployed in open positions, not lifetime invested capital.
         if (pos.sellDate && pos.sellDate <= date && pos.sellPrice != null) {
           pricePnl += convertAt((pos.sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency, pos.sellDate)
           return
@@ -348,6 +365,11 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         // the actual exchange the trade settled at (e.g. EUR paid for JPY shares).
         const buyInHistCurrency = convertAt(pos.buyPrice, pos.currency, hCurrency, pos.buyDate)
         pricePnl += convertAt((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency, date)
+
+        // costBasis freezes at the buy-date FX rate ("what was actually paid");
+        // currentValue floats at this date's FX rate — mirrors the price leg above.
+        costBasis += convertAt(pos.buyPrice * pos.quantity, pos.currency, displayCurrency, pos.buyDate)
+        currentValue += convertAt(price * pos.quantity, hCurrency, displayCurrency, date)
       })
 
       // Dividend P&L — converted at the ex-date's rate (frozen thereafter)
@@ -371,6 +393,8 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
           year: (range === 'All' || range === '5Y' || range === '3Y') ? '2-digit' : undefined,
         }),
         pnl: Math.round(pricePnl + divPnl),
+        costBasis: Math.round(costBasis),
+        currentValue: Math.round(currentValue),
       }
     })
   }, [effectiveHistories, fxHistories, positions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
@@ -382,19 +406,42 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
   const color = finalPnl >= 0 ? '#22c55e' : '#ef4444'
   const pad = Math.max(Math.abs(maxVal), Math.abs(minVal)) * 0.08 || 1000
 
+  const valueMax = chartData.length
+    ? Math.max(...chartData.map((d) => Math.max(d.costBasis, d.currentValue)))
+    : 0
+  const valuePad = valueMax * 0.08 || 1000
+
   return (
     <div className="chart-container">
       <div className="chart-header">
         <div>
-          <h3>Portfolio Total Return</h3>
-          <span style={{ fontSize: 10, color: '#666' }}>price P&L + net dividends (after withholding tax)</span>
+          <h3>{view === 'return' ? 'Portfolio Total Return' : 'Portfolio Value'}</h3>
+          <span style={{ fontSize: 10, color: '#666' }}>
+            {view === 'return'
+              ? 'price P&L + net dividends (after withholding tax)'
+              : 'capital in open positions vs. mark-to-market value'}
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {!loading && values.length > 0 && (
+          {view === 'return' && !loading && values.length > 0 && (
             <span className={finalPnl >= 0 ? 'gain' : 'loss'} style={{ fontSize: 13, fontWeight: 600 }}>
               {fmtCurrency(finalPnl, displayCurrency)}
             </span>
           )}
+          <div className="pie-group-toggle">
+            <button
+              className={`pie-group-btn${view === 'return' ? ' active' : ''}`}
+              onClick={() => handleViewChange('return')}
+            >
+              Total Return
+            </button>
+            <button
+              className={`pie-group-btn${view === 'value' ? ' active' : ''}`}
+              onClick={() => handleViewChange('value')}
+            >
+              Portfolio Value
+            </button>
+          </div>
           <div className="range-tabs">
             {RANGES.map((r) => (
               <button
@@ -412,7 +459,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       {loading && <div className="chart-placeholder">Loading portfolio history…</div>}
       {!loading && error && <div className="chart-placeholder error-text">History error: {error}</div>}
       {!loading && !error && chartData.length === 0 && <div className="chart-placeholder">No data for this range.</div>}
-      {!loading && !error && chartData.length > 0 && (
+      {!loading && !error && chartData.length > 0 && view === 'return' && (
         <ResponsiveContainer width="100%" height={260}>
           <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
             <defs>
@@ -455,6 +502,39 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
               dot={false}
             />
           </AreaChart>
+        </ResponsiveContainer>
+      )}
+      {!loading && !error && chartData.length > 0 && view === 'value' && (
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2a3a" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 10, fill: '#888' }}
+              interval={Math.floor(chartData.length / 7)}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[0, valueMax + valuePad]}
+              tick={{ fontSize: 10, fill: '#888' }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) =>
+                Math.abs(v) >= 1000
+                  ? `${(v / 1000).toFixed(1).replace(/\.0$/, '')}k`
+                  : parseFloat(v.toFixed(2)).toString()
+              }
+              width={42}
+            />
+            <Tooltip
+              contentStyle={{ background: '#1e1e2e', border: '1px solid #333', borderRadius: 6 }}
+              labelStyle={{ color: '#aaa' }}
+              formatter={(v: number, name: string) => [fmtCurrency(v, displayCurrency), name]}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <Line type="monotone" dataKey="costBasis" name="Cost Basis" stroke="#64748b" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="currentValue" name="Current Value" stroke="#3b82f6" strokeWidth={2} dot={false} />
+          </LineChart>
         </ResponsiveContainer>
       )}
     </div>
