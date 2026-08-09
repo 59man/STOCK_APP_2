@@ -356,19 +356,28 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
           return
         }
 
+        // Cost basis doesn't need a price feed — count it even if the ticker's
+        // history failed to load (e.g. a Yahoo rate-limit cooldown) or a manual
+        // price hasn't been entered yet, so the lot never silently vanishes from
+        // the chart the way it would if this were gated behind a price lookup.
+        const costBasisInDisplay = convertAt(pos.buyPrice * pos.quantity, pos.currency, displayCurrency, pos.buyDate)
+        costBasis += costBasisInDisplay
+
         const h = effectiveHistories.get(pos.ticker)
-        if (!h || h.length === 0) return
-        const price = priceAt(h, date)
-        if (price === null) return
+        const price = h && h.length > 0 ? priceAt(h, date) : null
+        if (price === null) {
+          // No price available for this date — value the lot at cost, mirroring
+          // the table's currentPrice ?? avgBuyPrice fallback, so Current Value
+          // never disagrees with Cost Basis just because a feed is down.
+          // pricePnl simply omits this lot's unrealized gain, same as before.
+          currentValue += costBasisInDisplay
+          return
+        }
         const hCurrency = histCurrency(pos.ticker, pos.currency)
         // Normalise buy price to history currency at the buy date's rate — that is
         // the actual exchange the trade settled at (e.g. EUR paid for JPY shares).
         const buyInHistCurrency = convertAt(pos.buyPrice, pos.currency, hCurrency, pos.buyDate)
         pricePnl += convertAt((price - buyInHistCurrency) * pos.quantity, hCurrency, displayCurrency, date)
-
-        // costBasis freezes at the buy-date FX rate ("what was actually paid");
-        // currentValue floats at this date's FX rate — mirrors the price leg above.
-        costBasis += convertAt(pos.buyPrice * pos.quantity, pos.currency, displayCurrency, pos.buyDate)
         currentValue += convertAt(price * pos.quantity, hCurrency, displayCurrency, date)
       })
 
