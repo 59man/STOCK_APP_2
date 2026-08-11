@@ -1,11 +1,10 @@
 import express from 'express'
-import { readFileSync, writeFileSync, existsSync, renameSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_FILE = join(__dirname, 'data.json')
-const DATA_TMP  = join(__dirname, 'data.json.tmp')
 const DATA_BAK  = join(__dirname, 'data.json.bak')
 const BACKUP_DIR = join(__dirname, 'backups')
 const BACKUP_KEEP = 7
@@ -42,8 +41,11 @@ function scheduleFlush() {
 function flushToDisk() {
   try {
     if (existsSync(DATA_FILE)) copyFileSync(DATA_FILE, DATA_BAK)
-    writeFileSync(DATA_TMP, JSON.stringify(store, null, 2))
-    renameSync(DATA_TMP, DATA_FILE)
+    // Write in place rather than write-tmp+rename: DATA_FILE is commonly bind-mounted
+    // as a single file (see docker run examples in CLAUDE.md), which makes it a mount
+    // point inside the container — renaming another file on top of a mount point fails
+    // with EBUSY. DATA_BAK above still protects against a write landing mid-corruption.
+    writeFileSync(DATA_FILE, JSON.stringify(store, null, 2))
     dailyBackup()
   } catch (err) {
     logErr('failed to flush data.json:', err.message)
