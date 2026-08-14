@@ -278,7 +278,11 @@ export function PortfolioTable({
     return () => document.removeEventListener('mousedown', handler)
   }, [showColPanel])
 
-  const activeColumns = colConfig.filter(c => c.visible)
+  const activeColumns = colConfig.filter(c => {
+    if (!c.visible) return false
+    const def = COLUMN_DEFS.find(d => d.key === c.key)
+    return !def?.hideBelow || window.innerWidth > def.hideBelow
+  })
 
   const toggleColumn = (key: ColKey) => {
     const next = colConfig.map(c => c.key === key ? { ...c, visible: !c.visible } : c)
