@@ -1,4 +1,4 @@
-import { useState, Fragment, useRef, useEffect } from 'react'
+import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
 import { PortfolioRow, Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
@@ -123,6 +123,29 @@ function saveColConfig(cfg: ColConfig[]) {
   try { localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(cfg)) } catch {}
 }
 
+// ── Sort config ────────────────────────────────────────────────────────────────
+type SortDir = 'asc' | 'desc'
+interface SortConfig { key: ColKey | 'ticker'; dir: SortDir }
+
+const SORT_STORAGE_KEY = 'stock_tracker_sort_config'
+
+function loadSortConfig(): SortConfig | null {
+  try {
+    const raw = localStorage.getItem(SORT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as SortConfig
+    if (parsed && typeof parsed.key === 'string' && (parsed.dir === 'asc' || parsed.dir === 'desc')) return parsed
+  } catch {}
+  return null
+}
+
+function saveSortConfig(cfg: SortConfig | null) {
+  try {
+    if (cfg) localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(cfg))
+    else localStorage.removeItem(SORT_STORAGE_KEY)
+  } catch {}
+}
+
 // ── Supporting types ──────────────────────────────────────────────────────────
 interface SellTarget {
   ticker: string
@@ -231,6 +254,9 @@ export function PortfolioTable({
   const [showColPanel, setShowColPanel] = useState(false)
   const colPanelRef = useRef<HTMLDivElement>(null)
 
+  // Sort config
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(loadSortConfig)
+
   // Edit mode
   const [editMode, setEditMode] = useState(false)
   const [editingLotId, setEditingLotId] = useState<string | null>(null)
@@ -271,6 +297,22 @@ export function PortfolioTable({
     const width = window.innerWidth
     const next = COLUMN_DEFS.map(d => ({ key: d.key, visible: !d.hideBelow || width > d.hideBelow }))
     setColConfig(next); saveColConfig(next)
+  }
+
+  const handleHeaderClick = (key: ColKey | 'ticker') => {
+    setSortConfig(prev => {
+      const next: SortConfig | null =
+        !prev || prev.key !== key ? { key, dir: 'asc' }
+        : prev.dir === 'asc' ? { key, dir: 'desc' }
+        : null
+      saveSortConfig(next)
+      return next
+    })
+  }
+
+  const sortIndicator = (key: ColKey | 'ticker') => {
+    if (sortConfig?.key !== key) return null
+    return <span className="sort-indicator">{sortConfig.dir === 'asc' ? ' ▲' : ' ▼'}</span>
   }
 
   const toggle = (ticker: string) =>
@@ -403,6 +445,45 @@ export function PortfolioTable({
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
   const cv = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
+
+  const sortValue = (r: PortfolioRow, key: ColKey | 'ticker'): string | number => {
+    switch (key) {
+      case 'ticker': return r.ticker
+      case 'type': return r.type
+      case 'qty': return r.totalQuantity
+      case 'avgBuy': return cv(r.avgBuyPrice, r.currency)
+      case 'firstBuy': return r.firstBuyDate
+      case 'lots': return r.lots
+      case 'broker': {
+        const brokers = [...new Set(r.positions.map((p) => p.broker).filter(Boolean))]
+        return brokers.length === 0 ? '' : brokers.length === 1 ? (brokers[0] as string) : 'Mixed'
+      }
+      case 'curPrice': return cv(r.currentPrice, r.currency)
+      case 'today': return cv(r.dailyChange, r.currency)
+      case 'costBasis': return cv(r.costBasis, r.currency)
+      case 'curValue': return cv(r.currentValue, r.currency)
+      case 'pricePnl': return cv(r.pnl, r.currency)
+      case 'dividends': return cv(r.dividendIncome, r.currency)
+      case 'totalReturn': return cv(r.totalReturn, r.currency)
+      case 'returnPct': return r.costBasis > 0 ? (r.totalReturn / r.costBasis) * 100 : 0
+      case 'irr': return r.irr ?? -Infinity
+    }
+  }
+
+  const sortedRows = useMemo(() => {
+    if (!sortConfig) return visibleRows
+    const { key, dir } = sortConfig
+    const sign = dir === 'asc' ? 1 : -1
+    return [...visibleRows].sort((a, b) => {
+      const va = sortValue(a, key)
+      const vb = sortValue(b, key)
+      if (typeof va === 'string' || typeof vb === 'string') {
+        return sign * String(va).localeCompare(String(vb))
+      }
+      return sign * ((va as number) - (vb as number))
+    })
+  }, [visibleRows, sortConfig, displayCurrency])
+
   const totalCost = rows.reduce((s, r) => s + cv(r.costBasis, r.currency), 0)
   const totalValue = rows.reduce((s, r) => s + cv(r.currentValue, r.currency), 0)
   const totalDivs = rows.reduce((s, r) => s + cv(r.dividendIncome, r.currency), 0)
@@ -526,17 +607,23 @@ export function PortfolioTable({
           <thead>
             <tr>
               <th></th>
-              <th>Ticker</th>
+              <th className="th-sortable" onClick={() => handleHeaderClick('ticker')}>
+                Ticker{sortIndicator('ticker')}
+              </th>
               {activeColumns.map(col => (
-                <th key={col.key} className={COL_CLASS[col.key]}>
-                  {COLUMN_DEFS.find(d => d.key === col.key)?.label}
+                <th
+                  key={col.key}
+                  className={`${COL_CLASS[col.key]} th-sortable`}
+                  onClick={() => handleHeaderClick(col.key)}
+                >
+                  {COLUMN_DEFS.find(d => d.key === col.key)?.label}{sortIndicator(col.key)}
                 </th>
               ))}
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((r) => {
+            {sortedRows.map((r) => {
               const totalReturnPctRow = r.costBasis > 0 ? (r.totalReturn / r.costBasis) * 100 : 0
               const isEditing = editingTicker === r.ticker
               const isExpanded = expanded.has(r.ticker)

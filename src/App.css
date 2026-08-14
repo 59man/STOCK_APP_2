@@ -536,6 +536,8 @@ th {
   white-space: nowrap;
 }
 th:nth-child(2) { text-align: left; }   /* Ticker column */
+.th-sortable { cursor: pointer; user-select: none; }
+.th-sortable:hover { background: var(--surface3); color: var(--text-2); }
 td {
   padding: 10px 13px;
   text-align: right;
