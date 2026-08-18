@@ -2,38 +2,24 @@
 
 A dark-themed personal portfolio tracker for Czech and international stocks, ETFs, funds, and commodities. Tracks live prices, dividends, P&L, IRR, and realized gains — with support for closed positions, manual price overrides for unlisted funds, and a fully responsive mobile layout.
 
+**📱 Android app:** **[⬇ Download the latest APK](https://github.com/59man/STOCK_APP_2/releases/latest)** — a native Kotlin/Compose companion app with full CRUD, offline-first sync, and the same charts as the web app. See [Android Companion App](#android-companion-app) below.
+
 ## Features
 
-- **Multiple portfolios** — create, rename, and delete portfolios; switch via a tab bar; each portfolio's positions and manual prices are stored independently
-- **Multi-asset portfolio** — stocks, ETFs, funds, commodities; any currency
-- **Display currency switcher** — toggle between CZK / USD / EUR at any time; all table values, summary totals, and both charts convert on the fly using live FX rates (GBP, CHF, JPY, CAD, AUD positions are also correctly converted — all 7 FX pairs fetched at startup)
-- **Live prices** — Yahoo Finance v8 API via proxy; 60 s module-level cache; Stooq CSV fallback — both sources routed through a server-side proxy to avoid CORS
-- **FX conversion** — EUR-denominated assets (4GLD.DE, EXUS.DE) and USD-denominated gold (XAU via GC=F) are automatically converted using real-time FX rates; cross-rates go via CZK as the base
-- **Net dividends** — fetched from Yahoo Finance `events.dividends`; per-country withholding tax applied automatically (15 % CZ default, 27.5 % AT, 0 % IE/LU, etc.); aliases handle renamed tickers (e.g. `CZG.PR → COLT.PR` after Yahoo delisted the old symbol) and a static table restores the COLT.PR 2021–2025 dividend history Yahoo lost in the rename
-- **Custom dividend tax rates** — override the default withholding rate for any individual dividend event (click the % in the expanded row); custom rates are highlighted in amber and included in all P&L and IRR calculations
-- **IRR (XIRR)** — annualised internal rate of return per position and for the whole portfolio, including dividend and sell cash flows
-- **Broker / platform column** — optionally record which broker each lot was bought through (XTB, Revolut, IBKR, Fio banka, Degiro, Trading 212); shown as a badge per row with "Mixed" when lots differ
-- **Daily P&L column (Today)** — shows today's absolute gain/loss and percentage for each open position based on the live quote's daily change; FX-converted assets (4GLD.DE, EXUS.DE, XAU) compute the previous close date-aware from the daily bars (`prevDailyClose` — last close from a prior exchange-local trading day), since Yahoo's `meta.previousClose` is null and `chartPreviousClose` is a week old with `range=5d`
-- **Configurable columns** — click **⚙ Columns** in the toolbar to show/hide any of the 15 data columns and reorder them with ↑ ↓ arrows; config saved to localStorage; opens as a bottom sheet on mobile; responsive defaults match the former CSS breakpoints but the user's choices always win
-- **Sell positions** — click **Sell** on any open row or individual lot; enter sell date + sell price and confirm; realized P&L is computed separately from unrealized
-- **Closed positions** — fully-closed tickers are hidden by default with a "Show closed (N)" toggle; each shows a grey **SOLD** badge; the lot table gains Sell Date / Sell Price columns when applicable
-- **ISIN support** — optional ISIN field stored per position; displayed below the ticker name in the table; editable in edit mode with a **⟲ Lookup** button that resolves ticker + name from an ISIN via Yahoo Finance search
-- **Live name lookup** — typing a ticker or ISIN in the Add Position modal auto-fetches the company name from Yahoo Finance on blur; if an ISIN is entered the ticker field is also updated with the resolved symbol so price fetching works immediately
-- **Total-price entry** — the Buy Price field has a **/ share | total** toggle: enter what you paid for the whole lot and the app divides by quantity on save (live per-share hint shown while typing)
-- **Portfolio P&L chart** — total return (price P&L + net dividends) over selectable ranges (1M / 3M / 6M / 1Y / 3Y / 5Y / All) in the selected display currency; the chart's final data point uses the live intraday quote so it always matches the table's Total Return; range preference persisted to localStorage; unlisted funds with manual prices included via synthetic price history
-- **Portfolio distribution charts** — three solid pie charts below the P&L line chart showing **Cost Basis**, **Current Value**, and **Total Return incl. Dividends** breakdown; toggle between **By Type** (Stocks / ETFs / Funds / Commodities) and **By Ticker** grouping; negative-return tickers are excluded from the Total Return chart; percentage labels rendered inside each slice
-- **Expandable rows** — click ▶ on any row to reveal individual lots and an embedded price chart with full range controls (range preference persisted); price chart also respects the display currency
-- **Manual price override** — for funds with no public price feed: enter the current total value from your bank report; the app divides by quantity to derive the per-unit price; invalid input shows an inline error
-- **Enhanced JSON export** — ↓ Export bundles positions, custom dividend tax rates, and manual prices into a single versioned JSON file (`version: 1`)
-- **Multi-format import** — ↑ Import accepts JSON (enhanced export), **XTB XLSX** (Cash Operations sheet), **Fio banka PDF**, **Revolut trading account statement PDF**, **Revolut XAU PDF**, **Trading 212 CSV**, **Degiro CSV**, and any unknown tabular file via a **column-mapping wizard**; broker sells are FIFO-matched against buys to produce correct open/closed lots; asset types (stock/ETF/fund/commodity) are auto-detected from Yahoo Finance; ISINs are resolved to tickers automatically; import modal shows detected position count before confirming
-- **Delete confirmation** — removing a row or lot shows a confirmation dialog; cannot be accidentally triggered
-- **Persistent file storage** — all data is saved to `server/data.json` via a local Express server with atomic writes (`.tmp` → rename + `.bak` backup); survives browser clears and restarts
-- **Daily rotating backups** — the first write of each day also snapshots to `server/backups/data-YYYY-MM-DD.json` (last 7 days kept)
-- **Server event log** — portfolio create/rename/delete, proxy failures, and flush errors are logged to stdout with ISO timestamps (`docker logs stock-tracker`)
-- **Rate-limit resilience** — a Yahoo 429 triggers a shared 120 s cooldown instead of per-ticker hammering; when every source fails, the last cached quote is served instead of an error
-- **Docker support** — single-container production image with a built-in healthcheck; Express serves the built frontend, proxies Yahoo Finance, and persists data via a bind-mounted `data.json`
-- **Unit-tested money math** — `npm test` runs vitest over the XIRR solver, FIFO lot matcher, and net-dividend calculation
-- **Fully responsive** — the table adapts at three breakpoints (960 px, 640 px, 400 px) by progressively hiding non-essential columns
+- **Multi-portfolio, multi-asset** — stocks, ETFs, funds, commodities, any currency; create/rename/delete portfolios via a tab bar, each stored independently
+- **Live prices & FX** — Yahoo Finance with a Stooq fallback; toggle display currency (CZK/USD/EUR) with all values, summaries, and charts converting instantly across 7 supported currencies
+- **Dividends** — net income after automatic per-country withholding tax, with per-event overrides when the default doesn't apply
+- **IRR (XIRR)** — annualised return per position and portfolio-wide, including dividend and sell cash flows
+- **Full position lifecycle** — buy, sell (partial or full), record historical closed positions, or delete, with realized vs. unrealized P&L tracked separately
+- **Charts** — portfolio total-return line chart, three distribution pie charts (Cost Basis / Current Value / Total Return, by type or by ticker), and a per-position price chart, all range-selectable and currency-aware
+- **Import** — JSON, XTB, Fio banka, Revolut, Trading 212, Degiro, or any tabular file via a column-mapping wizard; sells are FIFO-matched, types and ISINs auto-resolved via Yahoo Finance
+- **Export** — versioned JSON backup of positions, manual prices, and custom tax rates in one file
+- **ISIN & ticker lookup** — resolves ticker/name from an ISIN (or vice versa) via Yahoo Finance, both on import and when adding a position
+- **Configurable, responsive table** — show/hide/reorder any of 15 columns; adapts down to a mobile bottom-sheet layout
+- **Manual price override** — for unlisted funds with no public price feed, enter the total value from your statement and the app derives the per-unit price
+- **Durable storage** — Express server with atomic writes, daily rotating backups, and a bind-mountable Docker image
+- **Resilient live data** — a Yahoo rate limit triggers a shared cooldown with stale-cache fallback instead of failing every ticker
+- **Unit-tested money math** — XIRR solver, FIFO lot matcher, and net-dividend calculation all covered by `npm test`
 
 ## Getting Started (local dev)
 
