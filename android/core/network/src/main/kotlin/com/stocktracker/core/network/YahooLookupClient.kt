@@ -13,10 +13,18 @@ import java.util.concurrent.TimeUnit
 private data class YahooSearchResponse(val quotes: List<YahooSearchQuote>? = null)
 
 @Serializable
-private data class YahooSearchQuote(val symbol: String? = null, val quoteType: String? = null)
+private data class YahooSearchQuote(
+    val symbol: String? = null,
+    val quoteType: String? = null,
+    val longname: String? = null,
+    val shortname: String? = null,
+)
 
 /** Mirrors QuoteInfo in src/utils/yahooLookup.ts. */
 data class QuoteInfo(val ticker: String, val type: String)
+
+/** Ticker + display name — used by the ticker-edit ISIN lookup, which (unlike [QuoteInfo]) also wants a name to fill in. */
+data class NamedQuoteInfo(val ticker: String, val name: String?)
 
 private fun mapType(quoteType: String?): String = when (quoteType) {
     "ETF" -> "etf"
@@ -59,6 +67,13 @@ object YahooLookupClient {
     suspend fun lookupIsin(isin: String): QuoteInfo {
         val hit = query(isin)
         return QuoteInfo(ticker = hit?.symbol ?: isin, type = mapType(hit?.quoteType))
+    }
+
+    /** Same lookup as [lookupIsin], but also returns a display name — null on a miss (no fallback ticker). */
+    suspend fun lookupIsinWithName(isinOrTicker: String): NamedQuoteInfo? {
+        val hit = query(isinOrTicker) ?: return null
+        val symbol = hit.symbol ?: return null
+        return NamedQuoteInfo(ticker = symbol, name = hit.longname ?: hit.shortname)
     }
 
     /** Resolve a ticker for type enrichment only — the ticker itself is never changed. */

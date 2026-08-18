@@ -35,6 +35,7 @@ dependencies {
     implementation(project(":core:calc"))
     implementation(project(":core:data"))
     implementation(project(":core:import"))
+    implementation(project(":core:network"))
     implementation(project(":core:designsystem"))
 
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
