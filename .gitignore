@@ -6,6 +6,7 @@ audits/
 server/*.bak
 .playwright-mcp/
 .serena/
+.claude/scheduled_tasks.lock
 server/backups/
 server/*.pdf
 server/*.xlsx
