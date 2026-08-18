@@ -4,6 +4,7 @@ import { useFxRates, DisplayCurrency } from './hooks/useFxRates'
 import { PortfolioContent } from './components/PortfolioContent'
 import { ImportModal } from './components/ImportModal'
 import { ColumnMappingModal } from './components/ColumnMappingModal'
+import { ApiKeyModal } from './components/ApiKeyModal'
 import { Position } from './types'
 import { getItem, setItem } from './utils/storage'
 import { randomUUID } from './utils/uuid'
@@ -17,6 +18,7 @@ export default function App() {
   const { convert } = useFxRates()
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('CZK')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [contentKey, setContentKey] = useState(0)
   const [importData, setImportData] = useState<{
     fileName: string
@@ -186,6 +188,9 @@ export default function App() {
                 >{c}</button>
               ))}
             </div>
+            <button className="btn-secondary" title="Copy the Persist API key for the Android app" onClick={() => setShowApiKeyModal(true)}>
+              🔑
+            </button>
             <button className="btn-primary" onClick={() => setShowAddModal(true)}>
               + Add Position
             </button>
@@ -290,6 +295,7 @@ export default function App() {
           onClose={() => setColumnMapData(null)}
         />
       )}
+      {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
     </div>
   )
 }

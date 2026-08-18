@@ -877,6 +877,17 @@ input, select {
 input:focus, select:focus { border-color: var(--text-2); }
 input::placeholder { color: var(--faint); }
 
+/* ── API key modal ── */
+.api-key-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
 /* ── Import modal ── */
 .import-summary {
   background: var(--surface2);
