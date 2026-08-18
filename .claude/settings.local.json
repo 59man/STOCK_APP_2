@@ -76,7 +76,9 @@
       "Bash(npx playwright *)",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
-      "mcp__playwright__browser_evaluate"
+      "mcp__playwright__browser_evaluate",
+      "Read(//home/_59man/.ssh/**)",
+      "Bash(docker context *)"
     ]
   }
 }

@@ -8,3 +8,4 @@ server/*.bak
 server/*.pdf
 server/backups/
 server/*.xlsx
+android/
