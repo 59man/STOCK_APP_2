@@ -5,6 +5,7 @@ server/*.json
 audits/
 server/*.bak
 .playwright-mcp/
+.serena/
 server/backups/
 server/*.pdf
 server/*.xlsx
