@@ -56,7 +56,10 @@ fun ImportRoute(activePortfolioId: String?, onDone: () -> Unit, viewModel: Impor
     val context = LocalContext.current
     val hasCurrentPortfolio = activePortfolioId != null
 
-    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    // GetContent (ACTION_GET_CONTENT) rather than OpenDocument (ACTION_OPEN_DOCUMENT) — the latter
+    // only shows apps that implement the stricter DocumentsProvider API, which on several OEM
+    // skins excludes the device's own Files app; GetContent uses the classic chooser instead.
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val fileName = queryFileName(context, uri) ?: uri.lastPathSegment ?: "import"
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -65,7 +68,7 @@ fun ImportRoute(activePortfolioId: String?, onDone: () -> Unit, viewModel: Impor
 
     ImportScreen(
         uiState = uiState,
-        onPickFile = { pickFile.launch(arrayOf("*/*")) },
+        onPickFile = { pickFile.launch("*/*") },
         onSetTarget = viewModel::setTarget,
         onSetNewPortfolioName = viewModel::setNewPortfolioName,
         onSetCurrencyOverride = viewModel::setCurrencyOverride,

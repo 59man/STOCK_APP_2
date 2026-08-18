@@ -1,5 +1,6 @@
 node_modules/
 dist/
+vite.config.ts.timestamp-*.mjs
 Transactions_folder/
 server/*.json
 audits/

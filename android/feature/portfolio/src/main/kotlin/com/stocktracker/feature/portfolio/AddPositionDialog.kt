@@ -21,11 +21,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.model.PositionType
+import com.stocktracker.core.network.QuoteClient
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 private val CURRENCIES = listOf("USD", "EUR", "GBP", "JPY", "CZK", "CHF", "CAD", "AUD")
@@ -48,6 +52,8 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
     var isClosed by remember { mutableStateOf(false) }
     var sellDate by remember { mutableStateOf(LocalDate.now().toString()) }
     var sellPrice by remember { mutableStateOf("") }
+    var fetchTest by remember { mutableStateOf<FetchTestState>(FetchTestState.Idle) }
+    val scope = rememberCoroutineScope()
 
     val qty = quantity.toDoubleOrNull() ?: 0.0
     val rawPrice = priceInput.toDoubleOrNull() ?: 0.0
@@ -59,19 +65,44 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
         title = { Text("Add position") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(ticker, { ticker = it.uppercase() }, label = { Text("Ticker") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        ticker, { ticker = it.uppercase(); fetchTest = FetchTestState.Idle },
+                        label = { Text("Ticker") }, singleLine = true, modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        enabled = ticker.isNotBlank() && fetchTest != FetchTestState.Loading,
+                        onClick = {
+                            fetchTest = FetchTestState.Loading
+                            scope.launch {
+                                fetchTest = try {
+                                    val quote = QuoteClient.fetchQuote(ticker)
+                                    FetchTestState.Ok("${quote.price} ${quote.currency}")
+                                } catch (e: Exception) {
+                                    FetchTestState.Error(e.message ?: "Failed")
+                                }
+                            }
+                        },
+                    ) { Text(if (fetchTest == FetchTestState.Loading) "…" else "▶ Test") }
+                }
+                when (val state = fetchTest) {
+                    is FetchTestState.Ok -> Text("✓ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.Gain)
+                    is FetchTestState.Error -> Text("✗ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.Loss)
+                    else -> {}
+                }
+
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
                 var typeExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
                     OutlinedTextField(
-                        value = type.name.lowercase(), onValueChange = {}, readOnly = true, label = { Text("Type") },
+                        value = type.name, onValueChange = {}, readOnly = true, label = { Text("Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                     )
                     DropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
                         PositionType.entries.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { type = option; typeExpanded = false })
+                            DropdownMenuItem(text = { Text(option.name) }, onClick = { type = option; typeExpanded = false })
                         }
                     }
                 }

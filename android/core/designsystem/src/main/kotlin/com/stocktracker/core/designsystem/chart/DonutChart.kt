@@ -18,8 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -33,11 +31,11 @@ import kotlin.math.sin
 data class DonutSlice(val label: String, val value: Double, val color: Color)
 
 /**
- * Donut chart with an in-ring percentage label per slice (≥5%, mirrors
- * InsideLabel's cutoff in PortfolioPieCharts.tsx) and a legend row per slice
- * below — the mobile equivalent of the web's Pie+Legend+hover-Tooltip, since
- * a persistent legend with values does the same job a hover tooltip can't on
- * a touch screen.
+ * Full pie chart (filled wedges, no center hole — matches PortfolioPieCharts.tsx's
+ * solid Pie) with an in-slice percentage label per slice (≥5%, mirrors
+ * InsideLabel's cutoff there) and a legend row per slice below — the mobile
+ * equivalent of the web's Pie+Legend+hover-Tooltip, since a persistent legend
+ * with values does the same job a hover tooltip can't on a touch screen.
  */
 @Composable
 fun DonutChart(
@@ -59,7 +57,6 @@ fun DonutChart(
     Column(modifier) {
         Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
             val diameter = kotlin.math.min(size.width, size.height) * 0.92f
-            val strokeWidth = diameter * 0.32f
             val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
             var startAngle = -90f
             val gap = if (nonZero.size > 1) 1.5f else 0f
@@ -70,15 +67,14 @@ fun DonutChart(
                     color = slice.color,
                     startAngle = startAngle,
                     sweepAngle = (sweep - gap).coerceAtLeast(0f),
-                    useCenter = false,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
+                    useCenter = true,
                     topLeft = topLeft,
                     size = Size(diameter, diameter),
                 )
                 val percent = slice.value / total
                 if (percent >= 0.05) {
                     val midAngleRad = Math.toRadians((startAngle + sweep / 2).toDouble())
-                    val labelRadius = diameter / 2f - strokeWidth / 2f
+                    val labelRadius = diameter / 2f * 0.65f
                     val cx = topLeft.x + diameter / 2f + (labelRadius * cos(midAngleRad)).toFloat()
                     val cy = topLeft.y + diameter / 2f + (labelRadius * sin(midAngleRad)).toFloat()
                     val text = "${(percent * 100).roundToInt()}%"

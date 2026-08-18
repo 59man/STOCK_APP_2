@@ -191,7 +191,9 @@ internal fun PortfolioListScreen(
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
                 LazyColumn(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                    // Extra bottom inset so the floating "+" button never overlaps the last
+                    // card's content (it was covering the Total Return pie's title/legend).
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (uiState.visibleRows.isNotEmpty()) {

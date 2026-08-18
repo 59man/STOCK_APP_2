@@ -31,7 +31,8 @@ import com.stocktracker.core.network.QuoteClient
 import com.stocktracker.core.network.YahooLookupClient
 import kotlinx.coroutines.launch
 
-private sealed interface FetchTestState {
+/** Shared with AddPositionDialog's own "▶ Test" fetch button. */
+internal sealed interface FetchTestState {
     data object Idle : FetchTestState
     data object Loading : FetchTestState
     data class Ok(val msg: String) : FetchTestState
@@ -96,13 +97,13 @@ fun EditTickerDialog(row: PortfolioRow, onDismiss: () -> Unit, onSave: (List<Pos
                 var typeExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
                     OutlinedTextField(
-                        value = type.name.lowercase(), onValueChange = {}, readOnly = true, label = { Text("Type") },
+                        value = type.name, onValueChange = {}, readOnly = true, label = { Text("Type") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor(),
                     )
                     DropdownMenu(expanded = typeExpanded, onDismissRequest = { typeExpanded = false }) {
                         PositionType.entries.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name.lowercase()) }, onClick = { type = option; typeExpanded = false })
+                            DropdownMenuItem(text = { Text(option.name) }, onClick = { type = option; typeExpanded = false })
                         }
                     }
                 }
