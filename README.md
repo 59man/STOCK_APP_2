@@ -160,6 +160,26 @@ scp server/data.json your_user@your_server_ip:/DATA/stock-tracker/data.json
 # No container restart needed — file is bind-mounted and read on every request.
 ```
 
+## Android Companion App
+
+A native Android app (Kotlin + Jetpack Compose) that reads and writes the same portfolio data as the web app, syncing through the persist server described above. Full CRUD (add, edit, sell, delete), works fully offline — positions, P&L, IRR, and dividend tax are all computed on-device — and syncs opportunistically whenever connectivity is available.
+
+**[⬇ Download the latest APK](https://github.com/59man/STOCK_APP_2/releases/latest)** — debug build, install by enabling "Install from unknown sources" in Android Settings for the browser/file manager you use to open it. After installing, open the app's **Settings** screen and enter your persist server's URL and API key to start syncing.
+
+- **Offline-first** — the phone only needs connectivity to sync with the web app and to fetch live quotes, price history, and dividends (direct from Yahoo/Stooq, never routed through your own server)
+- **Full CRUD** — add, edit, sell, and delete positions from the phone, not just a read-only mirror of the web app
+- **Charts** — per-ticker price history, portfolio Total Return / Portfolio Value (Cost Basis vs. Current Value), and three distribution donuts (Cost Basis / Current Value / Total Return), matching the web app's charts
+- **Import** — all five broker statement formats (XTB, Fio banka, Revolut, Trading 212, Degiro) parsed entirely on-device, no network required
+- **Conflict-safe sync** — a three-way merge reconciles edits made on the phone and the web app while one was offline; a genuine same-record conflict (e.g. a sell price edited on both) surfaces a one-tap resolution prompt instead of silently picking a winner
+
+See `android/docs/mobile-sync-blueprint.md` for the full design writeup, or `CLAUDE.md` for build commands and module layout.
+
+Build from source:
+```bash
+cd android
+./gradlew :app:assembleDebug   # → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Architecture
 
 React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state (portfolios, active portfolio, display currency); per-portfolio state lives in `PortfolioContent`.

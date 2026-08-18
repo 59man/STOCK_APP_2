@@ -16,6 +16,8 @@ If port 3001 is already in use: `kill $(lsof -ti:3001)`
 
 No linter configured.
 
+Android companion app: see `/android` and the "Android Companion App" section below.
+
 ## Auth
 
 `/api/persist/*` (and, in production, `/api/yahoo/*` + `/api/stooq/*`) require an `X-API-Key` header matching `PERSIST_API_KEY`. Copy `.env.example` to `.env` and fill in a real secret (`openssl rand -hex 32`) — `PERSIST_API_KEY` is read by the server at runtime, `VITE_PERSIST_API_KEY` (same value) is baked into the browser bundle at build time, so both must be set and must match. `npm run dev` fails open with a console warning if `.env` is missing (no setup needed for local dev); `NODE_ENV=production` refuses to start without `PERSIST_API_KEY` set. `GET /api/health` is always unauthenticated.
@@ -256,4 +258,36 @@ Default column visibility by viewport (matches former CSS behaviour):
 |---|---|
 | Type, Cur. Price, Total Return | 640 px |
 | Qty | 400 px |
+
+## Android Companion App
+
+A native Kotlin + Jetpack Compose app lives in `/android` — a separate Gradle project (own `settings.gradle.kts`), full CRUD parity with the web app, offline-first (Room + WorkManager sync), calculations ported natively into `core:calc` so the app works fully with zero connectivity. Prebuilt debug APK: [GitHub Releases](https://github.com/59man/STOCK_APP_2/releases/latest). Full design rationale, phased build plan, and the sync/merge strategy: `android/docs/mobile-sync-blueprint.md` (a planning-time snapshot — cross-check against the code below for current state).
+
+```bash
+cd android
+./gradlew :core:calc:test     # calc-module unit tests (xirr/fifo/dividends/chart math) — plain JVM, no emulator
+./gradlew test                # full unit test suite across all modules
+./gradlew :app:assembleDebug  # → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Module layout
+
+- `app` — `MainActivity`, `NavHost`, DI root
+- `core/model` — pure Kotlin data classes, zero Android deps (mirrors `src/types/index.ts`)
+- `core/calc` — plain JVM module: `Xirr.kt`/`FifoMatcher.kt`/`Dividends.kt`/`RowDerivation.kt` port `xirr.ts`/`fifoMatcher.ts`/`dividends.ts`/the row-derivation logic field-for-field; `ChartMath.kt` ports the `PortfolioPnLChart.tsx` date math (`priceAt` step-lookup, `interpolateDaily`, `buildPortfolioChartData`). Tested independently of Android (`ChartMathTest.kt`, `XirrTest.kt`, etc.)
+- `core/database` — Room entities/DAOs/TypeConverters
+- `core/network` — Retrofit `PersistApi` (sync only) + direct-to-Yahoo/Stooq clients: `QuoteClient`, `HistoryClient`, `DividendClient`, `FxRateClient`, `YahooLookupClient`. Quotes, chart history, dividends, FX rates, and ISIN/ticker lookup all go phone→Yahoo/Stooq directly and never touch the user's own server — only sync does (Mobile Sync Blueprint, Phase 2 §00)
+- `core/import` — on-device PDF/XLSX/CSV statement parsing, all five broker formats
+- `core/data` — repositories, settings DataStore, sync workers (`SyncCoordinator`, `KeyedListSyncEngine`/`KeyedMapSyncEngine`, `ConflictCenter`, `PushWorker`)
+- `core/designsystem` — Material3 theme (`StockTrackerTheme`, `StockTrackerColors`) + a hand-rolled Compose Canvas charting layer under `chart/` (`AreaLineChart`, `MultiLineChart`, `DonutChart`, `sparseLabelIndices`, `formatChartValue`) — no external charting dependency, to match the app's minimal-dependency approach
+- `feature/portfolio` — list screen, position cards, add/edit/sell dialogs, import screen, charts, ViewModels
+- `feature/settings` — server URL, API key, display currency
+
+### Sync model
+
+Room is the offline-first source of truth; every mutation commits locally first, then enqueues a `WorkManager` push of the **entire array** for that key (matches the server's whole-array-per-key storage model — there's no per-record endpoint). A three-way merge (local diff + remote diff, both against a last-synced snapshot) reconciles concurrent edits made on the phone and the web app while one was offline. A genuine same-record conflict (e.g. a sell price edited on both devices) surfaces a one-tap resolution prompt (`ConflictCenter`/`ConflictScreen`) instead of silently picking a winner. `ManualPriceEntity` carries a real `updatedAt`, so a same-ticker manual-price conflict resolves by recency automatically; positions and portfolios have no modification timestamp, so they always prompt.
+
+### Charts
+
+Ported from `PriceChart.tsx` / `PortfolioPnLChart.tsx` / `PortfolioPieCharts.tsx`: per-ticker price history (in each position card's expanded view), portfolio Total Return / Portfolio Value (Cost Basis vs. Current Value, toggle in `PortfolioPnlChartCard`), and three donut charts (Cost Basis / Current Value / Total Return incl. Dividends, grouped by type/ticker/currency in `PortfolioPieChartsCard`). Per-ticker and portfolio history fetch directly from Yahoo via `HistoryClient`; portfolio-chart math (FX-at-date conversion, synthetic histories for manual-priced tickers, live-quote injection as today's bar) lives in `core:calc`'s `ChartMath.kt`, orchestrated by `PortfolioChartViewModel`.
 | Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR | 960 px |

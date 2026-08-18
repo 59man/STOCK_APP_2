@@ -194,6 +194,12 @@ internal fun PortfolioListScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (uiState.visibleRows.isNotEmpty()) {
+                        item(key = "pnl-chart") { PortfolioPnlChartCard(portfolioId = uiState.activePortfolioId) }
+                        item(key = "pie-charts") {
+                            PortfolioPieChartsCard(uiState.visibleRows, uiState.displayCurrency, uiState.rates)
+                        }
+                    }
                     items(uiState.visibleRows, key = { it.ticker }) { row ->
                         PositionCard(
                             row = row,
@@ -536,6 +542,12 @@ private fun PositionCard(
                     rates = rates,
                     onSetDivTax = onSetDivTax,
                     onClearDivTax = onClearDivTax,
+                )
+                PriceChartCard(
+                    ticker = row.ticker,
+                    tickerCurrency = row.currency,
+                    displayCurrency = displayCurrency,
+                    rates = rates,
                 )
             }
         }
