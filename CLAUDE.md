@@ -16,18 +16,24 @@ If port 3001 is already in use: `kill $(lsof -ti:3001)`
 
 No linter configured.
 
+## Auth
+
+`/api/persist/*` (and, in production, `/api/yahoo/*` + `/api/stooq/*`) require an `X-API-Key` header matching `PERSIST_API_KEY`. Copy `.env.example` to `.env` and fill in a real secret (`openssl rand -hex 32`) — `PERSIST_API_KEY` is read by the server at runtime, `VITE_PERSIST_API_KEY` (same value) is baked into the browser bundle at build time, so both must be set and must match. `npm run dev` fails open with a console warning if `.env` is missing (no setup needed for local dev); `NODE_ENV=production` refuses to start without `PERSIST_API_KEY` set. `GET /api/health` is always unauthenticated.
+
 ## Docker
 
 ```bash
 docker compose up -d --build   # local compose run (port 8080, data + backups bind-mounted, log rotation)
+                                # reads VITE_PERSIST_API_KEY / PERSIST_API_KEY from .env automatically
 
-docker build -t 59man/stock-tracker:latest .
+docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY=<same-secret> .
 docker push 59man/stock-tracker:latest
 
 # Run locally on port 4000
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /absolute/path/to/server/data.json:/app/server/data.json \
   -v /absolute/path/to/backups:/app/server/backups \
+  -e PERSIST_API_KEY=<same-secret> \
   --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
@@ -36,8 +42,9 @@ docker run -d --name stock-tracker -p 4000:8080 \
 - Always use an **absolute path** for the volume mount — `~/...` resolves relative to the shell user and often points to a different file.
 - All personal files in `server/` are excluded from the image via `.dockerignore` (`server/*.json`, `server/*.bak`, `server/*.pdf`, `server/backups/`) — never weaken these, the directory holds real portfolio data and bank statements. The bind-mounts provide `data.json` and `backups/` at runtime.
 - The backups mount is optional but recommended — without it the daily backups stay inside the container and vanish on `docker rm`.
-- The image has a `HEALTHCHECK` hitting `/api/persist/...` every 60 s; `docker ps` shows healthy/unhealthy.
-- In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout.
+- **`VITE_PERSIST_API_KEY` is a build arg, not a runtime env var** — it's inlined into the built JS at `npm run build` time inside the image's builder stage. Changing it means rebuilding the image, not just restarting the container. `PERSIST_API_KEY` (the server-side runtime check) can change with a plain restart.
+- The image has a `HEALTHCHECK` hitting `/api/health` every 60 s; `docker ps` shows healthy/unhealthy.
+- In production (`NODE_ENV=production`), Express also serves `dist/` as static files and proxies `/api/yahoo/*` → Yahoo Finance and `/api/stooq/*` → Stooq (replacing the Vite dev proxy). Both use a shared `proxyRequest()` helper with a 15 s AbortController timeout, and both require `X-API-Key` like `/api/persist/*`.
 
 ### Update a running container
 
@@ -47,6 +54,7 @@ docker stop stock-tracker && docker rm stock-tracker
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /absolute/path/to/server/data.json:/app/server/data.json \
   -v /absolute/path/to/backups:/app/server/backups \
+  -e PERSIST_API_KEY=<same-secret> \
   --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest

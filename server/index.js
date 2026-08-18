@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from 'express'
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -80,6 +81,35 @@ process.on('SIGTERM', () => { clearTimeout(flushTimer); flushToDisk(); process.e
 // ── App ───────────────────────────────────────────────────────────────────────
 const app = express()
 app.use(express.json({ limit: '10mb' }))
+
+// Unauthenticated — the Docker HEALTHCHECK and any pre-auth uptime check hit this.
+app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+// Shared-secret guard for /api/persist (and, in prod, /api/yahoo + /api/stooq).
+// Dev fails open with a warning so `npm run dev` needs no setup; prod fails
+// closed at startup rather than silently serving an unauthenticated instance
+// reachable from a phone.
+const API_KEY = process.env.PERSIST_API_KEY
+if (!API_KEY) {
+  if (IS_PROD) {
+    logErr('PERSIST_API_KEY is not set — refusing to start in production without it.')
+    process.exit(1)
+  }
+  log('PERSIST_API_KEY not set — running without auth (dev only).')
+}
+
+function requireApiKey(req, res, next) {
+  if (!API_KEY) return next()
+  if (req.header('X-API-Key') !== API_KEY) {
+    return res.status(401).json({ error: 'unauthorized' })
+  }
+  next()
+}
+
+app.use('/api/persist', requireApiKey)
+app.use('/api/yahoo', requireApiKey)
+app.use('/api/stooq', requireApiKey)
 
 // In production the Vite dev-server proxy is absent, so Express forwards external requests.
 async function proxyRequest(res, url, extraHeaders = {}) {

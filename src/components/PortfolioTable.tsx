@@ -278,11 +278,11 @@ export function PortfolioTable({
     return () => document.removeEventListener('mousedown', handler)
   }, [showColPanel])
 
-  const activeColumns = colConfig.filter(c => {
-    if (!c.visible) return false
-    const def = COLUMN_DEFS.find(d => d.key === c.key)
-    return !def?.hideBelow || window.innerWidth > def.hideBelow
-  })
+  // hideBelow only drives the *default* computed by loadColConfig/resetColumns.
+  // Once a column has a stored visible state — including an explicit toggle in
+  // the column panel — that choice wins here; the table scrolls horizontally
+  // (see .table-scroll) rather than silently re-hiding what the user picked.
+  const activeColumns = colConfig.filter(c => c.visible)
 
   const toggleColumn = (key: ColKey) => {
     const next = colConfig.map(c => c.key === key ? { ...c, visible: !c.visible } : c)

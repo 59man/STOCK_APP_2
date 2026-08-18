@@ -1,6 +1,11 @@
 services:
   stock-tracker:
-    build: .
+    build:
+      context: .
+      args:
+        # Baked into the frontend bundle at build time — see Dockerfile. Must match
+        # PERSIST_API_KEY below, and requires a rebuild (not just a restart) to change.
+        VITE_PERSIST_API_KEY: ${VITE_PERSIST_API_KEY}
     ports:
       - "8080:8080"
     volumes:
@@ -12,6 +17,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "8080"
+      PERSIST_API_KEY: ${PERSIST_API_KEY}
     logging:
       driver: json-file
       options:

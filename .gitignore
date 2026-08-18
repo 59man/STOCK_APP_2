@@ -5,6 +5,20 @@ server/*.json
 audits/
 server/*.bak
 .playwright-mcp/
+.serena/
 server/backups/
 server/*.pdf
 server/*.xlsx
+.env
+
+# Android (see /android)
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.idea/
+android/*.iml
+android/**/*.iml
+android/captures/
+android/.cxx/
+android/*.apk
+android/*.aab
