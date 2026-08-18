@@ -520,6 +520,10 @@ body {
 }
 
 .table-scroll { overflow-x: auto; }
+/* Lets the table grow past the viewport when explicit column choices need
+   more room than fits — .table-scroll's overflow-x then makes it scrollable
+   instead of squeezing every column into an unreadable sliver. */
+.table-scroll table { min-width: max-content; }
 
 table { width: 100%; border-collapse: collapse; }
 th {
