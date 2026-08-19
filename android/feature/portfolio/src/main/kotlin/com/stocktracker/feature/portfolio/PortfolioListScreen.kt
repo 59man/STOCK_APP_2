@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -610,6 +613,7 @@ fun PositionDetailRoute(
                     AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
                 Column(Modifier.fillMaxWidth()) {
+                    if (row.positions.isNotEmpty()) LotTableHeader()
                     row.positions.forEach { lot ->
                         LotRow(lot, onEdit = { editTarget = lot })
                     }
@@ -654,30 +658,60 @@ fun PositionDetailRoute(
 }
 
 @Composable
+private fun LotTableHeader() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md, bottom = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val headerStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+        val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+        Text("Date", modifier = Modifier.weight(1.8f), style = headerStyle, color = headerColor, maxLines = 1)
+        Text("Qty", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
+        Text("Price", modifier = Modifier.weight(1.5f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
+        Text("Status", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
+        Spacer(modifier = Modifier.width(40.dp))
+    }
+    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+}
+
+@Composable
 private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit) {
     val isSold = lot.sellDate != null && lot.sellPrice != null
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Text(
-                "${lot.buyDate} · ${formatQty(lot.quantity)} @ ${formatMoney(lot.buyPrice)} ${lot.currency}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            val sub = buildString {
-                lot.broker?.let { append(it) }
-                if (isSold) {
-                    if (isNotEmpty()) append(" · ")
-                    append("sold ${lot.sellDate} @ ${formatMoney(lot.sellPrice ?: 0.0)}")
-                }
-            }
-            if (sub.isNotEmpty()) {
-                Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Text(lot.buyDate, modifier = Modifier.weight(1.8f), style = NumericTypography.labelMedium, maxLines = 1)
+        Text(
+            formatQty(lot.quantity),
+            modifier = Modifier.weight(0.8f),
+            style = NumericTypography.labelMedium,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+        Text(
+            "${formatMoney(lot.buyPrice)} ${lot.currency}",
+            modifier = Modifier.weight(1.5f),
+            style = NumericTypography.labelMedium,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        Text(
+            // Broker and sell date/price are still fully editable via the Edit dialog — a status
+            // word is all that fits as a table column on a phone width, the detail is one tap away.
+            if (isSold) "Sold" else "Open",
+            modifier = Modifier.weight(0.8f),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (isSold) MaterialTheme.colorScheme.onSurfaceVariant else StockTrackerColors.gain,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+        IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Filled.Edit, contentDescription = "Edit lot", modifier = Modifier.size(18.dp))
         }
-        AppButton(text = "Edit", onClick = onEdit)
     }
 }
 
