@@ -30,8 +30,10 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,6 +56,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.importer.ColumnMapping
+import com.stocktracker.core.importer.UNVERIFIED_BROKER
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -264,6 +267,8 @@ private fun ReadyContent(
     onCancel: () -> Unit,
 ) {
     val tickers = state.result.valid.map { it.ticker }.distinct()
+    val unverifiedCount = state.result.valid.count { it.broker == UNVERIFIED_BROKER }
+
     Column(
         Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -276,6 +281,24 @@ private fun ReadyContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // Best-effort generic parser fallback (PDF text heuristic or OCR) — broker/currency are
+        // guesses, not read off the statement, so flag it loudly rather than let it sit quietly
+        // in a field nobody reads.
+        if (unverifiedCount > 0) {
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(
+                    "⚠ $unverifiedCount position${if (unverifiedCount == 1) "" else "s"} guessed from a scan or photo — " +
+                        "broker and currency weren't read off the statement, double-check before importing.",
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
 
         if (state.hasCurrentPortfolio) {
             Column {

@@ -42,6 +42,11 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
             modifier = Modifier.padding(padding).padding(16.dp).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Text(
+                "Get your API key from the 🔑 button in the web app, then paste both here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             OutlinedTextField(
                 value = uiState.serverUrl,
                 onValueChange = { onAction(SettingsAction.ServerUrlChanged(it)) },

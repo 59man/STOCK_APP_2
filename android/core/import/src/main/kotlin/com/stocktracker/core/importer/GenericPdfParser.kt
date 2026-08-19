@@ -72,7 +72,7 @@ suspend fun parseGeneric(lines: List<String>, lookupIsins: IsinLookup): ParseRes
             buyPrice = h.price,
             buyDate = h.date,
             currency = "USD", // unknown — user must verify
-            broker = "Unknown (verify)",
+            broker = UNVERIFIED_BROKER,
             isin = h.isin,
         )
     }

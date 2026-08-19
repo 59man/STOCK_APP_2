@@ -6,6 +6,9 @@ import java.util.UUID
 
 fun newId(): String = UUID.randomUUID().toString()
 
+/** Broker tag stamped on positions the generic heuristic parser (PDF fallback or OCR) had to guess at — never read directly off a statement. */
+const val UNVERIFIED_BROKER = "Unknown (verify)"
+
 /** Mirrors QuoteInfo in src/utils/yahooLookup.ts. */
 data class QuoteInfo(val ticker: String, val type: PositionType)
 
