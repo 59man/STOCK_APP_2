@@ -176,12 +176,12 @@ internal fun PortfolioListScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             if (uiState.conflictCount > 0) {
                 Surface(
-                    color = StockTrackerColors.Loss.copy(alpha = 0.15f),
+                    color = StockTrackerColors.loss.copy(alpha = 0.15f),
                     modifier = Modifier.fillMaxWidth().clickable { onOpenConflicts() },
                 ) {
                     Text(
                         "⚠ ${uiState.conflictCount} sync conflict${if (uiState.conflictCount == 1) "" else "s"} — tap to review",
-                        color = StockTrackerColors.Loss,
+                        color = StockTrackerColors.loss,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
@@ -607,10 +607,7 @@ fun PositionDetailRoute(
             ) {
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(
-                        onClick = { editTickerTarget = true },
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-                    ) { Text("✎ Edit ticker/name/ISIN") }
+                    AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
                 Column(Modifier.fillMaxWidth()) {
                     row.positions.forEach { lot ->
@@ -680,10 +677,7 @@ private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit
                 Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        TextButton(
-            onClick = onEdit,
-            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
-        ) { Text("Edit") }
+        AppButton(text = "Edit", onClick = onEdit)
     }
 }
 
@@ -748,7 +742,7 @@ private fun DividendPanel(
                         color = if (isOverridden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.clickable { editTarget = div }.padding(end = 12.dp),
                     )
-                    Text(formatMoney(netDc), style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.Gain)
+                    Text(formatMoney(netDc), style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.gain)
                 }
             }
         }

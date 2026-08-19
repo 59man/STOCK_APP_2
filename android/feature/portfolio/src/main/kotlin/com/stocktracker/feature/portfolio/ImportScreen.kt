@@ -233,7 +233,7 @@ private fun ParsingContent() {
 @Composable
 private fun ErrorContent(message: String, onRetry: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Text(message, color = StockTrackerColors.Loss, textAlign = TextAlign.Center)
+        Text(message, color = StockTrackerColors.loss, textAlign = TextAlign.Center)
         Spacer(Modifier.height(16.dp))
         Button(onClick = onRetry) { Text("Try again") }
     }

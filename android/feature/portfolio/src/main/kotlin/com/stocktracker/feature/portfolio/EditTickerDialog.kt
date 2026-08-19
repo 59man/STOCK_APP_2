@@ -84,8 +84,8 @@ fun EditTickerDialog(row: PortfolioRow, onDismiss: () -> Unit, onSave: (List<Pos
                     ) { Text(if (fetchTest == FetchTestState.Loading) "…" else "▶ Test") }
                 }
                 when (val state = fetchTest) {
-                    is FetchTestState.Ok -> Text("✓ ${state.msg}", style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.Gain)
-                    is FetchTestState.Error -> Text("✗ ${state.msg}", style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.Loss)
+                    is FetchTestState.Ok -> Text("✓ ${state.msg}", style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.gain)
+                    is FetchTestState.Error -> Text("✗ ${state.msg}", style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.loss)
                     else -> {}
                 }
 

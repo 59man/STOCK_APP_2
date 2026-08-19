@@ -86,8 +86,8 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
                     ) { Text(if (fetchTest == FetchTestState.Loading) "…" else "▶ Test") }
                 }
                 when (val state = fetchTest) {
-                    is FetchTestState.Ok -> Text("✓ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.Gain)
-                    is FetchTestState.Error -> Text("✗ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.Loss)
+                    is FetchTestState.Ok -> Text("✓ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.gain)
+                    is FetchTestState.Error -> Text("✗ ${state.msg}", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = StockTrackerColors.loss)
                     else -> {}
                 }
 
