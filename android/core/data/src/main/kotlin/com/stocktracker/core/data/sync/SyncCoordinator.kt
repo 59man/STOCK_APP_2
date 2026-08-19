@@ -13,6 +13,7 @@ import com.stocktracker.core.data.PortfolioRepository
 import com.stocktracker.core.data.PositionRepository
 import com.stocktracker.core.network.PersistKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -60,6 +61,20 @@ class SyncCoordinator @Inject constructor(
 
     suspend fun pullPortfolioList() {
         runCatching { portfolioRepository.pull() }
+    }
+
+    /**
+     * Pulls the portfolio list, then every synced key for every portfolio in
+     * that (now-current) list — not just whichever one happens to be active.
+     * Previously "Sync now" and app-foreground both only ever pulled the
+     * active portfolio's positions/manual prices/div-tax overrides, so any
+     * other portfolio stayed at whatever was last synced (or empty, on a
+     * fresh install) until the user switched to it *and* backgrounded and
+     * re-foregrounded the app while it was active.
+     */
+    suspend fun pullAllPortfolios() {
+        pullPortfolioList()
+        portfolioRepository.observe().first().forEach { portfolio -> pullPortfolio(portfolio.id) }
     }
 
     /**

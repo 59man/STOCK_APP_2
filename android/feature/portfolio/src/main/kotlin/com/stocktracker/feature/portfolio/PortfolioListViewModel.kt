@@ -235,15 +235,9 @@ class PortfolioListViewModel @Inject constructor(
 
     private fun refresh() {
         viewModelScope.launch {
-            syncCoordinator.pullPortfolioList()
-            // activePortfolioId can still be null here on a fresh Room DB — it's only ever set
-            // as a side effect inside the uiState combine block below, which needs an active
-            // collector and a portfolios emission to have already run. Resolve the same
-            // first-portfolio fallback directly against the just-pulled list instead of trusting
-            // that side effect has fired yet, otherwise positions silently never sync after a
-            // fresh install until the app happens to background/foreground once more.
-            val id = activePortfolioId.value ?: portfolioRepository.observe().first().firstOrNull()?.id
-            id?.let { syncCoordinator.pullPortfolio(it) }
+            // Pulls every portfolio, not just the active one — see
+            // SyncCoordinator.pullAllPortfolios for why that matters.
+            syncCoordinator.pullAllPortfolios()
         }
     }
 }

@@ -62,7 +62,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun syncNow() {
         viewModelScope.launch {
-            syncCoordinator.pullPortfolioList()
+            syncCoordinator.pullAllPortfolios()
             settingsRepository.setLastSyncedAt(Instant.now().toString())
         }
     }
