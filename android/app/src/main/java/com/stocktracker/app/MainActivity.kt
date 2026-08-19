@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.stocktracker.core.data.PortfolioRepository
+import com.stocktracker.core.data.SettingsRepository
 import com.stocktracker.core.designsystem.StockTrackerTheme
 import com.stocktracker.feature.portfolio.ConflictRoute
 import com.stocktracker.feature.portfolio.ImportRoute
@@ -27,6 +30,7 @@ import com.stocktracker.feature.portfolio.PositionDetailRoute
 import com.stocktracker.feature.settings.SettingsRoute
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 private object Routes {
@@ -52,6 +56,7 @@ private fun extractSharedUri(intent: Intent?): Uri? =
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var portfolioRepository: PortfolioRepository
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     private var sharedUriState = mutableStateOf<Uri?>(null)
 
@@ -59,7 +64,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedUriState.value = extractSharedUri(intent)
         setContent {
-            StockTrackerTheme {
+            val themeMode by settingsRepository.settings.map { it.themeMode }.collectAsState(initial = "system")
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (themeMode) {
+                "dark" -> true
+                "light" -> false
+                else -> systemDark
+            }
+            StockTrackerTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val navController = rememberNavController()
                     var sharedUri by sharedUriState

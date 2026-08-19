@@ -31,6 +31,7 @@ class SettingsViewModel @Inject constructor(
             displayCurrency = settings.displayCurrency,
             lastSyncedAt = settings.lastSyncedAt,
             connectionTest = test,
+            themeMode = settings.themeMode,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -39,6 +40,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsAction.ServerUrlChanged -> viewModelScope.launch { settingsRepository.setServerUrl(action.value) }
             is SettingsAction.ApiKeyChanged -> viewModelScope.launch { settingsRepository.setApiKey(action.value) }
             is SettingsAction.DisplayCurrencyChanged -> viewModelScope.launch { settingsRepository.setDisplayCurrency(action.value) }
+            is SettingsAction.ThemeModeChanged -> viewModelScope.launch { settingsRepository.setThemeMode(action.value) }
             SettingsAction.TestConnection -> testConnection()
             SettingsAction.SyncNow -> syncNow()
         }

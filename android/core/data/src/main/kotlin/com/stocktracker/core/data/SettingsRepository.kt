@@ -17,6 +17,8 @@ data class AppSettings(
     val apiKey: String = "",
     val displayCurrency: String = "CZK",
     val lastSyncedAt: String? = null,
+    /** "system" | "light" | "dark" */
+    val themeMode: String = "system",
 )
 
 /**
@@ -33,6 +35,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         val API_KEY = stringPreferencesKey("api_key")
         val DISPLAY_CURRENCY = stringPreferencesKey("display_currency")
         val LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -41,6 +44,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
             apiKey = prefs[Keys.API_KEY] ?: "",
             displayCurrency = prefs[Keys.DISPLAY_CURRENCY] ?: "CZK",
             lastSyncedAt = prefs[Keys.LAST_SYNCED_AT],
+            themeMode = prefs[Keys.THEME_MODE] ?: "system",
         )
     }
 
@@ -48,4 +52,5 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
     suspend fun setApiKey(key: String) = dataStore.edit { it[Keys.API_KEY] = key }
     suspend fun setDisplayCurrency(currency: String) = dataStore.edit { it[Keys.DISPLAY_CURRENCY] = currency }
     suspend fun setLastSyncedAt(isoTimestamp: String) = dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp }
+    suspend fun setThemeMode(mode: String) = dataStore.edit { it[Keys.THEME_MODE] = mode }
 }

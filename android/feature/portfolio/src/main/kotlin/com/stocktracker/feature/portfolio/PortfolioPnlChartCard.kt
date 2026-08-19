@@ -5,10 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.designsystem.chart.AreaLineChart
 import com.stocktracker.core.designsystem.chart.ChartSeries
+import com.stocktracker.core.designsystem.components.ToggleChip
 import com.stocktracker.core.designsystem.chart.MultiLineChart
 import java.util.Locale
 
@@ -55,10 +54,10 @@ fun PortfolioPnlChartCard(
         )
 
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ViewToggleButton("Total Return", uiState.view == PnlView.RETURN) {
+            ToggleChip("Total Return", uiState.view == PnlView.RETURN) {
                 viewModel.onAction(PortfolioChartAction.SetView(PnlView.RETURN))
             }
-            ViewToggleButton("Portfolio Value", uiState.view == PnlView.VALUE) {
+            ToggleChip("Portfolio Value", uiState.view == PnlView.VALUE) {
                 viewModel.onAction(PortfolioChartAction.SetView(PnlView.VALUE))
             }
         }
@@ -100,14 +99,5 @@ fun PortfolioPnlChartCard(
     }
 }
 
-@Composable
-private fun ViewToggleButton(label: String, active: Boolean, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-    ) { Text(label, style = MaterialTheme.typography.labelMedium) }
-}
 
 private fun fmtCurrencyChart(v: Double, currency: String): String = String.format(Locale.US, "%,.0f %s", v, currency)

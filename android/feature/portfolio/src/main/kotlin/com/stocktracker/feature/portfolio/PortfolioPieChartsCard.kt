@@ -9,7 +9,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.designsystem.chart.DonutChart
 import com.stocktracker.core.designsystem.chart.DonutSlice
+import com.stocktracker.core.designsystem.components.ToggleChip
 import com.stocktracker.core.model.PortfolioRow
 import com.stocktracker.core.model.PositionType
 import java.util.Locale
@@ -125,9 +125,9 @@ fun PortfolioPieChartsCard(rows: List<PortfolioRow>, displayCurrency: String, ra
             Text("Portfolio Distribution", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-            GroupToggleButton("By Type", groupBy == GroupBy.TYPE) { groupBy = GroupBy.TYPE }
-            GroupToggleButton("By Ticker", groupBy == GroupBy.TICKER) { groupBy = GroupBy.TICKER }
-            GroupToggleButton("By Currency", groupBy == GroupBy.CURRENCY) { groupBy = GroupBy.CURRENCY }
+            ToggleChip("By Type", groupBy == GroupBy.TYPE) { groupBy = GroupBy.TYPE }
+            ToggleChip("By Ticker", groupBy == GroupBy.TICKER) { groupBy = GroupBy.TICKER }
+            ToggleChip("By Currency", groupBy == GroupBy.CURRENCY) { groupBy = GroupBy.CURRENCY }
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp)) {
@@ -156,12 +156,3 @@ fun PortfolioPieChartsCard(rows: List<PortfolioRow>, displayCurrency: String, ra
     }
 }
 
-@Composable
-private fun GroupToggleButton(label: String, active: Boolean, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-            contentColor = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-    ) { Text(label, style = MaterialTheme.typography.labelMedium) }
-}

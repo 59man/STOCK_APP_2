@@ -13,12 +13,15 @@ data class SettingsUiState(
     val displayCurrency: String = "CZK",
     val lastSyncedAt: String? = null,
     val connectionTest: ConnectionTestState = ConnectionTestState.Idle,
+    /** "system" | "light" | "dark" */
+    val themeMode: String = "system",
 )
 
 sealed interface SettingsAction {
     data class ServerUrlChanged(val value: String) : SettingsAction
     data class ApiKeyChanged(val value: String) : SettingsAction
     data class DisplayCurrencyChanged(val value: String) : SettingsAction
+    data class ThemeModeChanged(val value: String) : SettingsAction
     data object TestConnection : SettingsAction
     data object SyncNow : SettingsAction
 }

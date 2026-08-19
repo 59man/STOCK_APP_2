@@ -13,6 +13,9 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -29,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private val CURRENCIES = listOf("CZK", "USD", "EUR")
+private val THEME_MODES = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
 
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
@@ -104,6 +108,21 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                             text = { Text(currency) },
                             onClick = { onAction(SettingsAction.DisplayCurrencyChanged(currency)); currencyExpanded = false },
                         )
+                    }
+                }
+            }
+
+            Column {
+                Text("Theme", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    THEME_MODES.forEachIndexed { index, (value, label) ->
+                        SegmentedButton(
+                            selected = uiState.themeMode == value,
+                            onClick = { onAction(SettingsAction.ThemeModeChanged(value)) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = THEME_MODES.size),
+                        ) {
+                            Text(label)
+                        }
                     }
                 }
             }

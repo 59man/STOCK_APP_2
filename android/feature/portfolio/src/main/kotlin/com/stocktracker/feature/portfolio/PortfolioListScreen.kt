@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -59,7 +58,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stocktracker.core.designsystem.NumericTypography
+import com.stocktracker.core.designsystem.Spacing
 import com.stocktracker.core.designsystem.StockTrackerColors
+import com.stocktracker.core.designsystem.components.AppButton
+import com.stocktracker.core.designsystem.components.AppButtonVariant
+import com.stocktracker.core.designsystem.components.AppCard
+import com.stocktracker.core.designsystem.components.Badge
 import com.stocktracker.core.model.PortfolioRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -417,43 +422,37 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
     val prevTotalValue = totalValue - totalDailyChange
     val dailyChangePercent = if (prevTotalValue > 0) (totalDailyChange / prevTotalValue) * 100 else 0.0
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(Modifier.padding(20.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+        AppCard(modifier = Modifier.fillMaxWidth(), contentPadding = Spacing.xl) {
+            Text(
+                "PORTFOLIO VALUE · $displayCurrency",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.sp,
+            )
+            Text(
+                formatMoney(totalValue),
+                style = NumericTypography.headlineEmphasis,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+            Row(modifier = Modifier.padding(top = Spacing.sm)) {
                 Text(
-                    "PORTFOLIO VALUE · $displayCurrency",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 1.sp,
+                    "${if (totalReturn >= 0) "▲" else "▼"} ${formatMoney(totalReturn)} (${formatPercent(returnPercent)})",
+                    style = NumericTypography.bodyMedium,
+                    color = pnlColor(totalReturn),
                 )
-                Text(
-                    formatMoney(totalValue),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                Row(modifier = Modifier.padding(top = 6.dp)) {
-                    Text(
-                        "${if (totalReturn >= 0) "▲" else "▼"} ${formatMoney(totalReturn)} (${formatPercent(returnPercent)})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = pnlColor(totalReturn),
-                    )
-                }
             }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             SummaryCard("P&L", formatMoney(totalPnl), Modifier.weight(1f), color = pnlColor(totalPnl))
             SummaryCard("Total return", formatMoney(totalReturn), Modifier.weight(1f), color = pnlColor(totalReturn))
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             SummaryCard(
                 "Today's change",
@@ -465,7 +464,7 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
                 "Net dividends",
                 if (totalDividends > 0) "+" + formatMoney(totalDividends) else "—",
                 Modifier.weight(1f),
-                color = if (totalDividends > 0) StockTrackerColors.Gain else null,
+                color = if (totalDividends > 0) StockTrackerColors.gain else null,
             )
             SummaryCard(
                 "IRR p.a.",
@@ -479,19 +478,18 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
 
 @Composable
 private fun SummaryCard(label: String, value: String, modifier: Modifier, color: Color? = null) {
-    Card(
+    AppCard(
         modifier = modifier,
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentPadding = Spacing.md,
     ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = color ?: MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = NumericTypography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color ?: MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -507,98 +505,79 @@ private fun PositionCard(
 ) {
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            // Transaction/lot details, dividends, and the price chart live on their own screen now
-            // (PositionDetailRoute) — cramming them inline here, under an already-tall summary
-            // section, made them unreadably small on a phone.
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetail),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column {
-                    Row {
-                        Text(row.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        if (row.isClosed) {
-                            Surface(color = Color.Gray, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(start = 6.dp)) {
-                                Text("SOLD", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall, color = Color.White)
-                            }
-                        }
-                        Text(
-                            " ›",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        // Transaction/lot details, dividends, and the price chart live on their own screen now
+        // (PositionDetailRoute) — cramming them inline here, under an already-tall summary
+        // section, made them unreadably small on a phone.
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetail),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column {
+                Row {
+                    Text(row.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (row.isClosed) {
+                        Badge(
+                            "SOLD",
+                            modifier = Modifier.padding(start = Spacing.sm),
+                            containerColor = Color.Gray,
+                            contentColor = Color.White,
                         )
                     }
-                    Text(row.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        formatMoney(dc(row.currentValue)),
+                        " ›",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        formatMoney(dc(row.dailyChange)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = pnlColor(row.dailyChange),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Text(row.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    "P&L ${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = pnlColor(row.pnl),
+                    formatMoney(dc(row.currentValue)),
+                    style = NumericTypography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "Return ${formatMoney(dc(row.totalReturn))}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = pnlColor(row.totalReturn),
+                    formatMoney(dc(row.dailyChange)),
+                    style = NumericTypography.bodyMedium,
+                    color = pnlColor(row.dailyChange),
                 )
             }
-            row.irr?.let { irr ->
-                Text(
-                    "IRR ${formatPercent(irr * 100)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "P&L ${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
+                style = NumericTypography.bodyMedium,
+                color = pnlColor(row.pnl),
+            )
+            Text(
+                "Return ${formatMoney(dc(row.totalReturn))}",
+                style = NumericTypography.bodyMedium,
+                color = pnlColor(row.totalReturn),
+            )
+        }
+        row.irr?.let { irr ->
+            Text(
+                "IRR ${formatPercent(irr * 100)}",
+                style = NumericTypography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = Spacing.xs),
+            )
+        }
+        if (!row.isClosed) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.End) {
+                // A manually-priced ticker (no live feed) is easy to forget about and let go
+                // stale — the primary accent makes "M $" visually distinct from the other two
+                // neutral actions instead of blending in.
+                AppButton(
+                    text = if (row.priceIsManual) "M ${'$'}" else "Set price",
+                    onClick = onSetManualPrice,
+                    variant = if (row.priceIsManual) AppButtonVariant.Primary else AppButtonVariant.Secondary,
+                    emphasized = row.priceIsManual,
                 )
-            }
-            if (!row.isClosed) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                    val neutralButtonColors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    // A manually-priced ticker (no live feed) is easy to forget about and let go
-                    // stale — the violet accent makes "M $" visually distinct from the other two
-                    // neutral-grey actions instead of blending in.
-                    TextButton(
-                        onClick = onSetManualPrice,
-                        colors = if (row.priceIsManual) {
-                            androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-                        } else {
-                            neutralButtonColors
-                        },
-                    ) {
-                        Text(
-                            if (row.priceIsManual) "M ${'$'}" else "Set price",
-                            fontWeight = if (row.priceIsManual) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
-                    TextButton(onClick = onSell, colors = neutralButtonColors) { Text("Sell") }
-                    TextButton(
-                        onClick = onDelete,
-                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
-                            contentColor = StockTrackerColors.Loss,
-                        ),
-                    ) { Text("Delete") }
-                }
+                AppButton(text = "Sell", onClick = onSell, variant = AppButtonVariant.Secondary)
+                AppButton(text = "Delete", onClick = onDelete, variant = AppButtonVariant.Danger)
             }
         }
     }
@@ -835,8 +814,10 @@ private fun DivTaxEditDialog(
     )
 }
 
-private fun pnlColor(value: Double): Color = if (value < 0) StockTrackerColors.Loss else StockTrackerColors.Gain
-private fun pnlColor(formatted: String): Color = if (formatted.startsWith("-")) StockTrackerColors.Loss else StockTrackerColors.Gain
+@Composable
+private fun pnlColor(value: Double): Color = if (value < 0) StockTrackerColors.loss else StockTrackerColors.gain
+@Composable
+private fun pnlColor(formatted: String): Color = if (formatted.startsWith("-")) StockTrackerColors.loss else StockTrackerColors.gain
 
 private fun formatMoney(value: Double): String = String.format(Locale.US, "%,.2f", value)
 private fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
