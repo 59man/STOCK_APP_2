@@ -109,9 +109,22 @@ class ImportViewModel @Inject constructor(
                 portfolioRepository.add(state.newPortfolioName.ifBlank { "Imported" }).id
             }
             val currencyOverride = state.currencyOverride.takeIf { state.result.currencyUncertain }
-            importRepository.commit(portfolioId, state.result, currencyOverride)
-            _uiState.value = ImportUiState.Done(state.result.valid.size)
+            val commitResult = importRepository.commit(portfolioId, state.result, currencyOverride)
+            _uiState.value = ImportUiState.Done(commitResult.committed, commitResult.duplicatesSkipped)
         }
+    }
+
+    /** A photographed statement, OCR'd on-device — feeds the same generic parser fallback as an unrecognized PDF. */
+    fun onOcrTextExtracted(lines: List<String>, hasCurrentPortfolio: Boolean) {
+        _uiState.value = ImportUiState.Parsing
+        viewModelScope.launch {
+            val result = importRepository.parseOcrText(lines)
+            onParsed("Scanned statement", result, hasCurrentPortfolio)
+        }
+    }
+
+    fun onOcrFailed() {
+        _uiState.value = ImportUiState.Error("Couldn't read that photo — try a clearer, well-lit shot of the statement.")
     }
 
     fun reset() {

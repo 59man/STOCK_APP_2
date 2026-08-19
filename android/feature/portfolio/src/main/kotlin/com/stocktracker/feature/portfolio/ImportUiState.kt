@@ -29,7 +29,7 @@ sealed interface ImportUiState {
     ) : ImportUiState
 
     data class Error(val message: String) : ImportUiState
-    data class Done(val count: Int) : ImportUiState
+    data class Done(val count: Int, val duplicatesSkipped: Int = 0) : ImportUiState
 }
 
 val ImportUiState.MappingNeeded.requiredFieldsMapped: Boolean
