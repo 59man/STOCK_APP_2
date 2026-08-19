@@ -179,7 +179,7 @@ internal fun PortfolioListScreen(
                 }
             }
             PortfolioTabs(uiState, onAction)
-            SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates)
+            SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
 
             if (uiState.closedCount > 0) {
                 TextButton(onClick = { onAction(PortfolioListAction.ToggleShowClosed) }) {
@@ -364,14 +364,18 @@ private fun AddPortfolioDialog(onDismiss: () -> Unit, onConfirm: (String) -> Uni
 }
 
 @Composable
-private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rates: Map<String, Double>) {
+private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rates: Map<String, Double>, portfolioIrr: Double?) {
     fun dc(amount: Double, from: String) = com.stocktracker.core.calc.convert(amount, from, displayCurrency, rates)
 
     val totalValue = rows.sumOf { dc(it.currentValue, it.currency) }
     val totalCostBasis = rows.sumOf { dc(it.costBasis, it.currency) }
     val totalPnl = rows.sumOf { dc(it.pnl, it.currency) }
+    val totalDividends = rows.sumOf { dc(it.dividendIncome, it.currency) }
     val totalReturn = rows.sumOf { dc(it.totalReturn, it.currency) }
     val returnPercent = if (totalCostBasis > 0) (totalReturn / totalCostBasis) * 100 else 0.0
+    val totalDailyChange = rows.sumOf { dc(it.dailyChange, it.currency) }
+    val prevTotalValue = totalValue - totalDailyChange
+    val dailyChangePercent = if (prevTotalValue > 0) (totalDailyChange / prevTotalValue) * 100 else 0.0
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Card(
@@ -406,6 +410,29 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
         ) {
             SummaryCard("P&L", formatMoney(totalPnl), Modifier.weight(1f), color = pnlColor(totalPnl))
             SummaryCard("Total return", formatMoney(totalReturn), Modifier.weight(1f), color = pnlColor(totalReturn))
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SummaryCard(
+                "Today's change",
+                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)} (${formatPercent(dailyChangePercent)})",
+                Modifier.weight(1f),
+                color = pnlColor(totalDailyChange),
+            )
+            SummaryCard(
+                "Net dividends",
+                if (totalDividends > 0) "+" + formatMoney(totalDividends) else "—",
+                Modifier.weight(1f),
+                color = if (totalDividends > 0) StockTrackerColors.Gain else null,
+            )
+            SummaryCard(
+                "IRR p.a.",
+                if (portfolioIrr != null) formatPercent(portfolioIrr * 100) else "…",
+                Modifier.weight(1f),
+                color = if (portfolioIrr != null) pnlColor(portfolioIrr) else null,
+            )
         }
     }
 }

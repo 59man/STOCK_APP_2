@@ -2,6 +2,7 @@ package com.stocktracker.feature.portfolio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.stocktracker.core.calc.computePortfolioIrr
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.calc.deriveRow
 import com.stocktracker.core.data.DivTaxOverrideRepository
@@ -150,6 +151,16 @@ class PortfolioListViewModel @Inject constructor(
             }
             .sortedBy { it.ticker }
 
+        val portfolioIrr = computePortfolioIrr(
+            positions = data.positions,
+            rows = rows,
+            dividendsByTicker = divs,
+            taxOverrides = data.divTaxOverrides,
+            displayCurrency = settings.displayCurrency,
+            today = today,
+            convert = { amount, from, to -> convert(amount, from, to, rates) },
+        )
+
         PortfolioListUiState(
             portfolios = portfolios,
             activePortfolioId = resolvedActiveId,
@@ -162,6 +173,7 @@ class PortfolioListViewModel @Inject constructor(
             rates = rates,
             dividendsByTicker = divs,
             divTaxOverrides = data.divTaxOverrides,
+            portfolioIrr = portfolioIrr,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioListUiState())
 

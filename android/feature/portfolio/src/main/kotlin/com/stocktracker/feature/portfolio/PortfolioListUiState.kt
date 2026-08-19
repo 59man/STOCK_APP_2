@@ -17,6 +17,7 @@ data class PortfolioListUiState(
     val rates: Map<String, Double> = com.stocktracker.core.calc.DEFAULT_RATES,
     val dividendsByTicker: Map<String, List<DividendEvent>> = emptyMap(),
     val divTaxOverrides: Map<String, Double> = emptyMap(),
+    val portfolioIrr: Double? = null,
 ) {
     val visibleRows: List<PortfolioRow> get() = if (showClosed) rows else rows.filterNot { it.isClosed }
     val closedCount: Int get() = rows.count { it.isClosed }
