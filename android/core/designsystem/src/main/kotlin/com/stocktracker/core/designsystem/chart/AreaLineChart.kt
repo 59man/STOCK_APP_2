@@ -1,9 +1,14 @@
 package com.stocktracker.core.designsystem.chart
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -11,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -19,9 +25,7 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.max
 
-private val GridColor = Color(0xFF2A2A3A)
-private val AxisLabelColor = Color(0xFF888888)
-private val ZeroLineColor = Color(0xFF555555)
+private const val DrawInDurationMs = 550
 
 /**
  * Single-series area/line chart with a gradient fill, sparse axis labels,
@@ -39,7 +43,19 @@ fun AreaLineChart(
 ) {
     if (values.isEmpty()) return
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 10.sp, color = AxisLabelColor)
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val zeroLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+    val labelStyle = TextStyle(fontSize = 10.sp, color = axisLabelColor)
+
+    // Draws the line/fill left-to-right on first composition and whenever the underlying
+    // data changes (e.g. a new range selection), instead of popping in fully rendered.
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(values) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(DrawInDurationMs))
+    }
+    val drawProgress = progress.value
 
     val minV = values.min()
     val maxV = values.max()
@@ -61,12 +77,12 @@ fun AreaLineChart(
 
         for (i in 0..3) {
             val y = topMargin + plotHeight * i / 3
-            drawLine(GridColor, Offset(leftMargin, y), Offset(size.width, y), strokeWidth = 1f)
+            drawLine(gridColor, Offset(leftMargin, y), Offset(size.width, y), strokeWidth = 1f)
         }
         if (showZeroLine && domainMin < 0 && domainMax > 0) {
             val y = yFor(0.0)
             drawLine(
-                ZeroLineColor, Offset(leftMargin, y), Offset(size.width, y),
+                zeroLineColor, Offset(leftMargin, y), Offset(size.width, y),
                 strokeWidth = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)),
             )
         }
@@ -83,8 +99,10 @@ fun AreaLineChart(
             lineTo(xFor(0), topMargin + plotHeight)
             close()
         }
-        drawPath(fillPath, brush = Brush.verticalGradient(listOf(color.copy(alpha = 0.3f), color.copy(alpha = 0f))))
-        drawPath(linePath, color = color, style = Stroke(width = 2.dp.toPx()))
+        clipRect(right = leftMargin + plotWidth * drawProgress) {
+            drawPath(fillPath, brush = Brush.verticalGradient(listOf(color.copy(alpha = 0.3f), color.copy(alpha = 0f))))
+            drawPath(linePath, color = color, style = Stroke(width = 2.dp.toPx()))
+        }
 
         listOf(domainMax, (domainMax + domainMin) / 2, domainMin).forEach { v ->
             val measured = textMeasurer.measure(formatChartValue(v), style = labelStyle)

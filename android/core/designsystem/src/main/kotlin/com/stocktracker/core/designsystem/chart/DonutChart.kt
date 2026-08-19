@@ -1,5 +1,7 @@
 package com.stocktracker.core.designsystem.chart
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,13 +34,8 @@ import kotlin.math.sin
 
 data class DonutSlice(val label: String, val value: Double, val color: Color)
 
-/**
- * Full pie chart (filled wedges, no center hole — matches PortfolioPieCharts.tsx's
- * solid Pie) with an in-slice percentage label per slice (≥5%, mirrors
- * InsideLabel's cutoff there) and a legend row per slice below — the mobile
- * equivalent of the web's Pie+Legend+hover-Tooltip, since a persistent legend
- * with values does the same job a hover tooltip can't on a touch screen.
- */
+private const val SweepInDurationMs = 550
+
 @Composable
 fun DonutChart(
     slices: List<DonutSlice>,
@@ -54,6 +53,16 @@ fun DonutChart(
     val total = nonZero.sumOf { it.value }
     val textMeasurer = rememberTextMeasurer()
 
+    // Every slice grows from 0 to its full sweep simultaneously (a radial reveal) rather than
+    // one continuous sweep across slices in sequence — simpler to compute per-slice and reads
+    // just as clearly as a "pie filling in" animation.
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(nonZero) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(SweepInDurationMs))
+    }
+    val sweepProgress = progress.value
+
     Column(modifier) {
         Canvas(modifier = Modifier.fillMaxWidth().height(200.dp)) {
             val diameter = kotlin.math.min(size.width, size.height) * 0.92f
@@ -66,13 +75,16 @@ fun DonutChart(
                 drawArc(
                     color = slice.color,
                     startAngle = startAngle,
-                    sweepAngle = (sweep - gap).coerceAtLeast(0f),
+                    sweepAngle = ((sweep - gap).coerceAtLeast(0f)) * sweepProgress,
                     useCenter = true,
                     topLeft = topLeft,
                     size = Size(diameter, diameter),
                 )
                 val percent = slice.value / total
-                if (percent >= 0.05) {
+                // Gated on the sweep being essentially complete — a percentage label positioned
+                // mid-animation, before the wedge has grown into its final angle, would sit in
+                // the wrong place relative to the (still-growing) slice.
+                if (percent >= 0.05 && sweepProgress > 0.95f) {
                     val midAngleRad = Math.toRadians((startAngle + sweep / 2).toDouble())
                     val labelRadius = diameter / 2f * 0.65f
                     val cx = topLeft.x + diameter / 2f + (labelRadius * cos(midAngleRad)).toFloat()

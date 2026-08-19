@@ -1,5 +1,7 @@
 package com.stocktracker.core.designsystem.chart
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -14,19 +16,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val GridColor = Color(0xFF2A2A3A)
-private val AxisLabelColor = Color(0xFF888888)
+private const val DrawInDurationMs = 550
 
 data class ChartSeries(val name: String, val values: List<Double>, val color: Color)
 
@@ -45,7 +49,16 @@ fun MultiLineChart(
     val allValues = series.flatMap { it.values }
     if (allValues.isEmpty()) return
     val textMeasurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 10.sp, color = AxisLabelColor)
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val labelStyle = TextStyle(fontSize = 10.sp, color = axisLabelColor)
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(series) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(DrawInDurationMs))
+    }
+    val drawProgress = progress.value
 
     val maxV = allValues.max()
     val minV = if (domainMinFixedAtZero) 0.0 else allValues.min()
@@ -68,17 +81,19 @@ fun MultiLineChart(
 
             for (i in 0..3) {
                 val y = topMargin + plotHeight * i / 3
-                drawLine(GridColor, Offset(leftMargin, y), Offset(size.width, y), strokeWidth = 1f)
+                drawLine(gridColor, Offset(leftMargin, y), Offset(size.width, y), strokeWidth = 1f)
             }
 
-            series.forEach { s ->
-                val path = Path()
-                s.values.forEachIndexed { i, v ->
-                    val x = xFor(i)
-                    val y = yFor(v)
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            clipRect(right = leftMargin + plotWidth * drawProgress) {
+                series.forEach { s ->
+                    val path = Path()
+                    s.values.forEachIndexed { i, v ->
+                        val x = xFor(i)
+                        val y = yFor(v)
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, color = s.color, style = Stroke(width = 2.dp.toPx()))
                 }
-                drawPath(path, color = s.color, style = Stroke(width = 2.dp.toPx()))
             }
 
             listOf(domainMax, (domainMax + domainMin) / 2, domainMin).forEach { v ->
