@@ -10,7 +10,8 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
-        android:theme="@style/Theme.StockTracker">
+        android:theme="@style/Theme.StockTracker"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"

@@ -14,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,21 +49,43 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            // Local-first text state: `uiState.serverUrl`/`apiKey` round-trip through an async
+            // DataStore write (SettingsViewModel.onAction -> settingsRepository.setX). Binding
+            // the field's `value` straight to that re-emitted state races fast typing/backspace
+            // against the write landing — a late, stale emission snaps the field back and eats
+            // keystrokes. Once the user has touched a field, its local copy wins over any further
+            // uiState re-emission; before that, it tracks uiState so the persisted value still
+            // shows up once DataStore's first real emission lands.
+            var localServerUrl by remember { mutableStateOf<String?>(null) }
+            var localApiKey by remember { mutableStateOf<String?>(null) }
+            var apiKeyVisible by remember { mutableStateOf(false) }
+
             OutlinedTextField(
-                value = uiState.serverUrl,
-                onValueChange = { onAction(SettingsAction.ServerUrlChanged(it)) },
+                value = localServerUrl ?: uiState.serverUrl,
+                onValueChange = {
+                    localServerUrl = it
+                    onAction(SettingsAction.ServerUrlChanged(it))
+                },
                 label = { Text("Server URL") },
                 placeholder = { Text("http://192.168.1.10:8080") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
             OutlinedTextField(
-                value = uiState.apiKey,
-                onValueChange = { onAction(SettingsAction.ApiKeyChanged(it)) },
+                value = localApiKey ?: uiState.apiKey,
+                onValueChange = {
+                    localApiKey = it
+                    onAction(SettingsAction.ApiKeyChanged(it))
+                },
                 label = { Text("API key") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
+                visualTransformation = if (apiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    TextButton(onClick = { apiKeyVisible = !apiKeyVisible }) {
+                        Text(if (apiKeyVisible) "Hide" else "Show")
+                    }
+                },
             )
 
             var currencyExpanded by remember { mutableStateOf(false) }
