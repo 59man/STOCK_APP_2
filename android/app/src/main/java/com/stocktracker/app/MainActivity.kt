@@ -23,6 +23,7 @@ import com.stocktracker.core.designsystem.StockTrackerTheme
 import com.stocktracker.feature.portfolio.ConflictRoute
 import com.stocktracker.feature.portfolio.ImportRoute
 import com.stocktracker.feature.portfolio.PortfolioListRoute
+import com.stocktracker.feature.portfolio.PositionDetailRoute
 import com.stocktracker.feature.settings.SettingsRoute
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
@@ -35,6 +36,8 @@ private object Routes {
     const val IMPORT_ARG_PORTFOLIO_ID = "portfolioId"
     const val IMPORT_ARG_URI = "uri"
     const val CONFLICTS = "conflicts"
+    const val POSITION_DETAIL = "positionDetail"
+    const val POSITION_DETAIL_ARG_TICKER = "ticker"
 }
 
 /** A statement shared into the app (Mail, Files, Drive, …) before the Compose tree exists to consume it. */
@@ -79,6 +82,9 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("${Routes.IMPORT}?${Routes.IMPORT_ARG_PORTFOLIO_ID}=${portfolioId ?: ""}")
                                 },
                                 onOpenConflicts = { navController.navigate(Routes.CONFLICTS) },
+                                onOpenPositionDetail = { ticker ->
+                                    navController.navigate("${Routes.POSITION_DETAIL}/${Uri.encode(ticker)}")
+                                },
                             )
                         }
                         composable(Routes.SETTINGS) {
@@ -86,6 +92,15 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Routes.CONFLICTS) {
                             ConflictRoute(onBack = { navController.popBackStack() })
+                        }
+                        composable(
+                            route = "${Routes.POSITION_DETAIL}/{${Routes.POSITION_DETAIL_ARG_TICKER}}",
+                            arguments = listOf(navArgument(Routes.POSITION_DETAIL_ARG_TICKER) { type = NavType.StringType }),
+                        ) { backStackEntry ->
+                            val ticker = backStackEntry.arguments?.getString(Routes.POSITION_DETAIL_ARG_TICKER)
+                            if (ticker != null) {
+                                PositionDetailRoute(ticker = ticker, onBack = { navController.popBackStack() })
+                            }
                         }
                         composable(
                             route = "${Routes.IMPORT}?${Routes.IMPORT_ARG_PORTFOLIO_ID}={${Routes.IMPORT_ARG_PORTFOLIO_ID}}" +

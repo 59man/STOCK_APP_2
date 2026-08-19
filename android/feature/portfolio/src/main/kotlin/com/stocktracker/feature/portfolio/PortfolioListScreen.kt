@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,6 +72,7 @@ fun PortfolioListRoute(
     onOpenSettings: () -> Unit,
     onOpenImport: (String?) -> Unit,
     onOpenConflicts: () -> Unit,
+    onOpenPositionDetail: (String) -> Unit,
     viewModel: PortfolioListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -103,6 +107,7 @@ fun PortfolioListRoute(
         onOpenSettings = onOpenSettings,
         onOpenImport = onOpenImport,
         onOpenConflicts = onOpenConflicts,
+        onOpenPositionDetail = onOpenPositionDetail,
         onExport = { exportLauncher.launch("portfolio_${LocalDate.now()}.json") },
         onAddPosition = { showAddDialog = true },
         onSellPosition = { sellTarget = it },
@@ -147,6 +152,7 @@ internal fun PortfolioListScreen(
     onOpenSettings: () -> Unit,
     onOpenImport: (String?) -> Unit,
     onOpenConflicts: () -> Unit,
+    onOpenPositionDetail: (String) -> Unit,
     onExport: () -> Unit,
     onAddPosition: () -> Unit,
     onSellPosition: (PortfolioRow) -> Unit,
@@ -184,7 +190,6 @@ internal fun PortfolioListScreen(
                 }
             }
             PortfolioTabs(uiState, onAction)
-            SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
 
             if (uiState.closedCount > 0) {
                 TextButton(onClick = { onAction(PortfolioListAction.ToggleShowClosed) }) {
@@ -206,6 +211,12 @@ internal fun PortfolioListScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    // Scrolls away with everything else now — previously pinned above the list,
+                    // the seven summary cards alone ran past half a phone screen, permanently
+                    // shrinking the space left for positions.
+                    item(key = "summary") {
+                        SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
+                    }
                     if (uiState.visibleRows.isNotEmpty()) {
                         item(key = "pnl-chart") { PortfolioPnlChartCard(portfolioId = uiState.activePortfolioId) }
                         item(key = "pie-charts") {
@@ -217,14 +228,10 @@ internal fun PortfolioListScreen(
                             row = row,
                             displayCurrency = uiState.displayCurrency,
                             rates = uiState.rates,
-                            dividendsByTicker = uiState.dividendsByTicker,
-                            divTaxOverrides = uiState.divTaxOverrides,
+                            onOpenDetail = { onOpenPositionDetail(row.ticker) },
                             onSell = { onSellPosition(row) },
                             onDelete = { row.ids.forEach { id -> onAction(PortfolioListAction.DeletePosition(id)) } },
                             onSetManualPrice = { onSetManualPrice(row) },
-                            onUpdatePosition = { position -> onAction(PortfolioListAction.UpdatePosition(position)) },
-                            onSetDivTax = { ticker, date, rate -> onAction(PortfolioListAction.SetDivTax(ticker, date, rate)) },
-                            onClearDivTax = { ticker, date -> onAction(PortfolioListAction.ClearDivTax(ticker, date)) },
                         )
                     }
                 }
@@ -493,18 +500,11 @@ private fun PositionCard(
     row: PortfolioRow,
     displayCurrency: String,
     rates: Map<String, Double>,
-    dividendsByTicker: Map<String, List<com.stocktracker.core.model.DividendEvent>>,
-    divTaxOverrides: Map<String, Double>,
+    onOpenDetail: () -> Unit,
     onSell: () -> Unit,
     onDelete: () -> Unit,
     onSetManualPrice: () -> Unit,
-    onUpdatePosition: (com.stocktracker.core.model.Position) -> Unit,
-    onSetDivTax: (String, String, Double) -> Unit,
-    onClearDivTax: (String, String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    var editTarget by remember { mutableStateOf<com.stocktracker.core.model.Position?>(null) }
-    var editTickerTarget by remember { mutableStateOf(false) }
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
 
     Card(
@@ -514,8 +514,11 @@ private fun PositionCard(
         ),
     ) {
         Column(Modifier.padding(16.dp)) {
+            // Transaction/lot details, dividends, and the price chart live on their own screen now
+            // (PositionDetailRoute) — cramming them inline here, under an already-tall summary
+            // section, made them unreadably small on a phone.
             Row(
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetail),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column {
@@ -527,7 +530,7 @@ private fun PositionCard(
                             }
                         }
                         Text(
-                            if (expanded) " ▾" else " ▸",
+                            " ›",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -572,8 +575,21 @@ private fun PositionCard(
                     val neutralButtonColors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    TextButton(onClick = onSetManualPrice, colors = neutralButtonColors) {
-                        Text(if (row.priceIsManual) "M ${'$'}" else "Set price")
+                    // A manually-priced ticker (no live feed) is easy to forget about and let go
+                    // stale — the violet accent makes "M $" visually distinct from the other two
+                    // neutral-grey actions instead of blending in.
+                    TextButton(
+                        onClick = onSetManualPrice,
+                        colors = if (row.priceIsManual) {
+                            androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+                        } else {
+                            neutralButtonColors
+                        },
+                    ) {
+                        Text(
+                            if (row.priceIsManual) "M ${'$'}" else "Set price",
+                            fontWeight = if (row.priceIsManual) FontWeight.Bold else FontWeight.Normal,
+                        )
                     }
                     TextButton(onClick = onSell, colors = neutralButtonColors) { Text("Sell") }
                     TextButton(
@@ -584,8 +600,46 @@ private fun PositionCard(
                     ) { Text("Delete") }
                 }
             }
-            if (expanded) {
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+        }
+    }
+}
+
+/**
+ * Full-screen destination for one ticker's lots, dividends, and price chart — split out of
+ * PositionCard's inline expansion because that content (a lot table plus a dividend panel plus
+ * a chart) was unreadable crammed into a list card on a phone. Re-derives the row from the same
+ * ViewModel/uiState the list screen uses rather than passing PortfolioRow across navigation.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PositionDetailRoute(
+    ticker: String,
+    onBack: () -> Unit,
+    viewModel: PortfolioListViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val row = uiState.rows.firstOrNull { it.ticker == ticker }
+    var editTarget by remember { mutableStateOf<com.stocktracker.core.model.Position?>(null) }
+    var editTickerTarget by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(row?.ticker ?: ticker) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back") }
+                },
+            )
+        },
+    ) { padding ->
+        if (row == null) {
+            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        } else {
+            Column(
+                Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            ) {
+                Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     TextButton(
                         onClick = { editTickerTarget = true },
                         colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant),
@@ -598,40 +652,40 @@ private fun PositionCard(
                 }
                 DividendPanel(
                     row = row,
-                    dividendsByTicker = dividendsByTicker,
-                    taxOverrides = divTaxOverrides,
-                    displayCurrency = displayCurrency,
-                    rates = rates,
-                    onSetDivTax = onSetDivTax,
-                    onClearDivTax = onClearDivTax,
+                    dividendsByTicker = uiState.dividendsByTicker,
+                    taxOverrides = uiState.divTaxOverrides,
+                    displayCurrency = uiState.displayCurrency,
+                    rates = uiState.rates,
+                    onSetDivTax = { t, date, rate -> viewModel.onAction(PortfolioListAction.SetDivTax(t, date, rate)) },
+                    onClearDivTax = { t, date -> viewModel.onAction(PortfolioListAction.ClearDivTax(t, date)) },
                 )
                 PriceChartCard(
                     ticker = row.ticker,
                     tickerCurrency = row.currency,
-                    displayCurrency = displayCurrency,
-                    rates = rates,
+                    displayCurrency = uiState.displayCurrency,
+                    rates = uiState.rates,
+                )
+            }
+
+            editTarget?.let { lot ->
+                EditLotDialog(
+                    position = lot,
+                    onDismiss = { editTarget = null },
+                    onSave = { updated -> viewModel.onAction(PortfolioListAction.UpdatePosition(updated)); editTarget = null },
+                )
+            }
+
+            if (editTickerTarget) {
+                EditTickerDialog(
+                    row = row,
+                    onDismiss = { editTickerTarget = false },
+                    onSave = { updatedLots ->
+                        updatedLots.forEach { viewModel.onAction(PortfolioListAction.UpdatePosition(it)) }
+                        editTickerTarget = false
+                    },
                 )
             }
         }
-    }
-
-    editTarget?.let { lot ->
-        EditLotDialog(
-            position = lot,
-            onDismiss = { editTarget = null },
-            onSave = { updated -> onUpdatePosition(updated); editTarget = null },
-        )
-    }
-
-    if (editTickerTarget) {
-        EditTickerDialog(
-            row = row,
-            onDismiss = { editTickerTarget = false },
-            onSave = { updatedLots ->
-                updatedLots.forEach { onUpdatePosition(it) }
-                editTickerTarget = false
-            },
-        )
     }
 }
 
