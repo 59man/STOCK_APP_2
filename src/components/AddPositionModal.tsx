@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react'
 import { Position } from '../types'
+import { proxyFetch } from '../utils/proxyFetch'
 
 interface Props {
   onAdd: (p: Omit<Position, 'id'>) => void
@@ -34,7 +35,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
     if (!ticker || form.name) return
     setNameLoading(true)
     try {
-      const res = await fetch(
+      const res = await proxyFetch(
         `/api/yahoo/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=1&newsCount=0`
       )
       if (res.ok) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { proxyFetch } from '../utils/proxyFetch'
 
 export type DisplayCurrency = 'CZK' | 'USD' | 'EUR'
 
@@ -21,7 +22,7 @@ const FX_PAIRS: [keyof Rates, string][] = [
 ]
 
 async function fetchFxRate(fxTicker: string): Promise<number> {
-  const res = await fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=1d`)
+  const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=1d`)
   if (!res.ok) throw new Error(`FX ${res.status}`)
   const json = await res.json()
   const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice

@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
+import { proxyFetch } from '../utils/proxyFetch'
 
 interface ChartPoint {
   date: string
@@ -59,8 +60,8 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: 
   const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
-      fetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
-      fetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
     ])
     const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
     const pricePts = parseRaw(priceJson, yahooRange)
@@ -80,7 +81,7 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: 
   }
 
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
-  const res = await fetch(path)
+  const res = await proxyFetch(path)
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()
   let currency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })

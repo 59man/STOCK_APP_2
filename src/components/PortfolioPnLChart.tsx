@@ -7,6 +7,7 @@ import { Position, Quote } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
+import { proxyFetch } from '../utils/proxyFetch'
 
 interface ChartPoint {
   label: string
@@ -64,7 +65,7 @@ const fxHistCache = new Map<string, TickerHistory>()
 async function fetchFxHistory(cur: string): Promise<void> {
   if (fxHistCache.has(cur)) return
   try {
-    const res = await fetch(`/api/yahoo/v8/finance/chart/${cur}CZK%3DX?interval=1d&range=max`)
+    const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${cur}CZK%3DX?interval=1d&range=max`)
     if (res.ok) fxHistCache.set(cur, parseHistory(await res.json()))
   } catch { /* chartData falls back to spot convert() */ }
 }
@@ -86,15 +87,15 @@ async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<Ti
   const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
-      fetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
-      fetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
     ])
     const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
     return fxMerge(parseHistory(priceJson), parseHistory(fxJson))
   }
 
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
-  const res = await fetch(path)
+  const res = await proxyFetch(path)
   if (!res.ok) throw new Error(`Yahoo history ${res.status}`)
   const json = await res.json()
   let metaCurrency = (json as { chart?: { result?: { meta?: { currency?: string } }[] } })

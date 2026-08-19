@@ -1,4 +1,5 @@
 import { Position } from '../types'
+import { proxyFetch } from './proxyFetch'
 
 export interface QuoteInfo {
   ticker: string
@@ -16,7 +17,7 @@ function mapType(quoteType: string | undefined): Position['type'] {
 
 async function query(q: string): Promise<{ symbol: string; quoteType: string } | null> {
   try {
-    const r = await fetch(`/api/yahoo/v1/finance/search?q=${encodeURIComponent(q)}&lang=en-US`)
+    const r = await proxyFetch(`/api/yahoo/v1/finance/search?q=${encodeURIComponent(q)}&lang=en-US`)
     if (!r.ok) return null
     const d = await r.json()
     const quotes: { symbol: string; quoteType: string }[] = d?.quotes ?? []

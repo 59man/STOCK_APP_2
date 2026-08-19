@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { Quote } from '../types'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
+import { proxyFetch } from '../utils/proxyFetch'
 
 const CACHE_TTL = 60_000
 
@@ -60,8 +61,8 @@ async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
   checkYahooCooldown()
   const { priceTicker, fxTicker, fallbackName = ticker.toUpperCase() } = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   const [priceRes, fxRes] = await Promise.all([
-    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=5d`), 9000),
-    withTimeout(fetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=5d`), 9000),
+    withTimeout(proxyFetch(`/api/yahoo/v8/finance/chart/${priceTicker}?interval=1d&range=5d`), 9000),
+    withTimeout(proxyFetch(`/api/yahoo/v8/finance/chart/${fxTicker}?interval=1d&range=5d`), 9000),
   ])
   if (priceRes.status === 429 || fxRes.status === 429) noteYahoo429()
   if (!priceRes.ok) throw new Error(`Price fetch ${priceRes.status}`)
@@ -90,7 +91,7 @@ async function fetchFxConvertedQuote(ticker: string): Promise<Quote> {
 async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
   checkYahooCooldown()
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`
-  const res = await withTimeout(fetch(path), 9000)
+  const res = await withTimeout(proxyFetch(path), 9000)
   if (res.status === 429) noteYahoo429()
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()
@@ -117,7 +118,7 @@ async function fetchFromYahooProxy(ticker: string): Promise<Quote> {
 
 async function fetchFromStooq(ticker: string): Promise<Quote> {
   const url = `/api/stooq/q/l/?s=${ticker.toLowerCase()}&f=sd2t2ohlcv&h&e=csv`
-  const res = await withTimeout(fetch(url), 9000)
+  const res = await withTimeout(proxyFetch(url), 9000)
   if (!res.ok) throw new Error(`Stooq ${res.status}`)
   const text = await res.text()
   const lines = text.trim().split('\n')

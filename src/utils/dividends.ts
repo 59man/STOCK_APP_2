@@ -1,3 +1,5 @@
+import { proxyFetch } from './proxyFetch'
+
 export interface DividendEvent {
   date: string       // ISO YYYY-MM-DD (ex-dividend date)
   amount: number     // gross amount per share
@@ -80,7 +82,7 @@ export async function fetchDividendEvents(ticker: string): Promise<DividendEvent
   const lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker).toUpperCase()
   const statics = STATIC_DIVIDENDS[lookupTicker] ?? []
   const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?range=max&interval=1d&events=div`
-  const res = await fetch(path)
+  const res = await proxyFetch(path)
   let fetched: DividendEvent[] = []
   let metaCurrency: string | undefined
   if (res.ok) {

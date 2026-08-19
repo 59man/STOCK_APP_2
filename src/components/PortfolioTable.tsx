@@ -4,6 +4,7 @@ import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
 import { PriceChart } from './PriceChart'
 import { SellPositionModal } from './SellPositionModal'
+import { proxyFetch } from '../utils/proxyFetch'
 
 // ── Ticker fetch test & ISIN lookup ───────────────────────────────────────────
 interface FetchTestResult { state: 'loading' | 'ok' | 'error'; msg: string }
@@ -12,7 +13,7 @@ async function testTickerFetch(ticker: string): Promise<{ ok: boolean; msg: stri
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 8000)
   try {
-    const res = await fetch(
+    const res = await proxyFetch(
       `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker.trim())}?interval=1d&range=1d`,
       { signal: ac.signal }
     )
@@ -32,7 +33,7 @@ async function testTickerFetch(ticker: string): Promise<{ ok: boolean; msg: stri
 
 async function lookupTickerByIsin(query: string): Promise<{ ticker: string; name: string } | null> {
   try {
-    const res = await fetch(
+    const res = await proxyFetch(
       `/api/yahoo/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=1&newsCount=0`
     )
     if (!res.ok) return null
