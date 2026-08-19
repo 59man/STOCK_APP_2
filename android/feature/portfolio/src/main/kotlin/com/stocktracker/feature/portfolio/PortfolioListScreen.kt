@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,7 +73,6 @@ import java.util.Locale
 
 @Composable
 fun PortfolioListRoute(
-    onOpenSettings: () -> Unit,
     onOpenImport: (String?) -> Unit,
     onOpenConflicts: () -> Unit,
     onOpenPositionDetail: (String) -> Unit,
@@ -109,7 +107,6 @@ fun PortfolioListRoute(
     PortfolioListScreen(
         uiState = uiState,
         onAction = viewModel::onAction,
-        onOpenSettings = onOpenSettings,
         onOpenImport = onOpenImport,
         onOpenConflicts = onOpenConflicts,
         onOpenPositionDetail = onOpenPositionDetail,
@@ -154,7 +151,6 @@ fun PortfolioListRoute(
 internal fun PortfolioListScreen(
     uiState: PortfolioListUiState,
     onAction: (PortfolioListAction) -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenImport: (String?) -> Unit,
     onOpenConflicts: () -> Unit,
     onOpenPositionDetail: (String) -> Unit,
@@ -170,9 +166,6 @@ internal fun PortfolioListScreen(
                 actions = {
                     TextButton(onClick = onExport, enabled = uiState.activePortfolioId != null) { Text("Export") }
                     TextButton(onClick = { onOpenImport(uiState.activePortfolioId) }) { Text("Import") }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
                 },
             )
         },
@@ -212,21 +205,16 @@ internal fun PortfolioListScreen(
             } else {
                 LazyColumn(
                     // Extra bottom inset so the floating "+" button never overlaps the last
-                    // card's content (it was covering the Total Return pie's title/legend).
+                    // card's content.
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // Scrolls away with everything else now — previously pinned above the list,
                     // the seven summary cards alone ran past half a phone screen, permanently
-                    // shrinking the space left for positions.
+                    // shrinking the space left for positions. Charts now live on the Insights
+                    // tab instead of stacked here too.
                     item(key = "summary") {
                         SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
-                    }
-                    if (uiState.visibleRows.isNotEmpty()) {
-                        item(key = "pnl-chart") { PortfolioPnlChartCard(portfolioId = uiState.activePortfolioId) }
-                        item(key = "pie-charts") {
-                            PortfolioPieChartsCard(uiState.visibleRows, uiState.displayCurrency, uiState.rates)
-                        }
                     }
                     items(uiState.visibleRows, key = { it.ticker }) { row ->
                         PositionCard(
@@ -270,7 +258,7 @@ private fun EmptyPortfolioState(onImportStatement: () -> Unit, onAddManually: ()
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioListAction) -> Unit) {
+internal fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioListAction) -> Unit) {
     var showAddDialog by remember { mutableStateOf(false) }
     var manageTarget by remember { mutableStateOf<com.stocktracker.core.model.Portfolio?>(null) }
     var renameTarget by remember { mutableStateOf<com.stocktracker.core.model.Portfolio?>(null) }
