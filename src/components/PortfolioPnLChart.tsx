@@ -440,7 +440,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
               : 'capital in open positions vs. mark-to-market value'}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {view === 'return' && !loading && values.length > 0 && (
             <span className={finalPnl >= 0 ? 'gain' : 'loss'} style={{ fontSize: 13, fontWeight: 600 }}>
               {fmtCurrency(finalPnl, displayCurrency)}

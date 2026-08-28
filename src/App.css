@@ -1013,6 +1013,7 @@ input::placeholder { color: var(--faint); }
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
   font-family: var(--font);
+  white-space: nowrap;
 }
 
 .pie-group-btn:last-child { border-right: none; }
