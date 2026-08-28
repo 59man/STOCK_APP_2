@@ -18,6 +18,7 @@ object NumericTypography {
     val bodyMedium = AppTypography.bodyMedium.merge(fontFeatureSettings = TabularNums)
     val titleLarge = AppTypography.titleLarge.merge(fontFeatureSettings = TabularNums)
     val titleMedium = AppTypography.titleMedium.merge(fontFeatureSettings = TabularNums)
+    val titleSmall = AppTypography.titleSmall.merge(fontFeatureSettings = TabularNums)
     val labelMedium = AppTypography.labelMedium.merge(fontFeatureSettings = TabularNums)
 
     /** Emphasized numeric style for hero/summary values (e.g. portfolio total). */

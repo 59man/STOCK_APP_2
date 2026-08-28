@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -447,28 +448,45 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
         ) {
             SummaryCard(
                 "Today's change",
-                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)} (${formatPercent(dailyChangePercent)})",
+                // A real space here lets Compose's default line-breaking wrap mid-number on a
+                // narrow card ("+1,796.8" / "4 (0.4%)") — it doesn't restrict breaks to word
+                // boundaries the way a browser's overflow-wrap does. A forced \n keeps the
+                // amount and the percent each intact on their own line if it must wrap.
+                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)}\n(${formatPercent(dailyChangePercent)})",
                 Modifier.weight(1f),
                 color = pnlColor(totalDailyChange),
+                valueStyle = NumericTypography.titleSmall,
             )
             SummaryCard(
                 "Net dividends",
-                if (totalDividends > 0) "+" + formatMoney(totalDividends) else "—",
+                // A bare "+14,322.66" has no space to wrap at, so on a narrow 3-up card
+                // Compose's default line-breaking splits it mid-digit ("+14,322.6" / "6").
+                // Forcing the break at the decimal point instead keeps the whole integer part
+                // and the whole fractional part each intact if it must wrap.
+                if (totalDividends > 0) "+" + formatMoney(totalDividends).replace(".", "\n.") else "—",
                 Modifier.weight(1f),
                 color = if (totalDividends > 0) StockTrackerColors.gain else null,
+                valueStyle = NumericTypography.titleSmall,
             )
             SummaryCard(
                 "IRR p.a.",
                 if (portfolioIrr != null) formatPercent(portfolioIrr * 100) else "…",
                 Modifier.weight(1f),
                 color = if (portfolioIrr != null) pnlColor(portfolioIrr) else null,
+                valueStyle = NumericTypography.titleSmall,
             )
         }
     }
 }
 
 @Composable
-private fun SummaryCard(label: String, value: String, modifier: Modifier, color: Color? = null) {
+private fun SummaryCard(
+    label: String,
+    value: String,
+    modifier: Modifier,
+    color: Color? = null,
+    valueStyle: androidx.compose.ui.text.TextStyle = NumericTypography.titleMedium,
+) {
     AppCard(
         modifier = modifier,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -477,9 +495,16 @@ private fun SummaryCard(label: String, value: String, modifier: Modifier, color:
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(
             value,
-            style = NumericTypography.titleMedium,
+            style = valueStyle,
             fontWeight = FontWeight.SemiBold,
             color = color ?: MaterialTheme.colorScheme.onSurface,
+            // These cards get narrow in a 3-up row (Today's change / Net dividends / IRR p.a.).
+            // Today's change's value has a deliberate \n between the amount and the (percent) —
+            // maxLines must allow that second line, or it gets ellipsized before ever reaching
+            // it. 2 lines comfortably covers every value this card renders; Ellipsis stays only
+            // as a last-resort guard against something even longer than that.
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
