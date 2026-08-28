@@ -183,7 +183,14 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry2 ->
                                 val ticker = backStackEntry2.arguments?.getString(Routes.POSITION_DETAIL_ARG_TICKER)
                                 if (ticker != null) {
-                                    PositionDetailRoute(ticker = ticker, onBack = { navController.popBackStack() })
+                                    // Same MAIN_GRAPH-scoped instance as PORTFOLIO/INSIGHTS above — a fresh
+                                    // default-scoped ViewModel here would re-resolve its own active portfolio
+                                    // as portfolios.firstOrNull() (see PortfolioListViewModel.uiState), which
+                                    // silently spins forever whenever the ticker lives in any portfolio other
+                                    // than the first one in the list.
+                                    val parentEntry = remember(backStackEntry2) { navController.getBackStackEntry(Routes.MAIN_GRAPH) }
+                                    val viewModel: PortfolioListViewModel = hiltViewModel(parentEntry)
+                                    PositionDetailRoute(ticker = ticker, onBack = { navController.popBackStack() }, viewModel = viewModel)
                                 }
                             }
                             composable(
