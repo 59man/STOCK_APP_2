@@ -691,9 +691,12 @@ private fun LotTableHeader() {
     ) {
         val headerStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
         val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
-        Text("Date", modifier = Modifier.weight(1.8f), style = headerStyle, color = headerColor, maxLines = 1)
+        // Date is a fixed-width "YYYY-MM-DD" (10 chars, always) — it never needs as much room
+        // as Price, whose "<amount> <currency>" content (e.g. "2,718.48 CZK") regularly runs
+        // longer; the old 1.8/1.5 split clipped the currency code to "C…" on real data.
+        Text("Date", modifier = Modifier.weight(1.55f), style = headerStyle, color = headerColor, maxLines = 1)
         Text("Qty", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
-        Text("Price", modifier = Modifier.weight(1.5f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
+        Text("Price", modifier = Modifier.weight(1.75f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
         Text("Status", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
         Spacer(modifier = Modifier.width(40.dp))
     }
@@ -708,7 +711,7 @@ private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(lot.buyDate, modifier = Modifier.weight(1.8f), style = NumericTypography.labelMedium, maxLines = 1)
+        Text(lot.buyDate, modifier = Modifier.weight(1.55f), style = NumericTypography.labelMedium, maxLines = 1)
         Text(
             formatQty(lot.quantity),
             modifier = Modifier.weight(0.8f),
@@ -718,7 +721,7 @@ private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit
         )
         Text(
             "${formatMoney(lot.buyPrice)} ${lot.currency}",
-            modifier = Modifier.weight(1.5f),
+            modifier = Modifier.weight(1.75f),
             style = NumericTypography.labelMedium,
             textAlign = TextAlign.End,
             maxLines = 1,
