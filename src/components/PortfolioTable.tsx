@@ -438,14 +438,6 @@ export function PortfolioTable({
     URL.revokeObjectURL(url)
   }
 
-  if (rows.length === 0) {
-    return (
-      <div className="empty-state">
-        <p>No positions yet. Add your first stock or ETF above.</p>
-      </div>
-    )
-  }
-
   const closedCount = rows.filter((r) => r.isClosed).length
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
@@ -500,6 +492,22 @@ export function PortfolioTable({
   const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
 
   const detailColSpan = activeColumns.length + 3
+
+  // Checked here, after every hook above has run unconditionally — not as an early return
+  // right after the hooks block. This component used to `return` the empty state right after
+  // its useState/useEffect calls and before sortedRows' useMemo; the same mounted instance
+  // transitioning from 0 rows (skips the useMemo) to >0 rows (calls it) on a later render is
+  // exactly "Rendered more hooks than during the previous render" (React error #310) — hit for
+  // real on first page load with a cold localStorage cache (0 rows synced instantly, then N
+  // rows arrive once the server fetch resolves a moment later). See PortfolioPieCharts for the
+  // same empty-state pattern done correctly: its `return null` already sits after all its hooks.
+  if (rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <p>No positions yet. Add your first stock or ETF above.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="table-wrapper">
