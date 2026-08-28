@@ -3,6 +3,8 @@ package com.stocktracker.feature.portfolio
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
@@ -11,7 +13,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -637,10 +642,17 @@ fun PositionDetailRoute(
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
-                Column(Modifier.fillMaxWidth()) {
-                    if (row.positions.isNotEmpty()) LotTableHeader()
-                    row.positions.forEach { lot ->
-                        LotRow(lot, onEdit = { editTarget = lot })
+                if (row.positions.isNotEmpty()) {
+                    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+                    Column(
+                        Modifier.fillMaxWidth().padding(top = Spacing.md)
+                            .border(1.dp, gridColor, RoundedCornerShape(4.dp)),
+                    ) {
+                        LotTableHeader(gridColor)
+                        row.positions.forEachIndexed { index, lot ->
+                            LotRow(lot, onEdit = { editTarget = lot }, gridColor = gridColor)
+                            if (index < row.positions.lastIndex) androidx.compose.material3.HorizontalDivider(color = gridColor)
+                        }
                     }
                 }
                 DividendPanel(
@@ -682,11 +694,20 @@ fun PositionDetailRoute(
     }
 }
 
+/** Thin cell-separator line spanning the row's own height — see LotTableHeader/LotRow. */
 @Composable
-private fun LotTableHeader() {
+private fun RowScope.GridVDivider(color: Color) {
+    Box(Modifier.fillMaxHeight().width(1.dp).background(color))
+}
+
+@Composable
+private fun LotTableHeader(gridColor: Color) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md, bottom = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        // height(IntrinsicSize.Min): a Row that wraps content gives its children unbounded
+        // height during measurement, so a GridVDivider's fillMaxHeight() would resolve to zero
+        // — this pins the Row's height to its tallest child's so fillMaxHeight() has something
+        // real to fill, which is what actually makes the vertical divider lines visible.
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val headerStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
@@ -694,44 +715,66 @@ private fun LotTableHeader() {
         // Date is a fixed-width "YYYY-MM-DD" (10 chars, always) — it never needs as much room
         // as Price, whose "<amount> <currency>" content (e.g. "2,718.48 CZK") regularly runs
         // longer; the old 1.8/1.5 split clipped the currency code to "C…" on real data.
-        Text("Date", modifier = Modifier.weight(1.55f), style = headerStyle, color = headerColor, maxLines = 1)
-        Text("Qty", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
-        Text("Price", modifier = Modifier.weight(1.75f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
-        Text("Status", modifier = Modifier.weight(0.8f), style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1)
+        Text(
+            "Date", modifier = Modifier.weight(1.55f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Qty", modifier = Modifier.weight(0.8f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Price", modifier = Modifier.weight(1.75f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Status", modifier = Modifier.weight(0.8f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
         Spacer(modifier = Modifier.width(40.dp))
     }
-    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    androidx.compose.material3.HorizontalDivider(color = gridColor)
 }
 
 @Composable
-private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit) {
+private fun LotRow(lot: com.stocktracker.core.model.Position, onEdit: () -> Unit, gridColor: Color) {
     val isSold = lot.sellDate != null && lot.sellPrice != null
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(lot.buyDate, modifier = Modifier.weight(1.55f), style = NumericTypography.labelMedium, maxLines = 1)
+        Text(
+            lot.buyDate,
+            modifier = Modifier.weight(1.55f).padding(horizontal = Spacing.xs),
+            style = NumericTypography.labelMedium,
+            maxLines = 1,
+        )
+        GridVDivider(gridColor)
         Text(
             formatQty(lot.quantity),
-            modifier = Modifier.weight(0.8f),
+            modifier = Modifier.weight(0.8f).padding(horizontal = Spacing.xs),
             style = NumericTypography.labelMedium,
             textAlign = TextAlign.End,
             maxLines = 1,
         )
+        GridVDivider(gridColor)
         Text(
             "${formatMoney(lot.buyPrice)} ${lot.currency}",
-            modifier = Modifier.weight(1.75f),
+            modifier = Modifier.weight(1.75f).padding(horizontal = Spacing.xs),
             style = NumericTypography.labelMedium,
             textAlign = TextAlign.End,
             maxLines = 1,
             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
+        GridVDivider(gridColor)
         Text(
             // Broker and sell date/price are still fully editable via the Edit dialog — a status
             // word is all that fits as a table column on a phone width, the detail is one tap away.
             if (isSold) "Sold" else "Open",
-            modifier = Modifier.weight(0.8f),
+            modifier = Modifier.weight(0.8f).padding(horizontal = Spacing.xs),
             style = MaterialTheme.typography.labelMedium,
             color = if (isSold) MaterialTheme.colorScheme.onSurfaceVariant else StockTrackerColors.gain,
             textAlign = TextAlign.End,
