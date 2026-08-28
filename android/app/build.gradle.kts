@@ -13,8 +13,8 @@ android {
         applicationId = "com.stocktracker.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.2.11"
+        versionCode = 14
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

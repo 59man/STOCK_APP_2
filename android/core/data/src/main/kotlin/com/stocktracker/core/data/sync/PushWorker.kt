@@ -1,6 +1,7 @@
 package com.stocktracker.core.data.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -44,6 +45,7 @@ class PushWorker @AssistedInject constructor(
                 SyncTarget.DIV_TAX_OVERRIDES -> pushOrReport(portfolioId, PersistKeys.divTaxOverrides(portfolioId)) { divTaxOverrideRepository.push(portfolioId) }
             }
         } catch (e: Exception) {
+            Log.w("PushWorker", "push failed for $target/$portfolioId, retrying", e)
             Result.retry() // network failure etc. — WorkManager's own backoff handles the wait
         }
     }
