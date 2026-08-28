@@ -3,8 +3,10 @@ package com.stocktracker.core.data
 import com.stocktracker.core.model.NO_FEED_TICKERS
 import com.stocktracker.core.model.Quote
 import com.stocktracker.core.network.QuoteClient
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -41,14 +43,20 @@ class QuoteRepository @Inject constructor() {
 
     suspend fun fetchTickers(tickers: List<String>) = coroutineScope {
         val candidates = tickers.map { it.uppercase() }.distinct().filterNot { it in NO_FEED_TICKERS }
-        val toFetch = inFlightLock.withLock {
-            candidates.filterNot { it in inFlight }.also { inFlight.addAll(it) }
-        }
-        if (toFetch.isEmpty()) return@coroutineScope
 
-        _loading.update { it + toFetch }
-        toFetch.forEach { ticker ->
+        candidates.forEach { ticker ->
             launch {
+                // add/remove of `ticker` both happen inside this single launch body, so a
+                // ticker can never be marked in-flight without a job guaranteed to clear it —
+                // even if this coroutineScope's parent is cancelled mid-loop (e.g. active
+                // portfolio switched again), a not-yet-started launch never runs its body at
+                // all, so it never adds itself in the first place.
+                val started = inFlightLock.withLock {
+                    if (ticker in inFlight) false else { inFlight.add(ticker); true }
+                }
+                if (!started) return@launch
+
+                _loading.update { it + ticker }
                 try {
                     val quote = fetchOne(ticker)
                     _quotes.update { it + (ticker to quote) }
@@ -56,7 +64,11 @@ class QuoteRepository @Inject constructor() {
                 } catch (e: Exception) {
                     _errors.update { it + (ticker to (e.message ?: "Failed")) }
                 } finally {
-                    inFlightLock.withLock { inFlight.remove(ticker) }
+                    // NonCancellable: withLock is itself suspending, so under cancellation it
+                    // would throw immediately and skip the removal, recreating the same leak.
+                    withContext(NonCancellable) {
+                        inFlightLock.withLock { inFlight.remove(ticker) }
+                    }
                     _loading.update { it - ticker }
                 }
             }
