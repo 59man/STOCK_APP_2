@@ -110,13 +110,24 @@ fun AreaLineChart(
             drawText(measured, topLeft = Offset(2.dp.toPx(), y))
         }
 
-        sparseLabelIndices(labels.size).forEach { i ->
+        // sparseLabelIndices only spaces indices evenly — it knows nothing about how wide each
+        // label's actual text renders, so a short label ("Jan 1 '24") next to a wide one ("Aug 28
+        // '26") can still collide even at "even" index spacing. Placing right-to-left and
+        // dropping anything that would overlap the nearest label already placed to its right
+        // fixes that while keeping the rightmost (most recent / "today") label always visible,
+        // same priority sparseLabelIndices itself already gives the last index.
+        var claimedLeftEdge = Float.MAX_VALUE
+        sparseLabelIndices(labels.size).reversed().forEach { i ->
             val measured = textMeasurer.measure(labels[i], style = labelStyle)
             // Centered on xFor(i), only clamped to the Canvas's own edges (not leftMargin) — the
             // first/last label is allowed to bleed into the margin, since forcing it flush against
             // leftMargin instead pushes it into its neighbor's space and the two collide instead.
             val x = (xFor(i) - measured.size.width / 2f).coerceIn(0f, size.width - measured.size.width)
-            drawText(measured, topLeft = Offset(x, topMargin + plotHeight + 2.dp.toPx()))
+            val right = x + measured.size.width
+            if (right + 4.dp.toPx() <= claimedLeftEdge) {
+                drawText(measured, topLeft = Offset(x, topMargin + plotHeight + 2.dp.toPx()))
+                claimedLeftEdge = x
+            }
         }
     }
 }

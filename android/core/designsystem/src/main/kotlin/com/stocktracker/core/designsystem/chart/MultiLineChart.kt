@@ -102,10 +102,18 @@ fun MultiLineChart(
                 drawText(measured, topLeft = Offset(2.dp.toPx(), y))
             }
 
-            sparseLabelIndices(labels.size).forEach { i ->
+            // See AreaLineChart's identical loop for why this walks right-to-left with an
+            // overlap check instead of just drawing every sparseLabelIndices() index directly —
+            // index spacing alone doesn't guarantee non-overlapping rendered text widths.
+            var claimedLeftEdge = Float.MAX_VALUE
+            sparseLabelIndices(labels.size).reversed().forEach { i ->
                 val measured = textMeasurer.measure(labels[i], style = labelStyle)
                 val x = (xFor(i) - measured.size.width / 2f).coerceIn(0f, size.width - measured.size.width)
-                drawText(measured, topLeft = Offset(x, topMargin + plotHeight + 2.dp.toPx()))
+                val right = x + measured.size.width
+                if (right + 4.dp.toPx() <= claimedLeftEdge) {
+                    drawText(measured, topLeft = Offset(x, topMargin + plotHeight + 2.dp.toPx()))
+                    claimedLeftEdge = x
+                }
             }
         }
         Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
