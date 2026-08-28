@@ -490,7 +490,8 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
             <XAxis
               dataKey="label"
               tick={{ fontSize: 10, fill: '#888' }}
-              interval={Math.floor(chartData.length / 7)}
+              interval="preserveStartEnd"
+              minTickGap={30}
               tickLine={false}
             />
             <YAxis
@@ -529,7 +530,8 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
             <XAxis
               dataKey="label"
               tick={{ fontSize: 10, fill: '#888' }}
-              interval={Math.floor(chartData.length / 7)}
+              interval="preserveStartEnd"
+              minTickGap={30}
               tickLine={false}
             />
             <YAxis

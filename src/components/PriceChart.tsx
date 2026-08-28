@@ -162,7 +162,8 @@ export function PriceChart({ ticker, tickerCurrency, displayCurrency, convert }:
             <XAxis
               dataKey="date"
               tick={{ fontSize: 10, fill: '#888' }}
-              interval={Math.floor(data.length / 6)}
+              interval="preserveStartEnd"
+              minTickGap={30}
               tickLine={false}
             />
             <YAxis
