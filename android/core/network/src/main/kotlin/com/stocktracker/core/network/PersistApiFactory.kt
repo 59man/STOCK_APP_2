@@ -46,7 +46,8 @@ private class ApiKeyInterceptor(private val config: PersistApiConfig) : Intercep
     }
 }
 
-fun createPersistApi(config: PersistApiConfig): PersistApi {
+/** Shared by every `create*Api` factory that talks to the persist server — same runtime-configurable server URL + API key. */
+fun buildPersistRetrofit(config: PersistApiConfig): Retrofit {
     val client = OkHttpClient.Builder()
         .addInterceptor(RuntimeServerInterceptor(config))
         .addInterceptor(ApiKeyInterceptor(config))
@@ -56,11 +57,15 @@ fun createPersistApi(config: PersistApiConfig): PersistApi {
 
     // baseUrl is a placeholder — RuntimeServerInterceptor overwrites scheme/host/port
     // on every request, but Retrofit still requires a syntactically valid one up front.
-    val retrofit = Retrofit.Builder()
+    return Retrofit.Builder()
         .baseUrl("http://localhost/")
         .client(client)
         .addConverterFactory(PersistJson.asConverterFactory("application/json".toMediaType()))
         .build()
-
-    return retrofit.create(PersistApi::class.java)
 }
+
+fun createPersistApi(config: PersistApiConfig): PersistApi =
+    buildPersistRetrofit(config).create(PersistApi::class.java)
+
+fun createDeviceApi(config: PersistApiConfig): DeviceApi =
+    buildPersistRetrofit(config).create(DeviceApi::class.java)

@@ -7,6 +7,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.stocktracker.core.data.DeviceRegistry
 import com.stocktracker.core.data.DivTaxOverrideRepository
 import com.stocktracker.core.data.ManualPriceRepository
 import com.stocktracker.core.data.PortfolioRepository
@@ -33,6 +34,7 @@ class SyncCoordinator @Inject constructor(
     private val manualPriceRepository: ManualPriceRepository,
     private val divTaxOverrideRepository: DivTaxOverrideRepository,
     private val conflictCenter: ConflictCenter,
+    private val deviceRegistry: DeviceRegistry,
 ) {
     private val workManager get() = WorkManager.getInstance(context)
 
@@ -61,6 +63,7 @@ class SyncCoordinator @Inject constructor(
 
     suspend fun pullPortfolioList() {
         runCatching { portfolioRepository.pull() }
+        deviceRegistry.heartbeat() // best-effort, piggybacks on this same cadence — see DeviceRegistry
     }
 
     /**

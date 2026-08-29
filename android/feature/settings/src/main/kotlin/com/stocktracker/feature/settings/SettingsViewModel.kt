@@ -2,6 +2,7 @@ package com.stocktracker.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.stocktracker.core.data.DeviceRegistry
 import com.stocktracker.core.data.SettingsRepository
 import com.stocktracker.core.data.sync.SyncCoordinator
 import com.stocktracker.core.network.HealthCheck
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val syncCoordinator: SyncCoordinator,
+    private val deviceRegistry: DeviceRegistry,
 ) : ViewModel() {
 
     private val connectionTest = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
@@ -43,6 +45,20 @@ class SettingsViewModel @Inject constructor(
             is SettingsAction.ThemeModeChanged -> viewModelScope.launch { settingsRepository.setThemeMode(action.value) }
             SettingsAction.TestConnection -> testConnection()
             SettingsAction.SyncNow -> syncNow()
+            SettingsAction.Disconnect -> disconnect()
+        }
+    }
+
+    /**
+     * Stops the app syncing: best-effort unregisters this device from the
+     * server, then clears the stored Server URL + API key — that's what
+     * actually stops future push/pull attempts. See DeviceRegistry.unregister.
+     */
+    private fun disconnect() {
+        viewModelScope.launch {
+            deviceRegistry.unregister()
+            settingsRepository.setServerUrl("")
+            settingsRepository.setApiKey("")
         }
     }
 

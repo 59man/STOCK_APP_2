@@ -24,4 +24,5 @@ sealed interface SettingsAction {
     data class ThemeModeChanged(val value: String) : SettingsAction
     data object TestConnection : SettingsAction
     data object SyncNow : SettingsAction
+    data object Disconnect : SettingsAction
 }

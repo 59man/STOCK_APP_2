@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -139,6 +141,29 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 text = uiState.lastSyncedAt?.let { "Last synced: $it" } ?: "Never synced",
                 style = MaterialTheme.typography.bodySmall,
             )
+
+            var showDisconnectConfirm by remember { mutableStateOf(false) }
+            Button(
+                onClick = { showDisconnectConfirm = true },
+                enabled = uiState.serverUrl.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Disconnect")
+            }
+            if (showDisconnectConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDisconnectConfirm = false },
+                    title = { Text("Disconnect from server?") },
+                    text = { Text("This stops syncing until you reconnect in Settings.") },
+                    confirmButton = {
+                        TextButton(onClick = { showDisconnectConfirm = false; onAction(SettingsAction.Disconnect) }) { Text("Disconnect") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDisconnectConfirm = false }) { Text("Cancel") }
+                    },
+                )
+            }
         }
     }
 }

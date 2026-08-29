@@ -9,8 +9,10 @@ import com.stocktracker.core.database.PortfolioDao
 import com.stocktracker.core.database.PositionDao
 import com.stocktracker.core.database.StockTrackerDatabase
 import com.stocktracker.core.database.SyncStateDao
+import com.stocktracker.core.network.DeviceApi
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistApiConfig
+import com.stocktracker.core.network.createDeviceApi
 import com.stocktracker.core.network.createPersistApi
 import dagger.Module
 import dagger.Provides
@@ -43,5 +45,15 @@ object DataModule {
             override suspend fun apiKey(): String = settings.settings.first().apiKey
         }
         return createPersistApi(config)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDeviceApi(settings: SettingsRepository): DeviceApi {
+        val config = object : PersistApiConfig {
+            override suspend fun serverUrl(): String = settings.settings.first().serverUrl
+            override suspend fun apiKey(): String = settings.settings.first().apiKey
+        }
+        return createDeviceApi(config)
     }
 }
