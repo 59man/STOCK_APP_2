@@ -31,6 +31,10 @@ function loadStore() {
 }
 
 loadStore()
+// store.devices is structured data the server itself reads/writes (not an opaque
+// client-authored blob like the /api/persist/:key values) — see the device
+// registry endpoints below. Same flush/backup machinery, just a typed array.
+if (!Array.isArray(store.devices)) store.devices = []
 
 let flushTimer = null
 
@@ -110,6 +114,7 @@ function requireApiKey(req, res, next) {
 app.use('/api/persist', requireApiKey)
 app.use('/api/yahoo', requireApiKey)
 app.use('/api/stooq', requireApiKey)
+app.use('/api/devices', requireApiKey)
 
 // In production the Vite dev-server proxy is absent, so Express forwards external requests.
 async function proxyRequest(res, url, extraHeaders = {}) {
@@ -169,6 +174,59 @@ app.post('/api/persist/:key', (req, res, next) => {
   }
   store[req.params.key] = req.body.value
   scheduleFlush()
+  res.json({ ok: true })
+})
+
+// ── Device registry ─────────────────────────────────────────────────────────
+// Descriptive metadata about which clients have synced with this server — not an
+// auth boundary (every device still shares the one X-API-Key; ids are self-reported).
+// See docs/superpowers/specs/2026-08-29-device-registry-design.md.
+
+app.post('/api/devices/heartbeat', (req, res) => {
+  const { id, label, platform } = req.body ?? {}
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'body.id must be a non-empty string' })
+  if (platform !== 'web' && platform !== 'android') return res.status(400).json({ error: "body.platform must be 'web' or 'android'" })
+
+  const now = new Date().toISOString()
+  let device = store.devices.find((d) => d.id === id)
+  if (device) {
+    // Never apply `label` here — an existing row keeps whatever label it has
+    // (possibly user-renamed via PATCH), so a client's own auto-guess on its next
+    // heartbeat can't clobber a rename.
+    device.lastSeen = now
+  } else {
+    device = { id, label: typeof label === 'string' && label ? label : 'Unknown device', platform, firstSeen: now, lastSeen: now }
+    store.devices.push(device)
+    log(`device registered: "${device.label}" (${platform}, ${id})`)
+  }
+  scheduleFlush()
+  res.json({ ok: true, device })
+})
+
+app.get('/api/devices', (_req, res) => {
+  const devices = [...store.devices].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+  res.json({ devices })
+})
+
+app.patch('/api/devices/:id', (req, res) => {
+  const label = req.body?.label
+  if (typeof label !== 'string' || !label) return res.status(400).json({ error: 'body.label must be a non-empty string' })
+  const device = store.devices.find((d) => d.id === req.params.id)
+  if (!device) return res.status(404).json({ error: 'device not found' })
+  device.label = label
+  scheduleFlush()
+  res.json({ ok: true, device })
+})
+
+app.delete('/api/devices/:id', (req, res) => {
+  const before = store.devices.length
+  store.devices = store.devices.filter((d) => d.id !== req.params.id)
+  if (store.devices.length !== before) {
+    log(`device removed: ${req.params.id}`)
+    scheduleFlush()
+  }
+  // Idempotent by design — Android's best-effort unregister-on-disconnect must be
+  // safe to call without checking existence first.
   res.json({ ok: true })
 })
 
