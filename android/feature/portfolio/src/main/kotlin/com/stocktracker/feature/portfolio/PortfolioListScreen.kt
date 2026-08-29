@@ -466,9 +466,10 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
                 "Net dividends",
                 // A bare "+14,322.66" has no space to wrap at, so on a narrow 3-up card
                 // Compose's default line-breaking splits it mid-digit ("+14,322.6" / "6").
-                // Forcing the break at the decimal point instead keeps the whole integer part
-                // and the whole fractional part each intact if it must wrap.
-                if (totalDividends > 0) "+" + formatMoney(totalDividends).replace(".", "\n.") else "—",
+                // A zero-width space at the decimal point gives Compose a break candidate
+                // there only if wrapping is actually needed — unlike a literal \n, it doesn't
+                // force short values like "+814.32" onto two lines when they'd fit on one.
+                if (totalDividends > 0) "+" + formatMoney(totalDividends).replace(".", "​.") else "—",
                 Modifier.weight(1f),
                 color = if (totalDividends > 0) StockTrackerColors.gain else null,
                 valueStyle = NumericTypography.titleSmall,
@@ -810,6 +811,7 @@ private fun DividendPanel(
     if (relevantDivs.isEmpty()) return
 
     var editTarget by remember { mutableStateOf<com.stocktracker.core.model.DividendEvent?>(null) }
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
 
     Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
         Text(
@@ -817,38 +819,31 @@ private fun DividendPanel(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        relevantDivs.forEach { div ->
-            val shares = row.positions.filter { lot -> isRelevant(lot, div.date) }.sumOf { it.quantity }
-            val overrideKey = "${row.ticker.uppercase()}::${div.date}"
-            val defaultRate = com.stocktracker.core.calc.getDividendTaxRate(row.ticker)
-            val appliedRate = taxOverrides[overrideKey] ?: defaultRate
-            val isOverridden = overrideKey in taxOverrides
-            val gross = shares * div.amount
-            val net = gross * (1 - appliedRate)
-            val netDc = com.stocktracker.core.calc.convert(net, div.currency, displayCurrency, rates)
+        Column(
+            Modifier.fillMaxWidth().padding(top = Spacing.xs)
+                .border(1.dp, gridColor, RoundedCornerShape(4.dp)),
+        ) {
+            DividendTableHeader(gridColor)
+            relevantDivs.forEachIndexed { index, div ->
+                val shares = row.positions.filter { lot -> isRelevant(lot, div.date) }.sumOf { it.quantity }
+                val overrideKey = "${row.ticker.uppercase()}::${div.date}"
+                val defaultRate = com.stocktracker.core.calc.getDividendTaxRate(row.ticker)
+                val appliedRate = taxOverrides[overrideKey] ?: defaultRate
+                val isOverridden = overrideKey in taxOverrides
+                val gross = shares * div.amount
+                val net = gross * (1 - appliedRate)
+                val netDc = com.stocktracker.core.calc.convert(net, div.currency, displayCurrency, rates)
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(div.date, style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        "${formatQty(shares)} sh × ${String.format(Locale.US, "%.4f", div.amount)} ${div.currency}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        formatPercent(appliedRate * 100),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isOverridden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { editTarget = div }.padding(end = 12.dp),
-                    )
-                    Text(formatMoney(netDc), style = MaterialTheme.typography.bodySmall, color = StockTrackerColors.gain)
-                }
+                DividendRow(
+                    div = div,
+                    shares = shares,
+                    appliedRatePct = appliedRate * 100,
+                    isOverridden = isOverridden,
+                    netDisplay = netDc,
+                    onEdit = { editTarget = div },
+                    gridColor = gridColor,
+                )
+                if (index < relevantDivs.lastIndex) androidx.compose.material3.HorizontalDivider(color = gridColor)
             }
         }
     }
@@ -863,6 +858,88 @@ private fun DividendPanel(
             onSave = { rate -> onSetDivTax(row.ticker, div.date, rate); editTarget = null },
             onClear = { onClearDivTax(row.ticker, div.date); editTarget = null },
             onDismiss = { editTarget = null },
+        )
+    }
+}
+
+/** Same Excel-style grid as LotTableHeader — see the comment there on why height(IntrinsicSize.Min) is required. */
+@Composable
+private fun DividendTableHeader(gridColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val headerStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
+        val headerColor = MaterialTheme.colorScheme.onSurfaceVariant
+        Text(
+            "Date", modifier = Modifier.weight(1.4f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Shares × Rate", modifier = Modifier.weight(2.2f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Tax %", modifier = Modifier.weight(0.9f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "Net", modifier = Modifier.weight(1.1f).padding(horizontal = Spacing.xs),
+            style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
+        )
+    }
+    androidx.compose.material3.HorizontalDivider(color = gridColor)
+}
+
+@Composable
+private fun DividendRow(
+    div: com.stocktracker.core.model.DividendEvent,
+    shares: Double,
+    appliedRatePct: Double,
+    isOverridden: Boolean,
+    netDisplay: Double,
+    onEdit: () -> Unit,
+    gridColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            div.date,
+            modifier = Modifier.weight(1.4f).padding(horizontal = Spacing.xs),
+            style = NumericTypography.labelMedium,
+            maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            "${formatQty(shares)} sh × ${String.format(Locale.US, "%.4f", div.amount)} ${div.currency}",
+            modifier = Modifier.weight(2.2f).padding(horizontal = Spacing.xs),
+            style = NumericTypography.labelMedium,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
+        GridVDivider(gridColor)
+        Text(
+            formatPercent(appliedRatePct),
+            modifier = Modifier.weight(0.9f).padding(horizontal = Spacing.xs).clickable(onClick = onEdit),
+            style = NumericTypography.labelMedium,
+            color = if (isOverridden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+        )
+        GridVDivider(gridColor)
+        Text(
+            formatMoney(netDisplay),
+            modifier = Modifier.weight(1.1f).padding(horizontal = Spacing.xs),
+            style = NumericTypography.labelMedium,
+            color = StockTrackerColors.gain,
+            textAlign = TextAlign.End,
+            maxLines = 1,
         )
     }
 }
