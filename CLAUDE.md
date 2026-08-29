@@ -100,6 +100,19 @@ The Express server (`server/index.js`) maintains an **in-memory store** loaded f
 - `stock_tracker_manual_prices_${id}` — manual price store for each portfolio
 - `stock_tracker_div_tax_${id}` — dividend tax overrides for each portfolio
 
+### Device registry (`/api/devices/*`)
+
+Separate from the generic `/api/persist/:key` store — see `docs/superpowers/specs/2026-08-29-device-registry-design.md` for full design rationale. Descriptive metadata only (device id, label, platform, first/last-seen), not an auth boundary — every device still shares the one `X-API-Key`. Server keeps it in `store.devices` (same in-memory store + flush/backup machinery as everything else, just a typed array instead of an opaque client-authored blob), with dedicated routes doing real server-side upsert/delete rather than a client read-modify-write:
+
+- `POST /api/devices/heartbeat` `{id, label?, platform: 'web'|'android'}` — creates on first sight, else only bumps `lastSeen` (never overwrites an existing label, so a user rename survives the client's next heartbeat)
+- `GET /api/devices` — list, sorted by `lastSeen` desc
+- `PATCH /api/devices/:id` `{label}` — rename
+- `DELETE /api/devices/:id` — remove, idempotent (200 even if already gone)
+
+**Web**: `useDeviceRegistry` hook (heartbeats on mount + every 5 min, id in `localStorage['stock_tracker_device_id']`) + `DeviceListModal`, opened via a 📶 header button next to the 🔑 API-key button. **Android**: device id + label live in the Settings `DataStore` (`SettingsRepository.getOrCreateDeviceId()`); `DeviceRegistry` (`core/data`) heartbeats piggyback on `SyncCoordinator.pullPortfolioList()`'s existing cadence; Settings' **Disconnect** button best-effort unregisters this device, then clears the stored Server URL/API key (which is what actually stops syncing) and the stored device id (so a future reconnect registers fresh, not resurrecting the old `firstSeen`).
+
+> **Gotcha · kotlinx.serialization silently drops fields at their default value.** `PersistJson` (`core/network/PersistKeys.kt`) doesn't set `encodeDefaults`, so a Retrofit `@Body` data class field left at its Kotlin default is omitted from the JSON entirely — bit `DeviceHeartbeatBody.platform` once (`= "android"` default meant the field vanished from the wire body, and the server's manual `platform !== 'web' && platform !== 'android'` check 400'd on the missing field). Fixed by making it a required constructor param with no default. `DeviceApiTest.kt`'s wire-bytes assertion (MockWebServer, same pattern as `PersistApiTest.kt`) is what would have caught it — prefer that pattern over type-only tests for any new persist/device API body.
+
 ### Key types (`src/types/index.ts`)
 
 - `Position` — a single purchase lot: ticker, name, type (`stock|etf|fund|commodity`), quantity, buyPrice, buyDate, currency; **optional** `broker?: string`, `isin?: string`, `sellPrice?: number`, and `sellDate?: string`
