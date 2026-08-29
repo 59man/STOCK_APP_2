@@ -12,6 +12,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: false,
       },
+      '/api/devices': {
+        target: 'http://localhost:3001',
+        changeOrigin: false,
+      },
       '/api/yahoo': {
         target: 'https://query1.finance.yahoo.com',
         changeOrigin: true,

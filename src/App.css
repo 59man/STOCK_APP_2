@@ -888,6 +888,41 @@ input::placeholder { color: var(--faint); }
   word-break: break-all;
 }
 
+/* ── Device list modal ── */
+.device-list {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.device-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+}
+.device-platform-icon { font-size: 18px; }
+.device-info {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.device-label {
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.device-label-input {
+  font-size: 13.5px; font-weight: 600;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 6px; color: var(--text); width: 100%;
+}
+.device-meta {
+  font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.device-remove-btn {
+  background: none; border: none; color: var(--muted);
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 4px 6px;
+}
+.device-remove-btn:hover { color: var(--loss, #f66); }
+
 /* ── Import modal ── */
 .import-summary {
   background: var(--surface2);
