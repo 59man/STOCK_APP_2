@@ -26,6 +26,7 @@ class FakeSyncStateDao : SyncStateDao {
     override suspend fun get(key: String): SyncStateEntity? = states[key]
     override fun observe(key: String) = throw NotImplementedError("unused in these tests")
     override suspend fun upsert(state: SyncStateEntity) { states[state.key] = state }
+    override suspend fun setDirtyFlag(key: String) { states[key] = states.getValue(key).copy(dirty = true) }
     override suspend fun markDirty(key: String) {
         val existing = states[key]
         states[key] = existing?.copy(dirty = true) ?: SyncStateEntity(key, null, dirty = true)
