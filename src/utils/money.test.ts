@@ -24,6 +24,18 @@ describe('xirr', () => {
   it('returns null with fewer than 2 cash flows', () => {
     expect(xirr([{ date: new Date(), amount: -1000 }])).toBeNull()
   })
+
+  it('returns null rather than an absurd annualized rate for a huge return over a near-zero duration', () => {
+    // A 2x return in 11 days genuinely annualizes to an astronomical rate under compounding —
+    // that's not a meaningful number for a UI to show, so xirr() should decline to return one
+    // (same "…" treatment as the already-handled same-day buy/sell case) rather than returning
+    // whatever value Newton-Raphson happens to converge to outside a sane [-99.9%, 1000%] p.a. bracket.
+    const r = xirr([
+      { date: new Date('2026-08-18'), amount: -2250 },
+      { date: new Date('2026-08-29'), amount: 4567 },
+    ])
+    expect(r).toBeNull()
+  })
 })
 
 const lot = (over: Partial<RawLot>): RawLot => ({

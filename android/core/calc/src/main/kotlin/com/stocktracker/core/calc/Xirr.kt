@@ -23,20 +23,32 @@ fun xirr(cashFlows: List<CashFlow>): Double? {
     fun f(r: Double) = amounts.indices.sumOf { i -> amounts[i] / Math.pow(1 + r, years[i]) }
     fun df(r: Double) = amounts.indices.sumOf { i -> -(years[i] * amounts[i]) / Math.pow(1 + r, years[i] + 1) }
 
+    // Bracket also used below to sanity-check Newton-Raphson: for cash flows spanning a very
+    // short duration, f(r) is nearly flat over a huge range of r, and Newton can "converge" to
+    // an astronomically large r that satisfies |f(r)| < tolerance by coincidence rather than
+    // representing a meaningful annualized rate. A result outside this bracket is rejected and
+    // falls through to the bounded bisection search below instead of being returned directly.
+    val lo0 = -0.999
+    val hi0 = 10.0
+
     var r = 0.1
     for (i in 0 until MAX_ITERATIONS) {
         val fr = f(r)
-        if (abs(fr) < 1e-8) return r
+        if (abs(fr) < 1e-8) {
+            if (r in lo0..hi0) return r
+            break
+        }
         val dfr = df(r)
         if (dfr == 0.0) break
         val next = r - fr / dfr
         if (!next.isFinite() || next <= -1.0) break
-        if (abs(next - r) < 1e-10) return next
+        if (abs(next - r) < 1e-10) {
+            if (next in lo0..hi0) return next
+            break
+        }
         r = next
     }
 
-    val lo0 = -0.999
-    val hi0 = 10.0
     val signLo = sign(f(lo0))
     if (signLo == sign(f(hi0))) return null
 
