@@ -24,11 +24,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.network.QuoteClient
+import com.stocktracker.core.network.YahooLookupClient
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -53,6 +55,7 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
     var sellDate by remember { mutableStateOf(LocalDate.now().toString()) }
     var sellPrice by remember { mutableStateOf("") }
     var fetchTest by remember { mutableStateOf<FetchTestState>(FetchTestState.Idle) }
+    var tickerWasFocused by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val qty = quantity.toDoubleOrNull() ?: 0.0
@@ -68,7 +71,22 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     OutlinedTextField(
                         ticker, { ticker = it.uppercase(); fetchTest = FetchTestState.Idle },
-                        label = { Text("Ticker") }, singleLine = true, modifier = Modifier.weight(1f),
+                        label = { Text("Ticker") }, singleLine = true,
+                        modifier = Modifier.weight(1f).onFocusChanged { focusState ->
+                            // Mirrors AddPositionModal's ticker-blur autofill (web) — resolves an
+                            // ISIN or bare ticker to its canonical symbol + name via Yahoo search,
+                            // same lookup EditTickerDialog's "⟲" button uses.
+                            if (tickerWasFocused && !focusState.isFocused && ticker.isNotBlank()) {
+                                scope.launch {
+                                    val hit = try { YahooLookupClient.lookupIsinWithName(ticker) } catch (_: Exception) { null }
+                                    if (hit != null) {
+                                        ticker = hit.ticker.uppercase()
+                                        hit.name?.let { name = it }
+                                    }
+                                }
+                            }
+                            tickerWasFocused = focusState.isFocused
+                        },
                     )
                     TextButton(
                         enabled = ticker.isNotBlank() && fetchTest != FetchTestState.Loading,
