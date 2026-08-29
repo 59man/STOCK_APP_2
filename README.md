@@ -18,6 +18,7 @@ A dark-themed personal portfolio tracker for Czech and international stocks, ETF
 - **Configurable, responsive table** — show/hide/reorder any of 15 columns; adapts down to a mobile bottom-sheet layout
 - **Manual price override** — for unlisted funds with no public price feed, enter the total value from your statement and the app derives the per-unit price
 - **Durable storage** — Express server with atomic writes, daily rotating backups, and a bind-mountable Docker image
+- **Device registry** — 📶 button next to the 🔑 API key button lists every device (web or Android) that's synced with this server, with an editable label, last-synced time, and one-tap removal
 - **Resilient live data** — a Yahoo rate limit triggers a shared cooldown with stale-cache fallback instead of failing every ticker
 - **Unit-tested money math** — XIRR solver, FIFO lot matcher, and net-dividend calculation all covered by `npm test`
 
@@ -43,8 +44,9 @@ kill $(lsof -ti:3001)
 ### Build and push
 
 ```bash
-# Build image
-docker build -t 59man/stock-tracker:latest .
+# Build image — VITE_PERSIST_API_KEY is baked into the frontend bundle at build time,
+# so it must be passed as a build-arg (same value as PERSIST_API_KEY in .env)
+docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY=<same-secret> .
 
 # Push to Docker Hub
 docker push 59man/stock-tracker:latest
@@ -157,6 +159,7 @@ A native Android app (Kotlin + Jetpack Compose) that reads and writes the same p
 - **Charts** — per-ticker price history, portfolio Total Return / Portfolio Value (Cost Basis vs. Current Value), and three distribution donuts (Cost Basis / Current Value / Total Return), matching the web app's charts
 - **Import** — all five broker statement formats (XTB, Fio banka, Revolut, Trading 212, Degiro) parsed entirely on-device, no network required
 - **Conflict-safe sync** — a three-way merge reconciles edits made on the phone and the web app while one was offline; a genuine same-record conflict (e.g. a sell price edited on both) surfaces a one-tap resolution prompt instead of silently picking a winner
+- **Disconnect** — Settings has a one-tap Disconnect that unregisters the phone from the server's device list and clears the saved Server URL/API key, stopping sync until you reconnect
 
 See `android/docs/mobile-sync-blueprint.md` for the full design writeup, or `CLAUDE.md` for build commands and module layout.
 
