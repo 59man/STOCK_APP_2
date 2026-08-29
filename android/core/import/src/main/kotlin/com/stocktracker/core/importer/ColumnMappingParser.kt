@@ -103,7 +103,7 @@ fun autoDetectMapping(header: List<String>): ColumnMapping {
         buyPrice = find("price", "cena", "buy price", "open price", "jednotková"),
         name = find("name", "název", "product", "instrument"),
         isin = find("isin"),
-        currency = find("currency", "měna", "fx"),
+        currency = find("currency", "měna", "fx", "ccy"),
         broker = find("broker", "platform", "source"),
         sellDate = find("sell date", "close time", "close date", "prodej datum"),
         sellPrice = find("sell price", "close price", "prodej cena"),

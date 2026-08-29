@@ -69,4 +69,11 @@ class ColumnMappingParserTest {
         assertNull(mapping.isin)
         assertNull(mapping.currency)
     }
+
+    @Test
+    fun `autoDetectMapping recognizes Ccy as a currency column`() {
+        val header = listOf("Symbol", "TradeDate", "Shares", "PricePerShare", "Ccy", "Broker")
+        val mapping = autoDetectMapping(header)
+        assertEquals(4, mapping.currency)
+    }
 }
