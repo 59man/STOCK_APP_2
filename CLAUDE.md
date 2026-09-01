@@ -294,7 +294,7 @@ cd android
 - `core/import` — on-device PDF/XLSX/CSV statement parsing, all five broker formats
 - `core/data` — repositories, settings DataStore, sync workers (`SyncCoordinator`, `KeyedListSyncEngine`/`KeyedMapSyncEngine`, `ConflictCenter`, `PushWorker`)
 - `core/designsystem` — Material3 theme (`StockTrackerTheme`, `StockTrackerColors`) + a hand-rolled Compose Canvas charting layer under `chart/` (`AreaLineChart`, `MultiLineChart`, `DonutChart`, `sparseLabelIndices`, `formatChartValue`) — no external charting dependency, to match the app's minimal-dependency approach
-- `feature/portfolio` — list screen, position cards, add/edit/sell dialogs, import screen, charts, ViewModels
+- `feature/portfolio` — list screen (XTB-style compact rows: circular logo/avatar via Coil3 `SubcomposeAsyncImage` — the app's one external image-loading dependency, falling back to a colored initial-letter avatar on load failure — ticker, type badge, native-currency badge, name, price, today's %, total return incl. dividends), a CZK/USD/EUR display-currency quick-switcher (`CurrencyTabs`, colored per currency, persists to the same `SettingsRepository` value the Settings screen's dropdown writes), position detail screen (P&L/Return/IRR, Set price/Sell/Delete, lot table, dividend table: Date/Gross/Tax %/Net), add/edit/sell dialogs, import screen, charts, ViewModels. The portfolio summary card lives on the Insights tab, not here (one value per row) — Portfolio tab is just the position list.
 - `feature/settings` — server URL, API key, display currency
 
 ### Sync model
@@ -309,4 +309,11 @@ Ported from `PriceChart.tsx` / `PortfolioPnLChart.tsx` / `PortfolioPieCharts.tsx
 
 ### Releases
 
-Debug APKs are distributed via [GitHub Releases](https://github.com/59man/STOCK_APP_2/releases), tagged `android-v<versionName>` (currently `android-v0.1.0`, matching `versionName` in `app/build.gradle.kts`). To publish an updated build under the same tag: `./gradlew :app:assembleDebug`, then `gh release upload android-v0.1.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber` (rename the local file first if you want a version-numbered asset name). Bump `versionCode`/`versionName` and cut a new tag for an actual release, rather than clobbering, once changes are substantial.
+Debug APKs are distributed via [GitHub Releases](https://github.com/59man/STOCK_APP_2/releases), one fresh tag per version bump — `android-v<versionName>` (matching `versionName` in `app/build.gradle.kts`; do not reuse/clobber a prior tag, `gh release list` shows the real current one since this note goes stale). Asset filename convention: `stock-tracker-v<version>.apk`.
+
+```bash
+# 1. bump versionCode/versionName in android/app/build.gradle.kts, commit, push
+cd android && ./gradlew :app:assembleDebug
+cp app/build/outputs/apk/debug/app-debug.apk /tmp/stock-tracker-v<version>.apk
+gh release create android-v<version> /tmp/stock-tracker-v<version>.apk --title "Android v<version>" --notes "..."
+```

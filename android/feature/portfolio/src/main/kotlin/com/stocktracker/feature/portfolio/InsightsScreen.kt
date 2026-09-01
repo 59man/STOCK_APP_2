@@ -38,6 +38,7 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
     Scaffold(topBar = { TopAppBar(title = { Text("Insights") }) }) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             PortfolioTabs(uiState, onAction)
+            CurrencyTabs(uiState, onAction)
 
             if (uiState.visibleRows.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -52,6 +53,9 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
                     contentPadding = PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    item(key = "summary") {
+                        SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
+                    }
                     item(key = "pnl-chart") { PortfolioPnlChartCard(portfolioId = uiState.activePortfolioId) }
                     item(key = "pie-charts") {
                         PortfolioPieChartsCard(uiState.visibleRows, uiState.displayCurrency, uiState.rates)

@@ -51,11 +51,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         )
     }
 
-    suspend fun setServerUrl(url: String) = dataStore.edit { it[Keys.SERVER_URL] = url }
-    suspend fun setApiKey(key: String) = dataStore.edit { it[Keys.API_KEY] = key }
-    suspend fun setDisplayCurrency(currency: String) = dataStore.edit { it[Keys.DISPLAY_CURRENCY] = currency }
-    suspend fun setLastSyncedAt(isoTimestamp: String) = dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp }
-    suspend fun setThemeMode(mode: String) = dataStore.edit { it[Keys.THEME_MODE] = mode }
+    suspend fun setServerUrl(url: String): Unit { dataStore.edit { it[Keys.SERVER_URL] = url } }
+    suspend fun setApiKey(key: String): Unit { dataStore.edit { it[Keys.API_KEY] = key } }
+    suspend fun setDisplayCurrency(currency: String): Unit { dataStore.edit { it[Keys.DISPLAY_CURRENCY] = currency } }
+    suspend fun setLastSyncedAt(isoTimestamp: String): Unit { dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp } }
+    suspend fun setThemeMode(mode: String): Unit { dataStore.edit { it[Keys.THEME_MODE] = mode } }
 
     /**
      * Stable per-install id sent to the server's device registry — generated once,

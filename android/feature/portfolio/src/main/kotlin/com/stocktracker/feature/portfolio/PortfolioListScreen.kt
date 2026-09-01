@@ -26,7 +26,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -74,6 +76,8 @@ import com.stocktracker.core.designsystem.components.AppButtonVariant
 import com.stocktracker.core.designsystem.components.AppCard
 import com.stocktracker.core.designsystem.components.Badge
 import com.stocktracker.core.model.PortfolioRow
+import com.stocktracker.core.model.PositionType
+import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -89,8 +93,6 @@ fun PortfolioListRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
-    var sellTarget by remember { mutableStateOf<PortfolioRow?>(null) }
-    var manualPriceTarget by remember { mutableStateOf<PortfolioRow?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -121,8 +123,6 @@ fun PortfolioListRoute(
         onOpenPositionDetail = onOpenPositionDetail,
         onExport = { exportLauncher.launch("portfolio_${LocalDate.now()}.json") },
         onAddPosition = { showAddDialog = true },
-        onSellPosition = { sellTarget = it },
-        onSetManualPrice = { manualPriceTarget = it },
     )
 
     if (showAddDialog && uiState.activePortfolioId != null) {
@@ -130,27 +130,6 @@ fun PortfolioListRoute(
             portfolioId = uiState.activePortfolioId!!,
             onDismiss = { showAddDialog = false },
             onAdded = { showAddDialog = false },
-        )
-    }
-    if (manualPriceTarget != null && uiState.activePortfolioId != null) {
-        val row = manualPriceTarget!!
-        ManualPriceDialog(
-            portfolioId = uiState.activePortfolioId!!,
-            ticker = row.ticker,
-            quantity = row.totalQuantity,
-            currentManual = if (row.priceIsManual) com.stocktracker.core.model.ManualPriceEntry(row.currentPrice, row.manualPriceDate ?: "") else null,
-            onDismiss = { manualPriceTarget = null },
-            onDone = { manualPriceTarget = null },
-        )
-    }
-    sellTarget?.let { row ->
-        SellPositionDialog(
-            row = row,
-            onDismiss = { sellTarget = null },
-            onConfirm = { sellPrice, sellDate ->
-                viewModel.onAction(PortfolioListAction.SellPositions(row.ids, sellPrice, sellDate))
-                sellTarget = null
-            },
         )
     }
 }
@@ -165,8 +144,6 @@ internal fun PortfolioListScreen(
     onOpenPositionDetail: (String) -> Unit,
     onExport: () -> Unit,
     onAddPosition: () -> Unit,
-    onSellPosition: (PortfolioRow) -> Unit,
-    onSetManualPrice: (PortfolioRow) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -197,6 +174,7 @@ internal fun PortfolioListScreen(
                 }
             }
             PortfolioTabs(uiState, onAction)
+            CurrencyTabs(uiState, onAction)
 
             if (uiState.closedCount > 0) {
                 TextButton(onClick = { onAction(PortfolioListAction.ToggleShowClosed) }) {
@@ -218,22 +196,12 @@ internal fun PortfolioListScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, top = 12.dp, end = 12.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // Scrolls away with everything else now — previously pinned above the list,
-                    // the seven summary cards alone ran past half a phone screen, permanently
-                    // shrinking the space left for positions. Charts now live on the Insights
-                    // tab instead of stacked here too.
-                    item(key = "summary") {
-                        SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
-                    }
                     items(uiState.visibleRows, key = { it.ticker }) { row ->
                         PositionCard(
                             row = row,
                             displayCurrency = uiState.displayCurrency,
                             rates = uiState.rates,
                             onOpenDetail = { onOpenPositionDetail(row.ticker) },
-                            onSell = { onSellPosition(row) },
-                            onDelete = { row.ids.forEach { id -> onAction(PortfolioListAction.DeletePosition(id)) } },
-                            onSetManualPrice = { onSetManualPrice(row) },
                         )
                     }
                 }
@@ -381,6 +349,36 @@ internal fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioLi
     }
 }
 
+private val DISPLAY_CURRENCIES = listOf("CZK", "USD", "EUR")
+
+/** Quick display-currency switcher — mirrors the web app's .currency-tabs, but persists to SettingsRepository instead of resetting per session. */
+@Composable
+internal fun CurrencyTabs(uiState: PortfolioListUiState, onAction: (PortfolioListAction) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        DISPLAY_CURRENCIES.forEach { currency ->
+            val active = currency == uiState.displayCurrency
+            val badgeColor = currencyBadgeColor(currency)
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (active) badgeColor else badgeColor.copy(alpha = 0.25f),
+                modifier = Modifier.padding(2.dp),
+            ) {
+                Text(
+                    text = currency,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                    color = if (active) Color.White else badgeColor,
+                    modifier = Modifier
+                        .clickable { onAction(PortfolioListAction.SetDisplayCurrency(currency)) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun AddPortfolioDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
@@ -406,7 +404,7 @@ private fun AddPortfolioDialog(onDismiss: () -> Unit, onConfirm: (String) -> Uni
 }
 
 @Composable
-private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rates: Map<String, Double>, portfolioIrr: Double?) {
+internal fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rates: Map<String, Double>, portfolioIrr: Double?) {
     fun dc(amount: Double, from: String) = com.stocktracker.core.calc.convert(amount, from, displayCurrency, rates)
 
     val totalValue = rows.sumOf { dc(it.currentValue, it.currency) }
@@ -440,44 +438,30 @@ private fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, rat
                 )
             }
         }
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            SummaryCard("P&L", formatMoney(totalPnl), Modifier.weight(1f), color = pnlColor(totalPnl))
-            SummaryCard("Total return", formatMoney(totalReturn), Modifier.weight(1f), color = pnlColor(totalReturn))
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
+            SummaryCard("P&L", formatMoney(totalPnl), Modifier.fillMaxWidth(), color = pnlColor(totalPnl))
+            SummaryCard("Total return", formatMoney(totalReturn), Modifier.fillMaxWidth(), color = pnlColor(totalReturn))
             SummaryCard(
                 "Today's change",
-                // A real space here lets Compose's default line-breaking wrap mid-number on a
-                // narrow card ("+1,796.8" / "4 (0.4%)") — it doesn't restrict breaks to word
-                // boundaries the way a browser's overflow-wrap does. A forced \n keeps the
-                // amount and the percent each intact on their own line if it must wrap.
-                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)}\n(${formatPercent(dailyChangePercent)})",
-                Modifier.weight(1f),
+                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)} (${formatPercent(dailyChangePercent)})",
+                Modifier.fillMaxWidth(),
                 color = pnlColor(totalDailyChange),
                 valueStyle = NumericTypography.titleSmall,
             )
             SummaryCard(
                 "Net dividends",
-                // A bare "+14,322.66" has no space to wrap at, so on a narrow 3-up card
-                // Compose's default line-breaking splits it mid-digit ("+14,322.6" / "6").
-                // A zero-width space at the decimal point gives Compose a break candidate
-                // there only if wrapping is actually needed — unlike a literal \n, it doesn't
-                // force short values like "+814.32" onto two lines when they'd fit on one.
-                if (totalDividends > 0) "+" + formatMoney(totalDividends).replace(".", "​.") else "—",
-                Modifier.weight(1f),
+                if (totalDividends > 0) "+" + formatMoney(totalDividends) else "—",
+                Modifier.fillMaxWidth(),
                 color = if (totalDividends > 0) StockTrackerColors.gain else null,
                 valueStyle = NumericTypography.titleSmall,
             )
             SummaryCard(
                 "IRR p.a.",
                 if (portfolioIrr != null) formatPercent(portfolioIrr * 100) else "…",
-                Modifier.weight(1f),
+                Modifier.fillMaxWidth(),
                 color = if (portfolioIrr != null) pnlColor(portfolioIrr) else null,
                 valueStyle = NumericTypography.titleSmall,
             )
@@ -521,38 +505,47 @@ private fun PositionCard(
     displayCurrency: String,
     rates: Map<String, Double>,
     onOpenDetail: () -> Unit,
-    onSell: () -> Unit,
-    onDelete: () -> Unit,
-    onSetManualPrice: () -> Unit,
 ) {
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
+    val dailyPct = dailyChangePercent(row)
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        // Transaction/lot details, dividends, and the price chart live on their own screen now
-        // (PositionDetailRoute) — cramming them inline here, under an already-tall summary
-        // section, made them unreadably small on a phone.
+        // XTB-style compact row: logo, ticker/name, and only today's %, total return incl.
+        // dividends, and current price. Everything else (avg buy, IRR, buy/sell/delete) lives on
+        // PositionDetailRoute now, reached by tapping the row.
         Row(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpenDetail),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Row {
-                    Text(row.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (row.isClosed) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PositionLogo(row.ticker, row.type)
+                Column(modifier = Modifier.padding(start = Spacing.sm)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(row.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Badge(
-                            "SOLD",
+                            typeBadgeLabel(row.type),
                             modifier = Modifier.padding(start = Spacing.sm),
-                            containerColor = Color.Gray,
+                            containerColor = typeBadgeColor(row.type),
                             contentColor = Color.White,
                         )
+                        Badge(
+                            row.currency,
+                            modifier = Modifier.padding(start = Spacing.sm),
+                            containerColor = currencyBadgeColor(row.currency),
+                            contentColor = Color.White,
+                        )
+                        if (row.isClosed) {
+                            Badge(
+                                "SOLD",
+                                modifier = Modifier.padding(start = Spacing.sm),
+                                containerColor = Color.Gray,
+                                contentColor = Color.White,
+                            )
+                        }
                     }
-                    Text(
-                        " ›",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text(row.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(row.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
@@ -561,47 +554,78 @@ private fun PositionCard(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    formatMoney(dc(row.dailyChange)),
+                    formatPercent(dailyPct),
                     style = NumericTypography.bodyMedium,
-                    color = pnlColor(row.dailyChange),
+                    color = pnlColor(dailyPct),
+                )
+                Text(
+                    formatMoney(dc(row.totalReturn)),
+                    style = NumericTypography.bodyMedium,
+                    color = pnlColor(row.totalReturn),
                 )
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.md), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                "P&L ${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
-                style = NumericTypography.bodyMedium,
-                color = pnlColor(row.pnl),
-            )
-            Text(
-                "Return ${formatMoney(dc(row.totalReturn))}",
-                style = NumericTypography.bodyMedium,
-                color = pnlColor(row.totalReturn),
-            )
-        }
-        row.irr?.let { irr ->
-            Text(
-                "IRR ${formatPercent(irr * 100)}",
-                style = NumericTypography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = Spacing.xs),
-            )
-        }
-        if (!row.isClosed) {
-            Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.End) {
-                // A manually-priced ticker (no live feed) is easy to forget about and let go
-                // stale — the primary accent makes "M $" visually distinct from the other two
-                // neutral actions instead of blending in.
-                AppButton(
-                    text = if (row.priceIsManual) "M ${'$'}" else "Set price",
-                    onClick = onSetManualPrice,
-                    variant = if (row.priceIsManual) AppButtonVariant.Primary else AppButtonVariant.Secondary,
-                    emphasized = row.priceIsManual,
-                )
-                AppButton(text = "Sell", onClick = onSell, variant = AppButtonVariant.Secondary)
-                AppButton(text = "Delete", onClick = onDelete, variant = AppButtonVariant.Danger)
-            }
-        }
+    }
+}
+
+/** `dailyChange` on [PortfolioRow] is absolute money only — derive today's % the same way SummaryHeader does at portfolio level. */
+private fun dailyChangePercent(row: PortfolioRow): Double {
+    val prevValue = row.currentValue - row.dailyChange
+    return if (prevValue > 0) (row.dailyChange / prevValue) * 100 else 0.0
+}
+
+private fun typeBadgeLabel(type: PositionType): String = when (type) {
+    PositionType.STOCK -> "Stock"
+    PositionType.ETF -> "ETF"
+    PositionType.FUND -> "Fund"
+    PositionType.COMMODITY -> "Commodity"
+}
+
+private fun typeBadgeColor(type: PositionType): Color = when (type) {
+    PositionType.STOCK -> Color(0xFF3B82F6)
+    PositionType.ETF -> Color(0xFF22C55E)
+    PositionType.FUND -> Color(0xFFA855F7)
+    PositionType.COMMODITY -> Color(0xFFEAB308)
+}
+
+/** Fixed color per currency the app's FX rates cover (CZK base + the 7 useFxRates pairs), so the same currency always reads as the same color across the app. */
+private fun currencyBadgeColor(currency: String): Color = when (currency.uppercase()) {
+    "CZK" -> Color(0xFF64748B)
+    "USD" -> Color(0xFF16A34A)
+    "EUR" -> Color(0xFF2563EB)
+    "GBP" -> Color(0xFFDB2777)
+    "CHF" -> Color(0xFFDC2626)
+    "JPY" -> Color(0xFFEA580C)
+    "CAD" -> Color(0xFF0D9488)
+    "AUD" -> Color(0xFF7C3AED)
+    else -> Color(0xFF6B7280)
+}
+
+/** 40dp circular avatar: best-effort real logo, falling back to a colored initial letter. */
+@Composable
+private fun PositionLogo(ticker: String, type: PositionType) {
+    val baseSymbol = ticker.substringBefore(".")
+    SubcomposeAsyncImage(
+        model = "https://financialmodelingprep.com/image-stock/$baseSymbol.png",
+        contentDescription = null,
+        modifier = Modifier.size(40.dp).clip(CircleShape),
+        error = { InitialAvatar(ticker, type) },
+        loading = { InitialAvatar(ticker, type) },
+    )
+}
+
+@Composable
+private fun InitialAvatar(ticker: String, type: PositionType) {
+    Box(
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(typeBadgeColor(type)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            ticker.take(1).uppercase(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+        )
     }
 }
 
@@ -622,6 +646,8 @@ fun PositionDetailRoute(
     val row = uiState.rows.firstOrNull { it.ticker == ticker }
     var editTarget by remember { mutableStateOf<com.stocktracker.core.model.Position?>(null) }
     var editTickerTarget by remember { mutableStateOf(false) }
+    var sellTarget by remember { mutableStateOf(false) }
+    var manualPriceTarget by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -640,6 +666,48 @@ fun PositionDetailRoute(
                 Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             ) {
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                run {
+                    fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "P&L ${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
+                            style = NumericTypography.bodyMedium,
+                            color = pnlColor(row.pnl),
+                        )
+                        Text(
+                            "Return ${formatMoney(dc(row.totalReturn))}",
+                            style = NumericTypography.bodyMedium,
+                            color = pnlColor(row.totalReturn),
+                        )
+                    }
+                    row.irr?.let { irr ->
+                        Text(
+                            "IRR ${formatPercent(irr * 100)}",
+                            style = NumericTypography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = Spacing.xs),
+                        )
+                    }
+                }
+                if (!row.isClosed) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.End) {
+                        AppButton(
+                            text = if (row.priceIsManual) "M ${'$'}" else "Set price",
+                            onClick = { manualPriceTarget = true },
+                            variant = if (row.priceIsManual) AppButtonVariant.Primary else AppButtonVariant.Secondary,
+                            emphasized = row.priceIsManual,
+                        )
+                        AppButton(text = "Sell", onClick = { sellTarget = true }, variant = AppButtonVariant.Secondary)
+                        AppButton(
+                            text = "Delete",
+                            onClick = { row.ids.forEach { id -> viewModel.onAction(PortfolioListAction.DeletePosition(id)) }; onBack() },
+                            variant = AppButtonVariant.Danger,
+                        )
+                    }
+                }
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
                     AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
@@ -688,6 +756,31 @@ fun PositionDetailRoute(
                     onSave = { updatedLots ->
                         updatedLots.forEach { viewModel.onAction(PortfolioListAction.UpdatePosition(it)) }
                         editTickerTarget = false
+                    },
+                )
+            }
+
+            if (manualPriceTarget && uiState.activePortfolioId != null) {
+                ManualPriceDialog(
+                    portfolioId = uiState.activePortfolioId!!,
+                    ticker = row.ticker,
+                    quantity = row.totalQuantity,
+                    currentManual = if (row.priceIsManual) {
+                        com.stocktracker.core.model.ManualPriceEntry(row.currentPrice, row.manualPriceDate ?: "")
+                    } else {
+                        null
+                    },
+                    onDismiss = { manualPriceTarget = false },
+                    onDone = { manualPriceTarget = false },
+                )
+            }
+            if (sellTarget) {
+                SellPositionDialog(
+                    row = row,
+                    onDismiss = { sellTarget = false },
+                    onConfirm = { sellPrice, sellDate ->
+                        viewModel.onAction(PortfolioListAction.SellPositions(row.ids, sellPrice, sellDate))
+                        sellTarget = false
                     },
                 )
             }
@@ -832,11 +925,12 @@ private fun DividendPanel(
                 val isOverridden = overrideKey in taxOverrides
                 val gross = shares * div.amount
                 val net = gross * (1 - appliedRate)
+                val grossDc = com.stocktracker.core.calc.convert(gross, div.currency, displayCurrency, rates)
                 val netDc = com.stocktracker.core.calc.convert(net, div.currency, displayCurrency, rates)
 
                 DividendRow(
                     div = div,
-                    shares = shares,
+                    grossDisplay = grossDc,
                     appliedRatePct = appliedRate * 100,
                     isOverridden = isOverridden,
                     netDisplay = netDc,
@@ -877,7 +971,7 @@ private fun DividendTableHeader(gridColor: Color) {
         )
         GridVDivider(gridColor)
         Text(
-            "Shares × Rate", modifier = Modifier.weight(2.2f).padding(horizontal = Spacing.xs),
+            "Gross", modifier = Modifier.weight(2.2f).padding(horizontal = Spacing.xs),
             style = headerStyle, color = headerColor, textAlign = TextAlign.End, maxLines = 1,
         )
         GridVDivider(gridColor)
@@ -897,7 +991,7 @@ private fun DividendTableHeader(gridColor: Color) {
 @Composable
 private fun DividendRow(
     div: com.stocktracker.core.model.DividendEvent,
-    shares: Double,
+    grossDisplay: Double,
     appliedRatePct: Double,
     isOverridden: Boolean,
     netDisplay: Double,
@@ -916,12 +1010,11 @@ private fun DividendRow(
         )
         GridVDivider(gridColor)
         Text(
-            "${formatQty(shares)} sh × ${String.format(Locale.US, "%.4f", div.amount)} ${div.currency}",
+            formatMoney(grossDisplay),
             modifier = Modifier.weight(2.2f).padding(horizontal = Spacing.xs),
             style = NumericTypography.labelMedium,
             textAlign = TextAlign.End,
             maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         )
         GridVDivider(gridColor)
         Text(
@@ -979,9 +1072,9 @@ private fun DivTaxEditDialog(
 }
 
 @Composable
-private fun pnlColor(value: Double): Color = if (value < 0) StockTrackerColors.loss else StockTrackerColors.gain
+internal fun pnlColor(value: Double): Color = if (value < 0) StockTrackerColors.loss else StockTrackerColors.gain
 @Composable
-private fun pnlColor(formatted: String): Color = if (formatted.startsWith("-")) StockTrackerColors.loss else StockTrackerColors.gain
+internal fun pnlColor(formatted: String): Color = if (formatted.startsWith("-")) StockTrackerColors.loss else StockTrackerColors.gain
 
-private fun formatMoney(value: Double): String = String.format(Locale.US, "%,.2f", value)
-private fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
+internal fun formatMoney(value: Double): String = String.format(Locale.US, "%,.2f", value)
+internal fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)

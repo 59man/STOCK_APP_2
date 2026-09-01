@@ -222,6 +222,9 @@ class PortfolioListViewModel @Inject constructor(
                 divTaxOverrideRepository.clear(portfolioId, action.ticker, action.date)
                 syncCoordinator.enqueuePush(portfolioId, SyncTarget.DIV_TAX_OVERRIDES)
             }
+            is PortfolioListAction.SetDisplayCurrency -> viewModelScope.launch {
+                settingsRepository.setDisplayCurrency(action.currency)
+            }
         }
     }
 

@@ -35,4 +35,5 @@ sealed interface PortfolioListAction {
     data class UpdatePosition(val position: Position) : PortfolioListAction
     data class SetDivTax(val ticker: String, val date: String, val rate: Double) : PortfolioListAction
     data class ClearDivTax(val ticker: String, val date: String) : PortfolioListAction
+    data class SetDisplayCurrency(val currency: String) : PortfolioListAction
 }
