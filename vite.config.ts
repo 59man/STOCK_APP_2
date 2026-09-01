@@ -16,6 +16,16 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: false,
       },
+      // Fio's session-cookie dance needs our own server code, not a plain rewrite proxy.
+      '/api/fio-fund': {
+        target: 'http://localhost:3001',
+        changeOrigin: false,
+      },
+      '/api/onemarkets': {
+        target: 'https://www.onemarkets.cz',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/onemarkets/, ''),
+      },
       '/api/yahoo': {
         target: 'https://query1.finance.yahoo.com',
         changeOrigin: true,

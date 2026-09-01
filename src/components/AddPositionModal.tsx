@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { Position } from '../types'
 import { proxyFetch } from '../utils/proxyFetch'
+import { mapType } from '../utils/yahooLookup'
 
 interface Props {
   onAdd: (p: Omit<Position, 'id'>) => void
@@ -45,6 +46,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
           if (hit.symbol) set('ticker', hit.symbol as string)
           const fetchedName = hit.longname || hit.shortname || ''
           if (fetchedName) set('name', fetchedName)
+          set('type', mapType(hit.quoteType as string | undefined))
         }
       }
     } catch {
@@ -102,6 +104,7 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
                 <option value="etf">ETF</option>
                 <option value="fund">Fund</option>
                 <option value="commodity">Commodity</option>
+                <option value="crypto">Crypto</option>
               </select>
             </label>
           </div>

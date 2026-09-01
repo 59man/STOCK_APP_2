@@ -763,6 +763,7 @@ export function PortfolioTable({
                                   <option value="etf">ETF</option>
                                   <option value="fund">FUND</option>
                                   <option value="commodity">COMMODITY</option>
+                                  <option value="crypto">CRYPTO</option>
                                 </select>
                               ) : (
                                 <span className={`badge badge-${r.type}`}>{r.type.toUpperCase()}</span>

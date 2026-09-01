@@ -6,11 +6,12 @@ export interface QuoteInfo {
   type: Position['type']
 }
 
-function mapType(quoteType: string | undefined): Position['type'] {
+export function mapType(quoteType: string | undefined): Position['type'] {
   switch (quoteType) {
     case 'ETF': return 'etf'
     case 'MUTUALFUND': return 'fund'
     case 'COMMODITY': return 'commodity'
+    case 'CRYPTOCURRENCY': return 'crypto'
     default: return 'stock'
   }
 }

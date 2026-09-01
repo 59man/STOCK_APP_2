@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef } from 'react'
 import { Quote } from '../types'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
+import { FUND_PROVIDER_TICKERS, FUND_PROVIDER_SET } from '../data/fundProviderTickers'
 import { proxyFetch } from '../utils/proxyFetch'
+import { parseOnemarketsCsv, parseFioFundJson } from '../utils/fundQuoteParsers'
 
 const CACHE_TTL = 60_000
 
@@ -142,6 +144,54 @@ async function fetchFromStooq(ticker: string): Promise<Quote> {
   }
 }
 
+function ymd(d: Date): string {
+  return d.toISOString().slice(0, 10).replace(/-/g, '')
+}
+
+async function fetchOnemarketsQuote(isin: string): Promise<Quote> {
+  const end = new Date()
+  const start = new Date(end.getTime() - 14 * 24 * 60 * 60 * 1000) // 2-week window comfortably covers weekends/holidays
+  const qs = new URLSearchParams({
+    isin, underlyings: '', underlyingsIds: '', start: ymd(start), end: ymd(end),
+    extras: '', exchange: '', tradingStartTime: '00:00', tradingEndTime: '23:59', underlyingCurrency: '',
+  })
+  const res = await withTimeout(
+    proxyFetch(`/api/onemarkets/bin/onemarkets-relaunch/multi-chartdata.csv?${qs}`),
+    9000
+  )
+  if (!res.ok) throw new Error(`onemarkets ${res.status}`)
+  const { price, prevClose, date } = parseOnemarketsCsv(await res.text())
+  return {
+    ticker: isin,
+    price,
+    change: price - prevClose,
+    changePercent: prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0,
+    currency: 'CZK',
+    name: isin,
+    lastUpdated: date,
+  }
+}
+
+async function fetchFioFundQuote(ticker: string): Promise<Quote> {
+  const res = await withTimeout(proxyFetch('/api/fio-fund/quote'), 9000)
+  if (!res.ok) throw new Error(`fio-fund ${res.status}`)
+  const { price, prevClose, date } = parseFioFundJson(await res.json())
+  return {
+    ticker: ticker.toUpperCase(),
+    price,
+    change: price - prevClose,
+    changePercent: prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0,
+    currency: 'CZK',
+    name: 'Fio Global Fond CZK',
+    lastUpdated: date,
+  }
+}
+
+async function fetchFundProviderQuote(ticker: string): Promise<Quote> {
+  const { provider } = FUND_PROVIDER_TICKERS[ticker.toUpperCase()]
+  return provider === 'onemarkets' ? fetchOnemarketsQuote(ticker.toUpperCase()) : fetchFioFundQuote(ticker)
+}
+
 const SOURCES: Array<(t: string) => Promise<Quote>> = [
   (t) => fetchFromYahooProxy(t),
   (t) => fetchFromStooq(t),
@@ -166,9 +216,12 @@ async function fetchQuote(ticker: string): Promise<Quote> {
   if (cached && now - cached.ts < CACHE_TTL) return cached.quote
 
   try {
-    // FX-converted tickers are stored in CZK in the portfolio
+    // FX-converted tickers are stored in CZK in the portfolio;
+    // fund-provider tickers have no Yahoo/Stooq listing at all.
     const quote = FX_CONVERTED_SET.has(key)
       ? await fetchFxConvertedQuote(ticker)
+      : FUND_PROVIDER_SET.has(key)
+      ? await fetchFundProviderQuote(ticker)
       : await fetchFromSources(ticker)
     cache.set(key, { quote, ts: now })
     return quote

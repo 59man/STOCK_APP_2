@@ -10,6 +10,7 @@ enum class PositionType {
     @SerialName("etf") ETF,
     @SerialName("fund") FUND,
     @SerialName("commodity") COMMODITY,
+    @SerialName("crypto") CRYPTO,
 }
 
 /**

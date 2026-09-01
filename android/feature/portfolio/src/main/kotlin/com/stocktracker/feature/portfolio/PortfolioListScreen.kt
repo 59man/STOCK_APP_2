@@ -579,6 +579,7 @@ private fun typeBadgeLabel(type: PositionType): String = when (type) {
     PositionType.ETF -> "ETF"
     PositionType.FUND -> "Fund"
     PositionType.COMMODITY -> "Commodity"
+    PositionType.CRYPTO -> "Crypto"
 }
 
 private fun typeBadgeColor(type: PositionType): Color = when (type) {
@@ -586,6 +587,7 @@ private fun typeBadgeColor(type: PositionType): Color = when (type) {
     PositionType.ETF -> Color(0xFF22C55E)
     PositionType.FUND -> Color(0xFFA855F7)
     PositionType.COMMODITY -> Color(0xFFEAB308)
+    PositionType.CRYPTO -> Color(0xFFFF9F1C)
 }
 
 /** Fixed color per currency the app's FX rates cover (CZK base + the 7 useFxRates pairs), so the same currency always reads as the same color across the app. */

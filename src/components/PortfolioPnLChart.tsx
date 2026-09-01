@@ -292,8 +292,12 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         }
         return
       }
+      // No Yahoo/Stooq history (e.g. a fund-provider-only ticker like the LU
+      // funds or FIOG.PR) — an auto-fetched live quote is more current than
+      // a possibly-stale leftover manual price, so prefer it when available.
+      const liveQuote = quotes?.get(t.toUpperCase())
       const mp = manualPrices?.[t.toUpperCase()]
-      if (!mp) return                                   // no manual price either
+      if (!liveQuote && !mp) return                     // no price data at all
 
       // Collect unique buy-date → buy-price knots from individual lots
       const knots = new Map<string, number>()
@@ -301,9 +305,13 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         .filter((p) => p.ticker.toUpperCase() === t.toUpperCase())
         .forEach((p) => { if (!knots.has(p.buyDate)) knots.set(p.buyDate, p.buyPrice) })
 
-      // Manual price knot at its entry date (wins over a same-day buy knot);
-      // lots bought after that date still start at P&L = 0 via their own knot.
-      knots.set(mp.updatedAt?.slice(0, 10) ?? today, mp.price)
+      // Latest-known-price knot (wins over a same-day buy knot); lots bought
+      // after that date still start at P&L = 0 via their own knot.
+      if (liveQuote && liveQuote.price > 0 && isFinite(liveQuote.price)) {
+        knots.set(today, liveQuote.price)
+      } else if (mp) {
+        knots.set(mp.updatedAt?.slice(0, 10) ?? today, mp.price)
+      }
       const sortedKnots: TickerHistory = [...knots.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
       map.set(t, interpolateDaily(sortedKnots))

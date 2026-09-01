@@ -33,6 +33,7 @@ private val TypeColors = mapOf(
     PositionType.ETF to Color(0xFF50C878),
     PositionType.FUND to Color(0xFFC97FF5),
     PositionType.COMMODITY to Color(0xFFF5C842),
+    PositionType.CRYPTO to Color(0xFFFF9F1C),
 )
 
 private val TypeLabels = mapOf(
@@ -40,6 +41,7 @@ private val TypeLabels = mapOf(
     PositionType.ETF to "ETFs",
     PositionType.FUND to "Funds",
     PositionType.COMMODITY to "Commodities",
+    PositionType.CRYPTO to "Crypto",
 )
 
 private val CurrencyColors = mapOf(

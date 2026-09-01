@@ -30,6 +30,7 @@ private fun mapType(quoteType: String?): String = when (quoteType) {
     "ETF" -> "etf"
     "MUTUALFUND" -> "fund"
     "COMMODITY" -> "commodity"
+    "CRYPTOCURRENCY" -> "crypto"
     else -> "stock"
 }
 

@@ -13,6 +13,7 @@ import { xirr } from '../utils/xirr'
 import { calcNetDividends, getDividendTaxRate } from '../utils/dividends'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 import { FX_CONVERTED_TICKERS } from '../data/fxConvertedTickers'
+import { FUND_PROVIDER_SET } from '../data/fundProviderTickers'
 
 interface Props {
   portfolioId: string
@@ -39,17 +40,21 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
     () => tickers.filter((t) => !NO_FEED_TICKERS.has(t.toUpperCase())),
     [tickers]
   )
+  // Fund-provider tickers (auto-priced via a dedicated proxy, see useQuotes)
+  // have no traceable Yahoo dividend history — skip the doomed dividend call.
+  const dividendTickers = useMemo(
+    () => feedTickers.filter((t) => !FUND_PROVIDER_SET.has(t.toUpperCase())),
+    [feedTickers]
+  )
 
   useEffect(() => {
-    if (feedTickers.length > 0) {
-      fetchQuotes(feedTickers)
-      fetchDividends(feedTickers)
-    }
-  }, [feedTickers, fetchQuotes, fetchDividends])
+    if (feedTickers.length > 0) fetchQuotes(feedTickers)
+    if (dividendTickers.length > 0) fetchDividends(dividendTickers)
+  }, [feedTickers, dividendTickers, fetchQuotes, fetchDividends])
 
   const refresh = () => {
     fetchQuotes(feedTickers)
-    fetchDividends(feedTickers)
+    fetchDividends(dividendTickers)
   }
 
   const rows: PortfolioRow[] = useMemo(() => {

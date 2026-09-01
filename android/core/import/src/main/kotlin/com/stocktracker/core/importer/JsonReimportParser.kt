@@ -38,6 +38,7 @@ private fun mapPositionType(raw: String?): PositionType = when (raw) {
     "etf" -> PositionType.ETF
     "fund" -> PositionType.FUND
     "commodity" -> PositionType.COMMODITY
+    "crypto" -> PositionType.CRYPTO
     else -> PositionType.STOCK
 }
 

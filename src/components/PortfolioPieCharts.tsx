@@ -22,6 +22,7 @@ const TYPE_COLORS: Record<string, string> = {
   etf:       '#50c878',
   fund:      '#c97ff5',
   commodity: '#f5c842',
+  crypto:    '#ff9f1c',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
   etf:       'ETFs',
   fund:      'Funds',
   commodity: 'Commodities',
+  crypto:    'Crypto',
 }
 
 const CURRENCY_COLORS: Record<string, string> = {

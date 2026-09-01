@@ -2,7 +2,7 @@ export interface Position {
   id: string
   ticker: string
   name: string
-  type: 'stock' | 'etf' | 'fund' | 'commodity'
+  type: 'stock' | 'etf' | 'fund' | 'commodity' | 'crypto'
   quantity: number
   buyPrice: number
   buyDate: string

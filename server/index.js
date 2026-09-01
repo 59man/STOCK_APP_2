@@ -115,6 +115,8 @@ app.use('/api/persist', requireApiKey)
 app.use('/api/yahoo', requireApiKey)
 app.use('/api/stooq', requireApiKey)
 app.use('/api/devices', requireApiKey)
+app.use('/api/onemarkets', requireApiKey)
+app.use('/api/fio-fund', requireApiKey)
 
 // In production the Vite dev-server proxy is absent, so Express forwards external requests.
 async function proxyRequest(res, url, extraHeaders = {}) {
@@ -148,7 +150,75 @@ if (IS_PROD) {
     const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
     proxyRequest(res, `https://stooq.com${upstreamPath}${qs}`)
   })
+
+  // Stateless passthrough to onemarkets' public (undocumented) NAV chart-data
+  // endpoint — used to auto-fetch the 3 UniCredit onemarkets fund prices that
+  // have no Yahoo/Stooq listing (see src/data/fundProviderTickers.ts).
+  app.get('/api/onemarkets/*', (req, res) => {
+    const upstreamPath = req.path.replace('/api/onemarkets', '')
+    const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+    proxyRequest(res, `https://www.onemarkets.cz${upstreamPath}${qs}`)
+  })
 }
+
+// ── Fio Global Fond auto-pricing ────────────────────────────────────────────
+// fiofondy.cz's NAV chart data is a Nette "signal" endpoint gated by a session
+// cookie (not CORS-enabled either way, so this can't be a raw client fetch).
+// Registered unconditionally (not IS_PROD-only) so it works the same in dev
+// (persist server on :3001, proxied by Vite — see vite.config.ts) and prod.
+const FIO_FUND_URL = 'https://www.fiofondy.cz/cs/podilove-fondy/globalni-akciovy-fond'
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+let fioCookieCache = { cookie: null, expiresAt: 0 }
+
+async function getFioSessionCookie() {
+  if (fioCookieCache.cookie && Date.now() < fioCookieCache.expiresAt) return fioCookieCache.cookie
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 15_000)
+  try {
+    const res = await fetch(FIO_FUND_URL, { signal: ac.signal, headers: { 'User-Agent': BROWSER_UA } })
+    clearTimeout(timer)
+    const cookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
+    const cookie = cookies.map((c) => c.split(';')[0]).join('; ')
+    if (!cookie) throw new Error('no session cookie in response')
+    fioCookieCache = { cookie, expiresAt: Date.now() + 30 * 60_000 }
+    return cookie
+  } catch (err) {
+    clearTimeout(timer)
+    throw err
+  }
+}
+
+app.get('/api/fio-fund/quote', async (_req, res) => {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 15_000)
+  try {
+    const cookie = await getFioSessionCookie()
+    const upstream = await fetch(`${FIO_FUND_URL}?do=getFundChartData`, {
+      signal: ac.signal,
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': FIO_FUND_URL,
+        'Cookie': cookie,
+      },
+    })
+    clearTimeout(timer)
+    const body = await upstream.text()
+    let json
+    try { json = JSON.parse(body) } catch { json = null }
+    if (!upstream.ok || !Array.isArray(json)) {
+      // session cookie likely stale (signal returned the {"redirect":...} shape) — drop it so the next request re-fetches one
+      fioCookieCache = { cookie: null, expiresAt: 0 }
+      return res.status(502).json({ error: 'Upstream returned no data' })
+    }
+    res.json(json)
+  } catch (err) {
+    clearTimeout(timer)
+    const isTimeout = err.name === 'AbortError'
+    logErr(`fio-fund proxy ${isTimeout ? 'timeout' : 'failure'}:`, isTimeout ? '' : err.message)
+    res.status(isTimeout ? 504 : 502).json({ error: isTimeout ? 'Upstream timeout' : 'Upstream request failed' })
+  }
+})
 
 app.get('/api/persist/:key', (req, res) => {
   const value = store[req.params.key] ?? null
