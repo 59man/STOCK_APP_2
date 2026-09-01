@@ -52,6 +52,24 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
     if (dividendTickers.length > 0) fetchDividends(dividendTickers)
   }, [feedTickers, dividendTickers, fetchQuotes, fetchDividends])
 
+  // Fund-provider tickers have no Yahoo history to fall back on after a page
+  // reload wipes useQuotes' in-memory cache — persist each successful
+  // auto-fetch as the manual price too, so a transient feed failure (a
+  // refresh landing before the provider responds, a rate limit, etc.) falls
+  // back to the last real live price instead of a stale pre-automation
+  // manual entry from a bank report months ago.
+  useEffect(() => {
+    tickers.forEach((t) => {
+      const key = t.toUpperCase()
+      if (!FUND_PROVIDER_SET.has(key)) return
+      const q = quotes.get(key)
+      if (!q || !(q.price > 0) || !isFinite(q.price)) return
+      if (manualPrices[key]?.price === q.price) return
+      setManualPrice(t, q.price)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes, tickers])
+
   const refresh = () => {
     fetchQuotes(feedTickers)
     fetchDividends(dividendTickers)

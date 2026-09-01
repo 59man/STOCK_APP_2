@@ -161,12 +161,17 @@ if (IS_PROD) {
   })
 }
 
-// ── Fio Global Fond auto-pricing ────────────────────────────────────────────
+// ── Fio fund auto-pricing ────────────────────────────────────────────────────
 // fiofondy.cz's NAV chart data is a Nette "signal" endpoint gated by a session
 // cookie (not CORS-enabled either way, so this can't be a raw client fetch).
 // Registered unconditionally (not IS_PROD-only) so it works the same in dev
 // (persist server on :3001, proxied by Vite — see vite.config.ts) and prod.
-const FIO_FUND_URL = 'https://www.fiofondy.cz/cs/podilove-fondy/globalni-akciovy-fond'
+// Generic over any fund's URL slug (?slug=<slug> → fiofondy.cz/cs/podilove-fondy/<slug>)
+// so adding a new Fio fund is a data-only change in fundProviderTickers.ts —
+// the session cookie is shared site-wide across every fund page (verified),
+// so one cache serves all slugs.
+const FIO_BASE_URL = 'https://www.fiofondy.cz/cs/podilove-fondy'
+const FIO_SLUG_RE = /^[a-z0-9-]+$/
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 let fioCookieCache = { cookie: null, expiresAt: 0 }
 
@@ -175,7 +180,8 @@ async function getFioSessionCookie() {
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 15_000)
   try {
-    const res = await fetch(FIO_FUND_URL, { signal: ac.signal, headers: { 'User-Agent': BROWSER_UA } })
+    // Any fund page bootstraps a valid session — this one is just a stable default.
+    const res = await fetch(`${FIO_BASE_URL}/globalni-akciovy-fond`, { signal: ac.signal, headers: { 'User-Agent': BROWSER_UA } })
     clearTimeout(timer)
     const cookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
     const cookie = cookies.map((c) => c.split(';')[0]).join('; ')
@@ -188,17 +194,22 @@ async function getFioSessionCookie() {
   }
 }
 
-app.get('/api/fio-fund/quote', async (_req, res) => {
+app.get('/api/fio-fund/quote', async (req, res) => {
+  const slug = req.query.slug
+  if (typeof slug !== 'string' || !FIO_SLUG_RE.test(slug)) {
+    return res.status(400).json({ error: 'invalid or missing slug' })
+  }
+  const fundUrl = `${FIO_BASE_URL}/${slug}`
   const ac = new AbortController()
   const timer = setTimeout(() => ac.abort(), 15_000)
   try {
     const cookie = await getFioSessionCookie()
-    const upstream = await fetch(`${FIO_FUND_URL}?do=getFundChartData`, {
+    const upstream = await fetch(`${fundUrl}?do=getFundChartData`, {
       signal: ac.signal,
       headers: {
         'User-Agent': BROWSER_UA,
         'X-Requested-With': 'XMLHttpRequest',
-        'Referer': FIO_FUND_URL,
+        'Referer': fundUrl,
         'Cookie': cookie,
       },
     })

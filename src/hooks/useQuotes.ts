@@ -172,8 +172,8 @@ async function fetchOnemarketsQuote(isin: string): Promise<Quote> {
   }
 }
 
-async function fetchFioFundQuote(ticker: string): Promise<Quote> {
-  const res = await withTimeout(proxyFetch('/api/fio-fund/quote'), 9000)
+async function fetchFioFundQuote(ticker: string, slug: string): Promise<Quote> {
+  const res = await withTimeout(proxyFetch(`/api/fio-fund/quote?slug=${encodeURIComponent(slug)}`), 9000)
   if (!res.ok) throw new Error(`fio-fund ${res.status}`)
   const { price, prevClose, date } = parseFioFundJson(await res.json())
   return {
@@ -182,14 +182,16 @@ async function fetchFioFundQuote(ticker: string): Promise<Quote> {
     change: price - prevClose,
     changePercent: prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0,
     currency: 'CZK',
-    name: 'Fio Global Fond CZK',
+    name: ticker.toUpperCase(),
     lastUpdated: date,
   }
 }
 
 async function fetchFundProviderQuote(ticker: string): Promise<Quote> {
-  const { provider } = FUND_PROVIDER_TICKERS[ticker.toUpperCase()]
-  return provider === 'onemarkets' ? fetchOnemarketsQuote(ticker.toUpperCase()) : fetchFioFundQuote(ticker)
+  const entry = FUND_PROVIDER_TICKERS[ticker.toUpperCase()]
+  return entry.provider === 'onemarkets'
+    ? fetchOnemarketsQuote(ticker.toUpperCase())
+    : fetchFioFundQuote(ticker, entry.slug)
 }
 
 const SOURCES: Array<(t: string) => Promise<Quote>> = [

@@ -5,6 +5,7 @@
 // Prints the resolved price/date for a human to eyeball against each fund's
 // own site — a fast way to notice if onemarkets/Fio ever change their
 // endpoint shape. Parsing logic here mirrors src/utils/fundQuoteParsers.ts.
+// Keep the FUNDS list below in sync with src/data/fundProviderTickers.ts.
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
@@ -45,8 +46,8 @@ async function checkOnemarkets(isin) {
   return parseOnemarketsCsv(await res.text())
 }
 
-async function checkFioFund() {
-  const url = 'https://www.fiofondy.cz/cs/podilove-fondy/globalni-akciovy-fond'
+async function checkFioFund(slug) {
+  const url = `https://www.fiofondy.cz/cs/podilove-fondy/${slug}`
   const pageRes = await fetch(url, { headers: { 'User-Agent': UA } })
   const cookies = typeof pageRes.headers.getSetCookie === 'function' ? pageRes.headers.getSetCookie() : []
   const cookie = cookies.map((c) => c.split(';')[0]).join('; ')
@@ -64,7 +65,7 @@ const FUNDS = [
   ['LU2606422355 (OM BlackRock Global Equity Dyn.)', () => checkOnemarkets('LU2606422355')],
   ['LU2606421548 (OM Fidelity World Equity Income)', () => checkOnemarkets('LU2606421548')],
   ['LU2595011649 (OM Pictet Global Opport. Alloc.)', () => checkOnemarkets('LU2595011649')],
-  ['FIOG.PR (Fio Global Fond CZK)', () => checkFioFund()],
+  ['FIOG.PR (Fio Global Fond CZK)', () => checkFioFund('globalni-akciovy-fond')],
 ]
 
 for (const [label, check] of FUNDS) {

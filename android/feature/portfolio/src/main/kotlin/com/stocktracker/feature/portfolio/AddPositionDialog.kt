@@ -31,6 +31,7 @@ import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.network.QuoteClient
 import com.stocktracker.core.network.YahooLookupClient
+import com.stocktracker.core.network.mapQuoteTypeToPositionType
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -74,14 +75,16 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
                         label = { Text("Ticker") }, singleLine = true,
                         modifier = Modifier.weight(1f).onFocusChanged { focusState ->
                             // Mirrors AddPositionModal's ticker-blur autofill (web) — resolves an
-                            // ISIN or bare ticker to its canonical symbol + name via Yahoo search,
-                            // same lookup EditTickerDialog's "⟲" button uses.
+                            // ISIN or bare ticker to its canonical symbol + name + type via Yahoo
+                            // search, same lookup EditTickerDialog's "⟲" button uses (that dialog
+                            // doesn't auto-set type, matching web's PortfolioTable edit-mode parity).
                             if (tickerWasFocused && !focusState.isFocused && ticker.isNotBlank()) {
                                 scope.launch {
                                     val hit = try { YahooLookupClient.lookupIsinWithName(ticker) } catch (_: Exception) { null }
                                     if (hit != null) {
                                         ticker = hit.ticker.uppercase()
                                         hit.name?.let { name = it }
+                                        type = mapQuoteTypeToPositionType(hit.quoteType)
                                     }
                                 }
                             }

@@ -1,5 +1,6 @@
 package com.stocktracker.core.network
 
+import com.stocktracker.core.model.PositionType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,7 +25,7 @@ private data class YahooSearchQuote(
 data class QuoteInfo(val ticker: String, val type: String)
 
 /** Ticker + display name — used by the ticker-edit ISIN lookup, which (unlike [QuoteInfo]) also wants a name to fill in. */
-data class NamedQuoteInfo(val ticker: String, val name: String?)
+data class NamedQuoteInfo(val ticker: String, val name: String?, val quoteType: String? = null)
 
 private fun mapType(quoteType: String?): String = when (quoteType) {
     "ETF" -> "etf"
@@ -32,6 +33,15 @@ private fun mapType(quoteType: String?): String = when (quoteType) {
     "COMMODITY" -> "commodity"
     "CRYPTOCURRENCY" -> "crypto"
     else -> "stock"
+}
+
+/** Same mapping as [mapType], for UI callers that want the typed enum directly (mirrors AddPositionModal's `mapType()`, src/utils/yahooLookup.ts). */
+fun mapQuoteTypeToPositionType(quoteType: String?): PositionType = when (quoteType) {
+    "ETF" -> PositionType.ETF
+    "MUTUALFUND" -> PositionType.FUND
+    "COMMODITY" -> PositionType.COMMODITY
+    "CRYPTOCURRENCY" -> PositionType.CRYPTO
+    else -> PositionType.STOCK
 }
 
 private const val BROWSER_USER_AGENT =
@@ -74,7 +84,7 @@ object YahooLookupClient {
     suspend fun lookupIsinWithName(isinOrTicker: String): NamedQuoteInfo? {
         val hit = query(isinOrTicker) ?: return null
         val symbol = hit.symbol ?: return null
-        return NamedQuoteInfo(ticker = symbol, name = hit.longname ?: hit.shortname)
+        return NamedQuoteInfo(ticker = symbol, name = hit.longname ?: hit.shortname, quoteType = hit.quoteType)
     }
 
     /** Resolve a ticker for type enrichment only — the ticker itself is never changed. */
