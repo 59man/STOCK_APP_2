@@ -66,8 +66,8 @@ private object Routes {
 private data class BottomNavTab(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 private val BottomNavTabs = listOf(
-    BottomNavTab(Routes.PORTFOLIO, "Portfolio", Icons.AutoMirrored.Filled.List),
     BottomNavTab(Routes.INSIGHTS, "Insights", Icons.Filled.PieChart),
+    BottomNavTab(Routes.PORTFOLIO, "Portfolio", Icons.AutoMirrored.Filled.List),
     BottomNavTab(Routes.SETTINGS, "Settings", Icons.Filled.Settings),
 )
 
