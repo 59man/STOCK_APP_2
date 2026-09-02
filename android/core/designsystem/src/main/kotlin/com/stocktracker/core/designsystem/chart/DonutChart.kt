@@ -101,17 +101,26 @@ fun DonutChart(
         }
         Column(Modifier.padding(top = 8.dp)) {
             nonZero.forEach { slice ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 3.dp)
+                        .background(slice.color.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
                     Box(Modifier.size(8.dp).background(slice.color, RoundedCornerShape(50)))
                     Text(
                         slice.label,
-                        modifier = Modifier.padding(start = 6.dp).weight(1f),
+                        modifier = Modifier.padding(start = 6.dp).weight(1f, fill = false),
                         style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
                     Text(
                         valueFormatter(slice.value),
+                        modifier = Modifier.padding(start = 8.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
                     )
                 }
             }
