@@ -21,4 +21,21 @@ class LotDividendCardTest {
         }
         composeTestRule.onNodeWithText("43,210.68 CZK").assertExists()
     }
+
+    @Test
+    fun dividendCard_largeGrossAmount_rendersOnOneLine() {
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                DividendCard(
+                    div = fakeDividendEvent(amount = 2.5, currency = "USD"),
+                    grossDisplay = 125_000.00,
+                    appliedRatePct = 15.0,
+                    isOverridden = false,
+                    netDisplay = 106_250.00,
+                    onEdit = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("125,000.00").assertExists()
+    }
 }
