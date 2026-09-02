@@ -122,6 +122,22 @@ pass.
 
 - `core:calc` and other logic modules are untouched — no new unit tests needed
   there.
+- **New: automated Compose UI tests** (new `androidTest`/Robolectric infra —
+  `feature:portfolio` has none today). Cover the exact failure modes this redesign
+  fixes, so a future change can't silently reintroduce them:
+  - Long name (e.g. a 50+ char ticker/fund name) never renders its full string —
+    asserts ellipsis truncation kicked in, not line-wrap.
+  - Large value (7-figure, e.g. `1,000,000.00`) renders as a single text node,
+    single line.
+  - 4-decimal price (crypto/JPY-style) renders without wrapping in both the
+    position row and the new lot/dividend cards.
+  - Applies to: `PositionCard`, `PositionDetailRoute`'s metric blocks, lot card,
+    dividend card — the four places that broke before.
+  - Test file(s) live under `feature/portfolio/src/test/kotlin/...` (Robolectric,
+    JVM-only — no emulator required, runs under the existing
+    `./gradlew test` / `./gradlew :core:calc:test`-style workflow) unless a real
+    Compose semantics check turns out to need `androidTest` instead; decide during
+    implementation based on what Robolectric's Compose support handles.
 - Manual verification on the emulator (`stocktracker_test` AVD) for layout across
   screen sizes, then a real-device pass (per prior experience, real-device testing
   has caught issues emulator testing missed) — specifically: long ticker names,
