@@ -21,8 +21,8 @@ val LocalStockTrackerDarkTheme = staticCompositionLocalOf { true }
  * new and migrated call sites should prefer these.
  */
 object StockTrackerColors {
-    val Gain = Color(0xFF34D566)
-    val Loss = Color(0xFFFF5449)
+    val Gain = Color(0xFF22C55E)
+    val Loss = Color(0xFFEF4444)
 
     private val LightGain = Color(0xFF2E7D32)
     private val LightLoss = Color(0xFFC62828)
@@ -33,14 +33,14 @@ object StockTrackerColors {
         @Composable get() = if (LocalStockTrackerDarkTheme.current) Loss else LightLoss
 }
 
-private val DarkBackground = Color(0xFF0B0B10)
-private val DarkSurface = Color(0xFF17171F)
-private val DarkSurfaceVariant = Color(0xFF20202B)
-private val DarkOnSurface = Color(0xFFEDEDF2)
-private val DarkOnSurfaceVariant = Color(0xFFA0A0AD)
-private val AccentPrimary = Color(0xFF8B7CF6)
-private val AccentOnPrimary = Color(0xFF1B1032)
-private val AccentPrimaryContainer = Color(0xFF352A5C)
+private val DarkBackground = Color(0xFF0A0A0D)
+private val DarkSurface = Color(0xFF17171D)
+private val DarkSurfaceVariant = Color(0xFF1E1E24)
+private val DarkOnSurface = Color(0xFFF2F2F5)
+private val DarkOnSurfaceVariant = Color(0xFF8A8A96)
+private val AccentPrimary = Color(0xFF1560F0)
+private val AccentOnPrimary = Color(0xFFFFFFFF)
+private val AccentPrimaryContainer = Color(0xFF0E3A99)
 
 private val StockTrackerDarkScheme = darkColorScheme(
     primary = AccentPrimary,
