@@ -34,12 +34,13 @@ readability problems across every screen:
    including dialogs — not just the position list.
 
 Out of scope: backend/server, sync engine, calc logic (`core:calc`), web app,
-iOS/KMP.
+iOS/KMP, tablet/foldable/landscape layouts — **phone portrait only**, matching
+today's app scope. Verification (see Testing) targets phone screen widths only.
 
 ## Design tokens (dark — primary target this round)
 
 | Token | Value | Use |
-|---|---|---|
+| --- | --- | --- |
 | `background` | `#0A0A0D` | Scaffold background |
 | `surface` (card) | `#17171D` | `AppCard`, dialogs, chart cards |
 | `surfaceSubtle` | `#1E1E24` | Neutral pill fill, dividers |
