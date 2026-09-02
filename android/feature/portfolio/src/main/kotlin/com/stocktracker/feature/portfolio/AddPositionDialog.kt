@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,7 +64,7 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
     val perSharePrice = if (priceIsTotal && qty > 0) rawPrice / qty else rawPrice
     val canSubmit = ticker.isNotBlank() && qty > 0 && rawPrice > 0 && buyDate.isNotBlank()
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add position") },
         text = {

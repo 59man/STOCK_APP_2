@@ -2,7 +2,7 @@ package com.stocktracker.feature.portfolio
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
+import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -66,7 +66,7 @@ fun ManualPriceDialog(
     var totalValue by remember { mutableStateOf(currentManual?.let { (it.price * quantity).toString() } ?: "") }
     val value = totalValue.toDoubleOrNull()
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Manual price — $ticker") },
         text = {

@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -155,7 +155,7 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 Text("Disconnect")
             }
             if (showDisconnectConfirm) {
-                AlertDialog(
+                AppDialog(
                     onDismissRequest = { showDisconnectConfirm = false },
                     title = { Text("Disconnect from server?") },
                     text = { Text("This stops syncing until you reconnect in Settings.") },

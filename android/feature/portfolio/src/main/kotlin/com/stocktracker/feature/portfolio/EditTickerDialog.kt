@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
+import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,7 +58,7 @@ fun EditTickerDialog(row: PortfolioRow, onDismiss: () -> Unit, onSave: (List<Pos
 
     val canSave = ticker.isNotBlank()
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit ${row.ticker}") },
         text = {

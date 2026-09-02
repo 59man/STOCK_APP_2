@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -24,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.model.Position
 
 private val EDIT_LOT_CURRENCIES = listOf("USD", "EUR", "GBP", "JPY", "CZK", "CHF", "CAD", "AUD")
@@ -45,7 +45,7 @@ fun EditLotDialog(position: Position, onDismiss: () -> Unit, onSave: (Position) 
     val price = buyPrice.toDoubleOrNull() ?: 0.0
     val canSave = qty > 0 && price >= 0 && buyDate.isNotBlank() && (!isClosed || sellPrice.toDoubleOrNull() != null)
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit lot — ${position.ticker}") },
         text = {

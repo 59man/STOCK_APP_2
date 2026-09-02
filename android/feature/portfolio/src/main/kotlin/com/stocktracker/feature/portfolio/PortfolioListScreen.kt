@@ -28,7 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
+import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -286,7 +286,7 @@ internal fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioLi
     }
 
     manageTarget?.let { portfolio ->
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { manageTarget = null },
             title = { Text(portfolio.name) },
             text = { Text("Manage this portfolio.") },
@@ -309,7 +309,7 @@ internal fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioLi
 
     renameTarget?.let { portfolio ->
         var name by remember(portfolio.id) { mutableStateOf(portfolio.name) }
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { renameTarget = null },
             title = { Text("Rename portfolio") },
             text = {
@@ -329,7 +329,7 @@ internal fun PortfolioTabs(uiState: PortfolioListUiState, onAction: (PortfolioLi
     }
 
     deleteTarget?.let { portfolio ->
-        AlertDialog(
+        AppDialog(
             onDismissRequest = { deleteTarget = null },
             title = { Text("Delete \"${portfolio.name}\"?") },
             text = { Text("This removes the portfolio and all its positions from this device. This cannot be undone.") },
@@ -377,7 +377,7 @@ internal fun CurrencyTabs(uiState: PortfolioListUiState, onAction: (PortfolioLis
 @Composable
 private fun AddPortfolioDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    androidx.compose.material3.AlertDialog(
+    com.stocktracker.core.designsystem.components.AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("New portfolio") },
         text = {
@@ -796,7 +796,7 @@ internal fun DivTaxEditDialog(
     var text by remember { mutableStateOf(String.format(Locale.US, "%.1f", (currentRate ?: defaultRate) * 100)) }
     val pct = text.toDoubleOrNull()
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Tax rate — $ticker $date") },
         text = {

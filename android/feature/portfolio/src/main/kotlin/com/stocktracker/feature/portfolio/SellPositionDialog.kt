@@ -2,7 +2,6 @@ package com.stocktracker.feature.portfolio
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -13,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.model.PortfolioRow
 import java.time.LocalDate
 import java.util.Locale
@@ -26,7 +26,7 @@ fun SellPositionDialog(row: PortfolioRow, onDismiss: () -> Unit, onConfirm: (sel
     val price = sellPrice.toDoubleOrNull() ?: 0.0
     val estimatedPnl = if (price > 0) (price - row.avgBuyPrice) * row.totalQuantity else null
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Sell ${row.ticker}") },
         text = {
@@ -37,7 +37,7 @@ fun SellPositionDialog(row: PortfolioRow, onDismiss: () -> Unit, onConfirm: (sel
                 estimatedPnl?.let { pnl ->
                     Text(
                         "Estimated P&L: ${String.format(Locale.US, "%,.2f", pnl)}",
-                        color = if (pnl < 0) androidx.compose.ui.graphics.Color(0xFFD32F2F) else androidx.compose.ui.graphics.Color(0xFF2E7D32),
+                        color = if (pnl < 0) com.stocktracker.core.designsystem.StockTrackerColors.loss else com.stocktracker.core.designsystem.StockTrackerColors.gain,
                     )
                 }
             }
