@@ -24,3 +24,5 @@ android/captures/
 android/.cxx/
 android/*.apk
 android/*.aab
+# Brainstorming visual companion sessions
+.superpowers/
