@@ -670,28 +670,23 @@ fun PositionDetailRoute(
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 run {
                     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            "P&L ${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
-                            style = NumericTypography.bodyMedium,
-                            color = pnlColor(row.pnl),
+                    Column(Modifier.fillMaxWidth().padding(top = Spacing.sm)) {
+                        com.stocktracker.core.designsystem.components.MetricBlock(
+                            label = "P&L",
+                            value = "${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
+                            valueColor = pnlColor(row.pnl),
                         )
-                        Text(
-                            "Return ${formatMoney(dc(row.totalReturn))}",
-                            style = NumericTypography.bodyMedium,
-                            color = pnlColor(row.totalReturn),
+                        com.stocktracker.core.designsystem.components.MetricBlock(
+                            label = "Total return incl. dividends",
+                            value = formatMoney(dc(row.totalReturn)),
+                            valueColor = pnlColor(row.totalReturn),
                         )
-                    }
-                    row.irr?.let { irr ->
-                        Text(
-                            "IRR ${formatPercent(irr * 100)}",
-                            style = NumericTypography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = Spacing.xs),
-                        )
+                        row.irr?.let { irr ->
+                            com.stocktracker.core.designsystem.components.MetricBlock(
+                                label = "IRR p.a.",
+                                value = formatPercent(irr * 100),
+                            )
+                        }
                     }
                 }
                 if (!row.isClosed) {
