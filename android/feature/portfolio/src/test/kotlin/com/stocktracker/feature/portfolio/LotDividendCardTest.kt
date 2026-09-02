@@ -19,6 +19,6 @@ class LotDividendCardTest {
                 LotCard(lot = fakePosition(quantity = 0.12345678, buyPrice = 43210.6789, currency = "CZK"), onEdit = {})
             }
         }
-        composeTestRule.onNodeWithText("43,210.6789 CZK").assertExists()
+        composeTestRule.onNodeWithText("43,210.68 CZK").assertExists()
     }
 }

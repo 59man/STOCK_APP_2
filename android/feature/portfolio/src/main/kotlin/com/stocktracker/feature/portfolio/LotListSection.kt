@@ -41,11 +41,11 @@ internal fun LotCard(lot: Position, onEdit: () -> Unit) {
             )
         }
         LotField("Quantity", formatQty(lot.quantity))
-        LotField("Buy price", "${formatLotPrice(lot.buyPrice)} ${lot.currency}")
+        LotField("Buy price", "${formatMoney(lot.buyPrice)} ${lot.currency}")
         lot.broker?.let { LotField("Broker", it) }
         if (isSold) {
             LotField("Sell date", lot.sellDate!!)
-            LotField("Sell price", "${formatLotPrice(lot.sellPrice!!)} ${lot.currency}")
+            LotField("Sell price", "${formatMoney(lot.sellPrice!!)} ${lot.currency}")
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onEdit) { Text("Edit") }
@@ -66,7 +66,3 @@ private fun LotField(label: String, value: String) {
 
 private fun formatQty(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else String.format(Locale.US, "%.4f", value)
-
-/** Full 4-decimal precision (vs. the 2-decimal [formatMoney]) — a lot's buy/sell price can be a
- * crypto-style price like 43210.6789, and truncating to 2 decimals silently loses the tail. */
-private fun formatLotPrice(value: Double): String = String.format(Locale.US, "%,.4f", value)
