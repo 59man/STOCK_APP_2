@@ -500,7 +500,7 @@ private fun SummaryCard(
 }
 
 @Composable
-private fun PositionCard(
+internal fun PositionCard(
     row: PortfolioRow,
     displayCurrency: String,
     rates: Map<String, Double>,
@@ -544,7 +544,13 @@ private fun PositionCard(
                             )
                         }
                     }
-                    Text(row.name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        row.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -552,17 +558,22 @@ private fun PositionCard(
                     formatMoney(dc(row.currentValue)),
                     style = NumericTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
-                Text(
-                    formatPercent(dailyPct),
-                    style = NumericTypography.bodyMedium,
-                    color = pnlColor(dailyPct),
-                )
-                Text(
-                    formatMoney(dc(row.totalReturn)),
-                    style = NumericTypography.bodyMedium,
-                    color = pnlColor(row.totalReturn),
-                )
+                Row(modifier = Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Badge(
+                        formatPercent(dailyPct),
+                        containerColor = pnlColor(dailyPct).copy(alpha = 0.16f),
+                        contentColor = pnlColor(dailyPct),
+                        emphasized = true,
+                    )
+                    Badge(
+                        formatMoney(dc(row.totalReturn)),
+                        containerColor = pnlColor(row.totalReturn).copy(alpha = 0.16f),
+                        contentColor = pnlColor(row.totalReturn),
+                        emphasized = true,
+                    )
+                }
             }
         }
     }
