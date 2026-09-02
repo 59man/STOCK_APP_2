@@ -90,7 +90,7 @@ fun PortfolioPnlChartCard(
                 MultiLineChart(
                     series = listOf(
                         ChartSeries("Cost Basis", uiState.points.map { it.costBasis }, Color(0xFF64748B)),
-                        ChartSeries("Current Value", uiState.points.map { it.currentValue }, Color(0xFF3B82F6)),
+                        ChartSeries("Current Value", uiState.points.map { it.currentValue }, MaterialTheme.colorScheme.primary),
                     ),
                     labels = uiState.points.map { formatAxisDate(it.date, uiState.range) },
                 )
