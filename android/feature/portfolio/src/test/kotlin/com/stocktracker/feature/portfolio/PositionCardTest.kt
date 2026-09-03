@@ -1,5 +1,6 @@
 package com.stocktracker.feature.portfolio
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.stocktracker.core.designsystem.StockTrackerTheme
@@ -49,5 +50,31 @@ class PositionCardTest {
             }
         }
         composeTestRule.onNodeWithText("1,000,000.00").assertExists()
+    }
+
+    @Test
+    fun longNameAndLargeValue_valueStaysDisplayed() {
+        // Deliberately much longer than `longName` above: PositionCard's Row wraps the whole
+        // card in `.clickable`, which merges all descendant semantics into one node — so
+        // `onNodeWithText(...).assertIsDisplayed()` against the default (merged) tree always
+        // resolves to that outer merged node and passes trivially, regardless of whether the
+        // inner value Text actually collapsed. useUnmergedTree=true is required to reach the
+        // real value Text node. A moderately long name (~50 chars) also isn't reliably enough
+        // to overflow the row under every font/density combination the test can run under; an
+        // extreme length removes that flakiness and forces the real failure mode: pre-fix, the
+        // unweighted name Row can claim the entire row width, and the sibling value/pill column
+        // measures to a zero-size box (not just visually clipped — actually zero width/height).
+        val veryLongName = "X".repeat(500)
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                PositionCard(
+                    row = fakeRow(name = veryLongName, currentValue = 1_000_000.00),
+                    displayCurrency = "USD",
+                    rates = emptyMap(),
+                    onOpenDetail = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("1,000,000.00", useUnmergedTree = true).assertIsDisplayed()
     }
 }

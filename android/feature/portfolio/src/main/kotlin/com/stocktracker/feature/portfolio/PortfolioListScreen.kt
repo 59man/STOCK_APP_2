@@ -27,8 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -69,6 +67,7 @@ import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.designsystem.components.AppButton
 import com.stocktracker.core.designsystem.components.AppButtonVariant
 import com.stocktracker.core.designsystem.components.AppCard
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.designsystem.components.Badge
 import com.stocktracker.core.model.PortfolioRow
 import com.stocktracker.core.model.PositionType
@@ -513,7 +512,7 @@ internal fun PositionCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 PositionLogo(row.ticker, row.type)
                 Column(modifier = Modifier.padding(start = Spacing.sm)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -554,6 +553,7 @@ internal fun PositionCard(
                     style = NumericTypography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Row(modifier = Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Badge(
