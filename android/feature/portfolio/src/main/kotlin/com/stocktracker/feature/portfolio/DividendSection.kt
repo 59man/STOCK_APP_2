@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import com.stocktracker.core.designsystem.NumericTypography
 import com.stocktracker.core.designsystem.Spacing
 import com.stocktracker.core.designsystem.StockTrackerColors
@@ -116,6 +117,6 @@ internal fun DividendCard(
 private fun DividendField(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified) {
     Row(Modifier.fillMaxWidth().padding(top = Spacing.xs), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        Text(value, style = NumericTypography.labelMedium, color = valueColor, maxLines = 1)
+        Text(value, style = NumericTypography.labelMedium, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

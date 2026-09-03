@@ -11,6 +11,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import com.stocktracker.core.designsystem.NumericTypography
 import com.stocktracker.core.designsystem.Spacing
 import com.stocktracker.core.designsystem.StockTrackerColors
@@ -60,7 +61,7 @@ private fun LotField(label: String, value: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        Text(value, style = NumericTypography.labelMedium, maxLines = 1)
+        Text(value, style = NumericTypography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
