@@ -2,7 +2,6 @@ package com.stocktracker.feature.portfolio
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import com.stocktracker.core.data.ManualPriceRepository
 import com.stocktracker.core.data.sync.SyncCoordinator
 import com.stocktracker.core.data.sync.SyncTarget
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.model.ManualPriceEntry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch

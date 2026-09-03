@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.stocktracker.core.designsystem.StockTrackerColors
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.model.PortfolioRow
 import com.stocktracker.core.model.PositionType

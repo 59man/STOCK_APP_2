@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import com.stocktracker.core.designsystem.components.AppDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,6 +27,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.stocktracker.core.designsystem.StockTrackerColors
+import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.network.QuoteClient
 import com.stocktracker.core.network.YahooLookupClient

@@ -36,7 +36,7 @@ fun SellPositionDialog(row: PortfolioRow, onDismiss: () -> Unit, onConfirm: (sel
                 OutlinedTextField(sellDate, { sellDate = it }, label = { Text("Sell date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 estimatedPnl?.let { pnl ->
                     Text(
-                        "Estimated P&L: ${String.format(Locale.US, "%,.2f", pnl)}",
+                        "Estimated P&L: ${formatMoney(pnl)}",
                         color = if (pnl < 0) com.stocktracker.core.designsystem.StockTrackerColors.loss else com.stocktracker.core.designsystem.StockTrackerColors.gain,
                     )
                 }
