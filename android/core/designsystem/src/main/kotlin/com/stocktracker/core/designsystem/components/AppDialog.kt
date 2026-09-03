@@ -42,7 +42,9 @@ fun AppDialog(
                 ProvideTextStyle(MaterialTheme.typography.titleLarge) { title() }
                 text?.let {
                     Spacer(Modifier.height(Spacing.md))
-                    ProvideTextStyle(MaterialTheme.typography.bodyMedium) { it() }
+                    Column(Modifier.weight(1f, fill = false)) {
+                        ProvideTextStyle(MaterialTheme.typography.bodyMedium) { it() }
+                    }
                 }
                 Spacer(Modifier.height(Spacing.lg))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
