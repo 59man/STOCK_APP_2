@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.stocktracker.core.designsystem.ComponentRadius
 import com.stocktracker.core.designsystem.Spacing
@@ -33,6 +34,8 @@ fun Badge(
             modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
