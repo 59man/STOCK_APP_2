@@ -515,18 +515,26 @@ internal fun PositionCard(
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 PositionLogo(row.ticker, row.type)
                 Column(modifier = Modifier.padding(start = Spacing.sm)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(row.ticker, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    // Ticker symbol is deliberately not shown here — it's the detail screen's
+                    // TopAppBar title (PositionDetailRoute). The card leads with the full name;
+                    // type/currency/SOLD badges sit where the name used to (below it).
+                    Text(
+                        row.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
                         Badge(
                             typeBadgeLabel(row.type),
-                            modifier = Modifier.padding(start = Spacing.sm),
                             containerColor = typeBadgeColor(row.type),
                             contentColor = Color.White,
                         )
                         Badge(
-                            row.currency,
+                            row.nativeCurrency,
                             modifier = Modifier.padding(start = Spacing.sm),
-                            containerColor = currencyBadgeColor(row.currency),
+                            containerColor = currencyBadgeColor(row.nativeCurrency),
                             contentColor = Color.White,
                         )
                         if (row.isClosed) {
@@ -538,13 +546,6 @@ internal fun PositionCard(
                             )
                         }
                     }
-                    Text(
-                        row.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -713,7 +714,17 @@ fun PositionDetailRoute(
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 run {
                     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
+                    val dailyPct = dailyChangePercent(row)
                     Column(Modifier.fillMaxWidth().padding(top = Spacing.sm)) {
+                        com.stocktracker.core.designsystem.components.MetricBlock(
+                            label = "Current price",
+                            value = "${formatMoney(dc(row.currentPrice))} ${uiState.displayCurrency}",
+                        )
+                        com.stocktracker.core.designsystem.components.MetricBlock(
+                            label = "Today's change",
+                            value = "${formatMoney(dc(row.dailyChange))} (${formatPercent(dailyPct)})",
+                            valueColor = pnlColor(row.dailyChange),
+                        )
                         com.stocktracker.core.designsystem.components.MetricBlock(
                             label = "P&L",
                             value = "${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",

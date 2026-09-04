@@ -6,16 +6,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,7 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -98,8 +108,21 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> systemDark
             }
+            // Hoisted here (Activity-scoped, created before the NavHost exists) instead of the
+            // former per-destination `getBackStackEntry(MAIN_GRAPH)` lookup, so its uiState.isLoading
+            // can gate the startup loading screen below — a second hiltViewModel() call would spin
+            // up its own instance and double every quote/dividend/FX network fetch in this
+            // ViewModel's init block. The Portfolio/Insights/PositionDetail routes now all take
+            // this single instance directly instead of re-deriving it from the nav back stack.
+            val portfolioViewModel: PortfolioListViewModel = hiltViewModel()
+            val portfolioUiState by portfolioViewModel.uiState.collectAsState()
+
             StockTrackerTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    if (portfolioUiState.isLoading) {
+                        AppLoadingScreen()
+                        return@Surface
+                    }
                     val navController = rememberNavController()
                     var sharedUri by sharedUriState
 
@@ -146,14 +169,12 @@ class MainActivity : ComponentActivity() {
                             startDestination = Routes.MAIN_GRAPH,
                             modifier = Modifier.padding(scaffoldPadding),
                         ) {
-                            // Portfolio and Insights share one PortfolioListViewModel instance (scoped to
-                            // this nested graph's own back-stack entry) so the active-portfolio selection
-                            // made on one tab is immediately reflected on the other, instead of each tab
-                            // independently defaulting back to the first portfolio.
+                            // Portfolio and Insights share the single Activity-scoped portfolioViewModel
+                            // hoisted above, so the active-portfolio selection made on one tab is
+                            // immediately reflected on the other, instead of each tab independently
+                            // defaulting back to the first portfolio.
                             navigation(startDestination = Routes.PORTFOLIO, route = Routes.MAIN_GRAPH) {
-                                composable(Routes.PORTFOLIO) { entry ->
-                                    val parentEntry = remember(entry) { navController.getBackStackEntry(Routes.MAIN_GRAPH) }
-                                    val viewModel: PortfolioListViewModel = hiltViewModel(parentEntry)
+                                composable(Routes.PORTFOLIO) {
                                     PortfolioListRoute(
                                         onOpenImport = { portfolioId ->
                                             navController.navigate("${Routes.IMPORT}?${Routes.IMPORT_ARG_PORTFOLIO_ID}=${portfolioId ?: ""}")
@@ -162,13 +183,11 @@ class MainActivity : ComponentActivity() {
                                         onOpenPositionDetail = { ticker ->
                                             navController.navigate("${Routes.POSITION_DETAIL}/${Uri.encode(ticker)}")
                                         },
-                                        viewModel = viewModel,
+                                        viewModel = portfolioViewModel,
                                     )
                                 }
-                                composable(Routes.INSIGHTS) { entry ->
-                                    val parentEntry = remember(entry) { navController.getBackStackEntry(Routes.MAIN_GRAPH) }
-                                    val viewModel: PortfolioListViewModel = hiltViewModel(parentEntry)
-                                    InsightsRoute(viewModel = viewModel)
+                                composable(Routes.INSIGHTS) {
+                                    InsightsRoute(viewModel = portfolioViewModel)
                                 }
                             }
                             composable(Routes.SETTINGS) {
@@ -183,14 +202,12 @@ class MainActivity : ComponentActivity() {
                             ) { backStackEntry2 ->
                                 val ticker = backStackEntry2.arguments?.getString(Routes.POSITION_DETAIL_ARG_TICKER)
                                 if (ticker != null) {
-                                    // Same MAIN_GRAPH-scoped instance as PORTFOLIO/INSIGHTS above — a fresh
+                                    // Same Activity-scoped instance as PORTFOLIO/INSIGHTS above — a fresh
                                     // default-scoped ViewModel here would re-resolve its own active portfolio
                                     // as portfolios.firstOrNull() (see PortfolioListViewModel.uiState), which
                                     // silently spins forever whenever the ticker lives in any portfolio other
                                     // than the first one in the list.
-                                    val parentEntry = remember(backStackEntry2) { navController.getBackStackEntry(Routes.MAIN_GRAPH) }
-                                    val viewModel: PortfolioListViewModel = hiltViewModel(parentEntry)
-                                    PositionDetailRoute(ticker = ticker, onBack = { navController.popBackStack() }, viewModel = viewModel)
+                                    PositionDetailRoute(ticker = ticker, onBack = { navController.popBackStack() }, viewModel = portfolioViewModel)
                                 }
                             }
                             composable(
@@ -228,5 +245,17 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         sharedUriState.value = extractSharedUri(intent)
+    }
+}
+
+/** Shown until portfolioUiState.isLoading flips false — no fixed timer, just the real data-ready signal. */
+@Composable
+private fun AppLoadingScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Stock Tracker", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(24.dp))
+            CircularProgressIndicator()
+        }
     }
 }
