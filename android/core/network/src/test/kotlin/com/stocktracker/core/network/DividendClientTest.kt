@@ -2,32 +2,42 @@ package com.stocktracker.core.network
 
 import com.stocktracker.core.model.DividendEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Mirrors src/utils/dividends.test.ts. */
 class DividendClientTest {
 
-    private fun body(currency: String, events: String?) =
-        """{"chart":{"result":[{"meta":{"currency":"$currency"}""" +
+    private fun body(currency: String, events: String?, bars: Int = 500): String {
+        val timestamps = (0 until bars).joinToString(",")
+        return """{"chart":{"result":[{"meta":{"currency":"$currency"},"timestamp":[$timestamps]""" +
             (events?.let { ""","events":{"dividends":$it}""" } ?: "") + "}]}}"
+    }
 
     @Test fun `parses events into ISO ex-dates stamped with the feed currency`() {
-        val events = parseDividendEvents(body("USD", """{"a":{"date":1716793200,"amount":1.24}}"""))
+        val events = parseDividendChart(body("USD", """{"a":{"date":1716793200,"amount":1.24}}""")).events
         assertEquals(listOf(DividendEvent("2024-05-27", 1.24, "USD")), events)
     }
 
     @Test fun `normalises GBp pence amounts to GBP`() {
-        val event = parseDividendEvents(body("GBp", """{"a":{"date":1716793200,"amount":250.0}}""")).single()
+        val event = parseDividendChart(body("GBp", """{"a":{"date":1716793200,"amount":250.0}}""")).events.single()
         assertEquals("GBP", event.currency)
         assertEquals(2.5, event.amount, 1e-9)
     }
 
     @Test fun `a successful response carrying no dividend events parses to empty`() {
-        assertEquals(emptyList<DividendEvent>(), parseDividendEvents(body("EUR", null)))
+        assertEquals(emptyList<DividendEvent>(), parseDividendChart(body("EUR", null)).events)
+    }
+
+    @Test fun `one dividend per bar is the signature of a saturating interval`() {
+        val saturated = parseDividendChart(body("USD", """{"a":{"date":1716793200,"amount":0.2}}""", bars = 1))
+        assertTrue(saturated.bars > 0 && saturated.events.size >= saturated.bars)
+        val healthy = parseDividendChart(body("USD", """{"a":{"date":1716793200,"amount":1.24}}"""))
+        assertTrue(healthy.events.size < healthy.bars)
     }
 
     @Test fun `static history fills only the dates the live feed lacks`() {
-        val live = parseDividendEvents(body("CZK", """{"a":{"date":1782864000,"amount":30.0}}"""))
+        val live = parseDividendChart(body("CZK", """{"a":{"date":1782864000,"amount":30.0}}""")).events
         val merged = mergeStatics(live, staticDividendsFor("CZG.PR")) // aliased to COLT.PR
         assertEquals(
             listOf("2021-06-25", "2022-06-01", "2023-06-16", "2024-07-03", "2025-07-03", "2026-07-01"),

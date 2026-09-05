@@ -1,19 +1,36 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { fetchDividendEvents, calcNetDividends } from './dividends'
 
-function mockYahoo(body: unknown, status = 200) {
+let requested: string[] = []
+
+/** Responds with `bodies[n]` to the n-th request, repeating the last one thereafter. */
+function mockYahoo(bodies: unknown | unknown[], status = 200) {
+  const list = Array.isArray(bodies) ? bodies : [bodies]
+  requested = []
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => ({
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => body,
-    })) as unknown as typeof fetch,
+    vi.fn(async (url: string) => {
+      const body = list[Math.min(requested.length, list.length - 1)]
+      requested.push(url)
+      return { ok: status >= 200 && status < 300, status, json: async () => body }
+    }) as unknown as typeof fetch,
   )
 }
 
-const chart = (currency: string, dividends: Record<string, { date: number; amount: number }> | null) => ({
-  chart: { result: [{ meta: { currency }, events: dividends ? { dividends } : undefined }] },
+const chart = (
+  currency: string,
+  dividends: Record<string, { date: number; amount: number }> | null,
+  bars = 500,
+) => ({
+  chart: {
+    result: [
+      {
+        meta: { currency },
+        timestamp: Array.from({ length: bars }, (_, i) => i),
+        events: dividends ? { dividends } : undefined,
+      },
+    ],
+  },
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -50,6 +67,29 @@ describe('fetchDividendEvents', () => {
     expect(events.map((e) => e.date)).toEqual([
       '2021-06-25', '2022-06-01', '2023-06-16', '2024-07-03', '2025-07-03', '2026-07-01',
     ])
+  })
+
+  it('refetches at daily resolution when every bar carries a dividend', async () => {
+    // Yahoo emits at most one dividend per bar, so one-event-per-bar means the weekly
+    // interval is saturating and silently dropping payouts (a weekly-distribution ETF).
+    const saturated = chart('USD', { a: { date: 1_716_793_200, amount: 0.2 } }, 1)
+    const daily = chart('USD', {
+      a: { date: 1_716_793_200, amount: 0.2 },
+      b: { date: 1_717_398_000, amount: 0.2 },
+    })
+    mockYahoo([saturated, daily])
+
+    const events = await fetchDividendEvents('QDTE')
+
+    expect(events).toHaveLength(2)
+    expect(requested[0]).toContain('interval=1wk')
+    expect(requested[1]).toContain('interval=1d')
+  })
+
+  it('does not refetch when the weekly response is not saturated', async () => {
+    mockYahoo(chart('USD', { a: { date: 1_716_793_200, amount: 1.24 } }))
+    await fetchDividendEvents('JNJ')
+    expect(requested).toHaveLength(1)
   })
 })
 

@@ -27,13 +27,18 @@ fun yahooChartQuery(range: String, nowMs: Long = System.currentTimeMillis()): St
     return "interval=1wk&${epochWindow(nowMs)}"
 }
 
-/** Interval + window for a ticker's dividend event history. */
-fun yahooDividendQuery(nowMs: Long = System.currentTimeMillis()): String =
-    // Yahoo emits at most one dividend per bar, so the interval caps how many events
-    // survive: 3mo collapses 227 JNJ payouts to 168 and 1mo drops one. Weekly bars
-    // returned event-for-event identical sets to daily for JNJ, VIG.PR, 8306.T and
-    // DTE.DE at ~1/5 the payload — no dividend-paying instrument pays weekly.
-    "interval=1wk&${epochWindow(nowMs)}&events=div"
+/**
+ * Interval + window for a ticker's dividend event history.
+ *
+ * Weekly by default: Yahoo emits at most one dividend per bar, so the interval caps how
+ * many events survive — 3mo collapses 227 JNJ payouts to 168 and 1mo drops one — while
+ * weekly returned event-for-event identical sets to daily for JNJ, VIG.PR, 8306.T and
+ * DTE.DE at ~1/5 the payload. Weekly-distribution ETFs (QDTE, XDTE, ...) *would* saturate
+ * a weekly bar, so callers detect that (one event per bar) and retry with "1d", which no
+ * real distribution schedule can saturate.
+ */
+fun yahooDividendQuery(interval: String = "1wk", nowMs: Long = System.currentTimeMillis()): String =
+    "interval=$interval&${epochWindow(nowMs)}&events=div"
 
 /** Interval + window for a CUR->CZK rate history. */
 fun yahooFxHistoryQuery(nowMs: Long = System.currentTimeMillis()): String =

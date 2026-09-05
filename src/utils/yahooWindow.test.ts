@@ -16,7 +16,11 @@ describe('yahooChartQuery', () => {
 
 describe('yahooDividendQuery', () => {
   it('asks for weekly bars over the full window — coarser intervals drop events', () => {
-    expect(yahooDividendQuery(NOW)).toBe('interval=1wk&period1=0&period2=1788700000&events=div')
+    expect(yahooDividendQuery('1wk', NOW)).toBe('interval=1wk&period1=0&period2=1788700000&events=div')
+  })
+
+  it('can drop to daily bars, for a distribution schedule that saturates a weekly bar', () => {
+    expect(yahooDividendQuery('1d', NOW)).toBe('interval=1d&period1=0&period2=1788700000&events=div')
   })
 })
 

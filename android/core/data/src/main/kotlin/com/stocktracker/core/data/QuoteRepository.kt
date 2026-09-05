@@ -86,6 +86,11 @@ class QuoteRepository @Inject constructor() {
             val quote = QuoteClient.fetchQuote(ticker)
             cache[ticker] = CacheEntry(quote, now)
             quote
+        } catch (e: CancellationException) {
+            // Ahead of the generic catch below, which would otherwise turn a cancelled
+            // fetch into a stale-cache "success" — the caller would then go on to publish
+            // that quote and clear the ticker's error entry from a job that is already dead.
+            throw e
         } catch (e: Exception) {
             cache[ticker]?.quote ?: throw e // stale beats nothing
         }

@@ -79,10 +79,14 @@ const STATIC_DIVIDENDS: Record<string, DividendEvent[]> = {
   ],
 }
 
-export async function fetchDividendEvents(ticker: string): Promise<DividendEvent[]> {
-  const lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker).toUpperCase()
-  const statics = STATIC_DIVIDENDS[lookupTicker] ?? []
-  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?${yahooDividendQuery()}`
+interface DividendChart {
+  currency: string | undefined
+  bars: number
+  events: DividendEvent[]
+}
+
+async function fetchDividendChart(ticker: string, interval: '1wk' | '1d'): Promise<DividendChart> {
+  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?${yahooDividendQuery(interval)}`
   const res = await proxyFetch(path)
   // Throw rather than fall through with an empty list: useDividends caches whatever
   // this resolves to for the rest of the session, so swallowing a 429/500 would
@@ -90,15 +94,33 @@ export async function fetchDividendEvents(ticker: string): Promise<DividendEvent
   // uncached; a genuinely empty but successful response (an accumulating ETF)
   // still caches, as it should.
   if (!res.ok) throw new Error(`Yahoo dividends ${res.status}`)
-  const json = await res.json()
-  let metaCurrency: string | undefined = json?.chart?.result?.[0]?.meta?.currency ?? undefined
-  const raw = json?.chart?.result?.[0]?.events?.dividends
-  let fetched: DividendEvent[] = raw
-    ? (Object.values(raw) as Array<{ date: number; amount: number }>).map(({ date, amount }) => ({
-        date: new Date(date * 1000).toISOString().slice(0, 10),
-        amount,
-      }))
-    : []
+  const result = (await res.json())?.chart?.result?.[0]
+  const raw = result?.events?.dividends
+  return {
+    currency: result?.meta?.currency ?? undefined,
+    bars: (result?.timestamp ?? []).length,
+    events: raw
+      ? (Object.values(raw) as Array<{ date: number; amount: number }>).map(({ date, amount }) => ({
+          date: new Date(date * 1000).toISOString().slice(0, 10),
+          amount,
+        }))
+      : [],
+  }
+}
+
+export async function fetchDividendEvents(ticker: string): Promise<DividendEvent[]> {
+  const lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker).toUpperCase()
+  const statics = STATIC_DIVIDENDS[lookupTicker] ?? []
+  let payload = await fetchDividendChart(lookupTicker, '1wk')
+  // Yahoo emits at most one dividend per bar, so an instrument distributing at least as
+  // often as the bar interval silently loses events — one event per bar is that
+  // signature. Retry at daily resolution, which no real distribution schedule saturates.
+  // (Weekly-distribution ETFs like QDTE/XDTE are the case this catches.)
+  if (payload.bars > 0 && payload.events.length >= payload.bars) {
+    payload = await fetchDividendChart(lookupTicker, '1d')
+  }
+  let metaCurrency = payload.currency
+  let fetched = payload.events
   // Yahoo reports LSE dividends in pence (GBp) — normalise to GBP
   if (metaCurrency === 'GBp') {
     metaCurrency = 'GBP'

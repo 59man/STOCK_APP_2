@@ -252,12 +252,15 @@ hand-build a chart query:
 | Builder | Interval | Used by |
 |---|---|---|
 | `yahooChartQuery(range)` | `1d`, or `1wk` for `max` | `PriceChart`, `PortfolioPnLChart`, `HistoryClient.fetchHistory` |
-| `yahooDividendQuery()` | `1wk` over the full window | `dividends.ts`, `DividendClient` |
+| `yahooDividendQuery(interval?)` | `1wk` over the full window, `1d` on retry | `dividends.ts`, `DividendClient` |
 | `yahooFxHistoryQuery()` | `1d` over the full window | `PortfolioPnLChart` FX histories, `HistoryClient.fetchFxHistory` |
 
 Why those intervals: Yahoo emits at most one dividend per bar, so `3mo` collapses JNJ's 227
 payouts to 168 and `1mo` drops one — `1wk` returned event-for-event identical sets to daily
-for JNJ/VIG.PR/8306.T/DTE.DE at ~1/5 the payload, and nothing pays weekly. For charts, an
+for JNJ/VIG.PR/8306.T/DTE.DE at ~1/5 the payload. A weekly-distribution ETF (QDTE, XDTE, …)
+*would* saturate a weekly bar, so both dividend fetchers check for the saturation signature
+— one event per bar — and transparently refetch at `interval=1d`, which no real
+distribution schedule can saturate. For charts, an
 unbounded *daily* max request is 14 291 bars / 1.4 MB **per ticker**, which the portfolio
 chart would multiply by every holding; weekly is ~5x smaller and still far finer than the
 3mo bars `range=max` yielded. FX history stays daily because `convertAt()` resolves every
@@ -267,6 +270,11 @@ Both dividend fetchers **throw on a non-OK response** rather than resolving empt
 caches (`useDividends`, `DividendRepository`) keep whatever resolves for the whole session,
 so swallowing a 429/500 would pin a ticker at "no dividends" with no retry. A genuinely
 empty but *successful* response (an accumulating ETF) still caches, as it should.
+
+A daily epoch-to-now FX history is ~600 KB per currency, so it must be fetched once per
+session, not once per chart render: the web has `PortfolioPnLChart`'s module-level
+`fxHistCache` and Android has a `ConcurrentHashMap` inside `HistoryClient.fetchFxHistory`
+(only successful fetches are cached, so a transient failure still retries).
 
 ### Vite proxy (`vite.config.ts`)
 

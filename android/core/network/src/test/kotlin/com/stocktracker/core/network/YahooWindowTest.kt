@@ -18,7 +18,11 @@ class YahooWindowTest {
     }
 
     @Test fun `dividends ask for weekly bars over the full window`() {
-        assertEquals("interval=1wk&period1=0&period2=1788700000&events=div", yahooDividendQuery(now))
+        assertEquals("interval=1wk&period1=0&period2=1788700000&events=div", yahooDividendQuery("1wk", now))
+    }
+
+    @Test fun `dividends can drop to daily bars for a schedule that saturates a weekly bar`() {
+        assertEquals("interval=1d&period1=0&period2=1788700000&events=div", yahooDividendQuery("1d", now))
     }
 
     @Test fun `fx history keeps daily bars for per-date conversion`() {
@@ -26,7 +30,7 @@ class YahooWindowTest {
     }
 
     @Test fun `no builder emits range=max, which Yahoo answers with 3mo bars regardless of interval`() {
-        listOf(yahooChartQuery("max", now), yahooDividendQuery(now), yahooFxHistoryQuery(now))
+        listOf(yahooChartQuery("max", now), yahooDividendQuery("1wk", now), yahooFxHistoryQuery(now))
             .forEach { assertFalse(it.contains("range=max")) }
     }
 }

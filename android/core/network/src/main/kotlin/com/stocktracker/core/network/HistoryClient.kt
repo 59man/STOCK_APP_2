@@ -12,6 +12,7 @@ import okhttp3.Request
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 @Serializable
@@ -120,7 +121,24 @@ object HistoryClient {
         TickerHistoryResult(points, currency)
     }
 
-    /** CUR→CZK daily close history, full history — silently empty on failure so callers fall back to spot conversion. */
-    suspend fun fetchFxHistory(currency: String): PriceHistory =
-        runCatching { parse(fetchRaw("${currency}CZK=X", yahooFxHistoryQuery())) }.getOrDefault(emptyList())
+    /**
+     * CUR→CZK daily close history, full history — silently empty on failure so callers
+     * fall back to spot conversion.
+     *
+     * Cached for the process lifetime, mirroring PortfolioPnLChart.tsx's module-level
+     * `fxHistCache`. The series is range-independent by construction, but
+     * PortfolioChartViewModel re-runs its fetch on every chart range change, and a daily
+     * epoch-to-now FX history is ~600 KB per currency — without this, tapping
+     * 1M → 3M → 6M → All would re-download several MB of identical data. Only successful
+     * fetches are cached, so a transient failure still retries.
+     */
+    private val fxHistoryCache = ConcurrentHashMap<String, PriceHistory>()
+
+    suspend fun fetchFxHistory(currency: String): PriceHistory {
+        fxHistoryCache[currency]?.let { return it }
+        val points = runCatching { parse(fetchRaw("${currency}CZK=X", yahooFxHistoryQuery())) }
+            .getOrDefault(emptyList())
+        if (points.isNotEmpty()) fxHistoryCache[currency] = points
+        return points
+    }
 }

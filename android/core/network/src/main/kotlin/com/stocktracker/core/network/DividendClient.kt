@@ -15,7 +15,11 @@ private data class YahooDivChartResponse(val chart: YahooDivChart? = null)
 @Serializable
 private data class YahooDivChart(val result: List<YahooDivResult>? = null)
 @Serializable
-private data class YahooDivResult(val meta: YahooDivMeta? = null, val events: YahooDivEvents? = null)
+private data class YahooDivResult(
+    val meta: YahooDivMeta? = null,
+    val timestamp: List<Long>? = null,
+    val events: YahooDivEvents? = null,
+)
 @Serializable
 private data class YahooDivMeta(val currency: String? = null)
 @Serializable
@@ -65,11 +69,22 @@ object DividendClient : DividendSource {
         val lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.uppercase()] ?: ticker).uppercase()
         val statics = STATIC_DIVIDENDS[lookupTicker] ?: emptyList()
 
-        val url = "https://query1.finance.yahoo.com/v8/finance/chart/${java.net.URLEncoder.encode(lookupTicker, "UTF-8")}" +
-            "?${yahooDividendQuery()}"
-        val request = Request.Builder().url(url).header("User-Agent", BROWSER_USER_AGENT).build()
+        var payload = fetchChart(lookupTicker, "1wk")
+        // Yahoo emits at most one dividend per bar, so an instrument distributing at least
+        // as often as the bar interval silently loses events — one event per bar is that
+        // signature. Retry at daily resolution, which no real distribution schedule
+        // saturates. (Weekly-distribution ETFs like QDTE/XDTE are the case this catches.)
+        if (payload.bars > 0 && payload.events.size >= payload.bars) {
+            payload = fetchChart(lookupTicker, "1d")
+        }
 
-        var fetched: List<DividendEvent> = emptyList()
+        mergeStatics(payload.events, statics)
+    }
+
+    private fun fetchChart(lookupTicker: String, interval: String): DividendChart {
+        val url = "https://query1.finance.yahoo.com/v8/finance/chart/${java.net.URLEncoder.encode(lookupTicker, "UTF-8")}" +
+            "?${yahooDividendQuery(interval)}"
+        val request = Request.Builder().url(url).header("User-Agent", BROWSER_USER_AGENT).build()
         client.newCall(request).execute().use { response ->
             // Throw rather than fall through with an empty list: DividendRepository caches
             // whatever this returns for the rest of the process, so swallowing a 429/500
@@ -78,15 +93,16 @@ object DividendClient : DividendSource {
             // ETF) still caches, as it should.
             if (!response.isSuccessful) throw Exception("Yahoo dividends ${response.code}")
             val body = response.body?.string() ?: throw Exception("Yahoo dividends: empty body")
-            fetched = parseDividendEvents(body)
+            return parseDividendChart(body)
         }
-
-        mergeStatics(fetched, statics)
     }
 }
 
+/** [bars] is the returned bar count — one dividend per bar means the interval is saturating. */
+internal data class DividendChart(val bars: Int, val events: List<DividendEvent>)
+
 /** Yahoo's dividend map → events in the feed's own currency. Exposed for tests. */
-internal fun parseDividendEvents(body: String): List<DividendEvent> {
+internal fun parseDividendChart(body: String): DividendChart {
     val result = PersistJson.decodeFromString(YahooDivChartResponse.serializer(), body).chart?.result?.firstOrNull()
     val currency = result?.meta?.currency ?: "USD"
     val events = (result?.events?.dividends ?: emptyMap()).values.map { d ->
@@ -94,7 +110,9 @@ internal fun parseDividendEvents(body: String): List<DividendEvent> {
         DividendEvent(date = date, amount = d.amount, currency = currency)
     }
     // Yahoo reports LSE dividends in pence
-    return if (currency == "GBp") events.map { it.copy(amount = it.amount / 100, currency = "GBP") } else events
+    val normalised =
+        if (currency == "GBp") events.map { it.copy(amount = it.amount / 100, currency = "GBP") } else events
+    return DividendChart(bars = result?.timestamp?.size ?: 0, events = normalised)
 }
 
 /** Static events fill only ex-dates the live feed doesn't carry — a live event always wins its date. */
