@@ -3,6 +3,7 @@ package com.stocktracker.core.data
 import com.stocktracker.core.model.NO_FEED_TICKERS
 import com.stocktracker.core.model.Quote
 import com.stocktracker.core.network.QuoteClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -61,6 +62,8 @@ class QuoteRepository @Inject constructor() {
                     val quote = fetchOne(ticker)
                     _quotes.update { it + (ticker to quote) }
                     _errors.update { it - ticker }
+                } catch (e: CancellationException) {
+                    throw e // cancellation is not a fetch failure — don't surface it as a quote error
                 } catch (e: Exception) {
                     _errors.update { it + (ticker to (e.message ?: "Failed")) }
                 } finally {

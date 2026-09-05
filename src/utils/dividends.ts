@@ -1,4 +1,5 @@
 import { proxyFetch } from './proxyFetch'
+import { yahooDividendQuery } from './yahooWindow'
 
 export interface DividendEvent {
   date: string       // ISO YYYY-MM-DD (ex-dividend date)
@@ -81,26 +82,27 @@ const STATIC_DIVIDENDS: Record<string, DividendEvent[]> = {
 export async function fetchDividendEvents(ticker: string): Promise<DividendEvent[]> {
   const lookupTicker = (DIVIDEND_TICKER_ALIASES[ticker.toUpperCase()] ?? ticker).toUpperCase()
   const statics = STATIC_DIVIDENDS[lookupTicker] ?? []
-  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?range=max&interval=1d&events=div`
+  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(lookupTicker)}?${yahooDividendQuery()}`
   const res = await proxyFetch(path)
-  let fetched: DividendEvent[] = []
-  let metaCurrency: string | undefined
-  if (res.ok) {
-    const json = await res.json()
-    metaCurrency = json?.chart?.result?.[0]?.meta?.currency ?? undefined
-    const raw = json?.chart?.result?.[0]?.events?.dividends
-    if (raw) {
-      fetched = (Object.values(raw) as Array<{ date: number; amount: number }>)
-        .map(({ date, amount }) => ({
-          date: new Date(date * 1000).toISOString().slice(0, 10),
-          amount,
-        }))
-    }
-    // Yahoo reports LSE dividends in pence (GBp) — normalise to GBP
-    if (metaCurrency === 'GBp') {
-      metaCurrency = 'GBP'
-      fetched.forEach((e) => { e.amount /= 100 })
-    }
+  // Throw rather than fall through with an empty list: useDividends caches whatever
+  // this resolves to for the rest of the session, so swallowing a 429/500 would
+  // silently pin the ticker at "no dividends" with no retry. Only errors are
+  // uncached; a genuinely empty but successful response (an accumulating ETF)
+  // still caches, as it should.
+  if (!res.ok) throw new Error(`Yahoo dividends ${res.status}`)
+  const json = await res.json()
+  let metaCurrency: string | undefined = json?.chart?.result?.[0]?.meta?.currency ?? undefined
+  const raw = json?.chart?.result?.[0]?.events?.dividends
+  let fetched: DividendEvent[] = raw
+    ? (Object.values(raw) as Array<{ date: number; amount: number }>).map(({ date, amount }) => ({
+        date: new Date(date * 1000).toISOString().slice(0, 10),
+        amount,
+      }))
+    : []
+  // Yahoo reports LSE dividends in pence (GBp) — normalise to GBP
+  if (metaCurrency === 'GBp') {
+    metaCurrency = 'GBP'
+    fetched = fetched.map((e) => ({ ...e, amount: e.amount / 100 }))
   }
   const fetchedDates = new Set(fetched.map((e) => e.date))
   return [...fetched, ...statics.filter((e) => !fetchedDates.has(e.date))]

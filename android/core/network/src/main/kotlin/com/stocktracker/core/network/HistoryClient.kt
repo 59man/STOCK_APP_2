@@ -48,8 +48,8 @@ object HistoryClient {
         .readTimeout(9, TimeUnit.SECONDS)
         .build()
 
-    private suspend fun fetchRaw(ticker: String, yahooRange: String): YahooHistResult? = withContext(Dispatchers.IO) {
-        val url = "https://query1.finance.yahoo.com/v8/finance/chart/${encode(ticker)}?interval=1d&range=$yahooRange"
+    private suspend fun fetchRaw(ticker: String, query: String): YahooHistResult? = withContext(Dispatchers.IO) {
+        val url = "https://query1.finance.yahoo.com/v8/finance/chart/${encode(ticker)}?${query}"
         val request = Request.Builder().url(url).header("User-Agent", BROWSER_USER_AGENT).build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw Exception("Yahoo history ${response.code}")
@@ -104,13 +104,13 @@ object HistoryClient {
     suspend fun fetchHistory(ticker: String, yahooRange: String): TickerHistoryResult = coroutineScope {
         val fx = FX_CONVERTED_TICKERS[ticker.uppercase()]
         if (fx != null) {
-            val priceDeferred = async { fetchRaw(fx.priceTicker, yahooRange) }
-            val fxDeferred = async { fetchRaw(fx.fxTicker, yahooRange) }
+            val priceDeferred = async { fetchRaw(fx.priceTicker, yahooChartQuery(yahooRange)) }
+            val fxDeferred = async { fetchRaw(fx.fxTicker, yahooChartQuery(yahooRange)) }
             val points = mergeFx(parse(priceDeferred.await()), parse(fxDeferred.await()))
             return@coroutineScope TickerHistoryResult(points, "CZK")
         }
 
-        val result = fetchRaw(ticker, yahooRange)
+        val result = fetchRaw(ticker, yahooChartQuery(yahooRange))
         var currency = result?.meta?.currency
         var points = parse(result)
         if (currency == "GBp") { // Yahoo reports LSE prices in pence
@@ -120,7 +120,7 @@ object HistoryClient {
         TickerHistoryResult(points, currency)
     }
 
-    /** CUR→CZK daily close history, range=max — silently empty on failure so callers fall back to spot conversion. */
+    /** CUR→CZK daily close history, full history — silently empty on failure so callers fall back to spot conversion. */
     suspend fun fetchFxHistory(currency: String): PriceHistory =
-        runCatching { parse(fetchRaw("${currency}CZK=X", "max")) }.getOrDefault(emptyList())
+        runCatching { parse(fetchRaw("${currency}CZK=X", yahooFxHistoryQuery())) }.getOrDefault(emptyList())
 }

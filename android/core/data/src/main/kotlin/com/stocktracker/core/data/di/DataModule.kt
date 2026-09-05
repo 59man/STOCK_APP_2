@@ -10,6 +10,8 @@ import com.stocktracker.core.database.PositionDao
 import com.stocktracker.core.database.StockTrackerDatabase
 import com.stocktracker.core.database.SyncStateDao
 import com.stocktracker.core.network.DeviceApi
+import com.stocktracker.core.network.DividendClient
+import com.stocktracker.core.network.DividendSource
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistApiConfig
 import com.stocktracker.core.network.createDeviceApi
@@ -36,6 +38,10 @@ object DataModule {
     @Provides fun provideManualPriceDao(db: StockTrackerDatabase): ManualPriceDao = db.manualPriceDao()
     @Provides fun provideDivTaxOverrideDao(db: StockTrackerDatabase): DivTaxOverrideDao = db.divTaxOverrideDao()
     @Provides fun provideSyncStateDao(db: StockTrackerDatabase): SyncStateDao = db.syncStateDao()
+
+    @Provides
+    @Singleton
+    fun provideDividendSource(): DividendSource = DividendClient
 
     @Provides
     @Singleton

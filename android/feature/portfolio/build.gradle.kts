@@ -67,5 +67,9 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    // Robolectric resolves ComponentActivity from the merged test manifest; scoping this to
+    // debug only left `testReleaseUnitTest` (and so plain `./gradlew test`) failing with
+    // "Unable to resolve activity for Intent ... ComponentActivity".
+    testImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

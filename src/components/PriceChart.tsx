@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 import { proxyFetch } from '../utils/proxyFetch'
+import { yahooChartQuery } from '../utils/yahooWindow'
 
 interface ChartPoint {
   date: string
@@ -60,8 +61,8 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: 
   const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
-      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
-      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?${yahooChartQuery(yahooRange)}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?${yahooChartQuery(yahooRange)}`),
     ])
     const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
     const pricePts = parseRaw(priceJson, yahooRange)
@@ -80,7 +81,7 @@ async function fetchHistory(ticker: string, yahooRange: string): Promise<{ pts: 
     return { pts, currency: 'CZK' }
   }
 
-  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
+  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?${yahooChartQuery(yahooRange)}`
   const res = await proxyFetch(path)
   if (!res.ok) throw new Error(`Yahoo ${res.status}`)
   const json = await res.json()

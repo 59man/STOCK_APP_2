@@ -8,6 +8,7 @@ import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 import { proxyFetch } from '../utils/proxyFetch'
+import { yahooChartQuery, yahooFxHistoryQuery } from '../utils/yahooWindow'
 
 interface ChartPoint {
   label: string
@@ -57,7 +58,7 @@ function parseHistory(json: unknown): TickerHistory {
 // Avoids threading currency through every history map.
 const yahooHistCurrency = new Map<string, string>()
 
-// Historical FX rates (CUR → CZK daily closes, range=max) so each chart date
+// Historical FX rates (CUR → CZK daily closes, full history) so each chart date
 // converts at that date's rate instead of today's spot. Fetched once per
 // currency per session; range-independent, so cached at module level.
 const fxHistCache = new Map<string, TickerHistory>()
@@ -65,7 +66,7 @@ const fxHistCache = new Map<string, TickerHistory>()
 async function fetchFxHistory(cur: string): Promise<void> {
   if (fxHistCache.has(cur)) return
   try {
-    const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${cur}CZK%3DX?interval=1d&range=max`)
+    const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${cur}CZK%3DX?${yahooFxHistoryQuery()}`)
     if (res.ok) fxHistCache.set(cur, parseHistory(await res.json()))
   } catch { /* chartData falls back to spot convert() */ }
 }
@@ -87,14 +88,14 @@ async function fetchYahooHistory(ticker: string, yahooRange: string): Promise<Ti
   const fx = FX_CONVERTED_TICKERS[ticker.toUpperCase()]
   if (fx) {
     const [priceRes, fxRes] = await Promise.all([
-      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?interval=1d&range=${yahooRange}`),
-      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?interval=1d&range=${yahooRange}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.priceTicker}?${yahooChartQuery(yahooRange)}`),
+      proxyFetch(`/api/yahoo/v8/finance/chart/${fx.fxTicker}?${yahooChartQuery(yahooRange)}`),
     ])
     const [priceJson, fxJson] = await Promise.all([priceRes.json(), fxRes.json()])
     return fxMerge(parseHistory(priceJson), parseHistory(fxJson))
   }
 
-  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=${yahooRange}`
+  const path = `/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?${yahooChartQuery(yahooRange)}`
   const res = await proxyFetch(path)
   if (!res.ok) throw new Error(`Yahoo history ${res.status}`)
   const json = await res.json()
