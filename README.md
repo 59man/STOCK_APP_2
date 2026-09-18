@@ -1,317 +1,82 @@
 # Stock Tracker
 
-A dark-themed personal portfolio tracker for Czech and international stocks, ETFs, funds, and commodities. Tracks live prices, dividends, P&L, IRR, and realized gains — with support for closed positions, manual price overrides for unlisted funds, and a fully responsive mobile layout.
+A self-hosted portfolio tracker for Czech and international stocks, ETFs, funds, commodities, and crypto. It has a web app and a native Android app, and both sync through your own small server.
 
-**📱 Android app:** **[⬇ Download the latest APK](https://github.com/59man/STOCK_APP_2/releases/latest)** — a native Kotlin/Compose companion app with full CRUD, offline-first sync, and the same charts as the web app. See [Android Companion App](#android-companion-app) below.
+**📱 [Download the latest Android APK](https://github.com/59man/STOCK_APP_2/releases/latest)**
 
 ## Features
 
-- **Multi-portfolio, multi-asset** — stocks, ETFs, funds, commodities, any currency; create/rename/delete portfolios via a tab bar, each stored independently
-- **Live prices & FX** — Yahoo Finance with a Stooq fallback; toggle display currency (CZK/USD/EUR) with all values, summaries, and charts converting instantly across 7 supported currencies
-- **Dividends** — net income after automatic per-country withholding tax, with per-event overrides when the default doesn't apply
-- **IRR (XIRR)** — annualised return per position and portfolio-wide, including dividend and sell cash flows
-- **Full position lifecycle** — buy, sell (partial or full), record historical closed positions, or delete, with realized vs. unrealized P&L tracked separately
-- **Charts** — portfolio total-return line chart, three distribution pie charts (Cost Basis / Current Value / Total Return, by type or by ticker), and a per-position price chart, all range-selectable and currency-aware
-- **Import** — JSON, XTB, Fio banka, Revolut, Trading 212, Degiro, or any tabular file via a column-mapping wizard; sells are FIFO-matched, types and ISINs auto-resolved via Yahoo Finance
-- **Export** — versioned JSON backup of positions, manual prices, and custom tax rates in one file
-- **ISIN & ticker lookup** — resolves ticker/name from an ISIN (or vice versa) via Yahoo Finance, both on import and when adding a position
-- **Configurable, responsive table** — show/hide/reorder any of 15 columns; adapts down to a mobile bottom-sheet layout
-- **Manual price override** — for unlisted funds with no public price feed, enter the total value from your statement and the app derives the per-unit price
-- **Durable storage** — Express server with atomic writes, daily rotating backups, and a bind-mountable Docker image
-- **Device registry** — 📶 button next to the 🔑 API key button lists every device (web or Android) that's synced with this server, with an editable label, last-synced time, and one-tap removal
-- **Resilient live data** — a Yahoo rate limit triggers a shared cooldown with stale-cache fallback instead of failing every ticker
-- **Unit-tested money math** — XIRR solver, FIFO lot matcher, and net-dividend calculation all covered by `npm test`
+- **Multiple portfolios, any currency.** Totals and charts switch between CZK, USD, and EUR instantly.
+- **Live prices.** Prices come from Yahoo Finance, with Stooq as a fallback. Onemarkets and Fio funds are fetched from the providers' own sites. You can still set a price by hand for anything without a feed.
+- **Returns.** Shows realized and unrealized P&L, net dividends after per-country withholding tax (editable per payout), and IRR per position and per portfolio.
+- **Full position lifecycle.** Buy, sell partially or fully, record past closed positions, and edit individual lots.
+- **Charts.** Portfolio total return and value over time (converted at each day's historical FX rate), distribution pies, and a price chart per position.
+- **Import.** Reads XTB, Fio banka, Revolut, Trading 212, and Degiro statements, plus any CSV or XLSX through a column-mapping wizard. Sells are matched FIFO, and tickers and types are resolved from ISINs automatically.
+- **Export.** One JSON backup covers positions, manual prices, and tax overrides.
+- **Durable storage.** Writes are atomic, and the server keeps daily backups for the last 7 days. The Docker image includes a healthcheck.
 
-## Getting Started (local dev)
+### Android app
+
+The Android app is native Kotlin + Jetpack Compose.
+
+- **Offline-first.** Everything is calculated on the phone. Quotes and history come straight from Yahoo, and your server is used only for sync.
+- **Full add/edit/sell/delete.** It's not a read-only mirror of the web app.
+- **Statement import on the phone.** Handles all five broker formats.
+- **Conflict-safe sync.** Edits made offline on both devices are merged. If the same record changed in both places, the app asks you which version to keep.
+
+## Quick start
 
 ```bash
+cp .env.example .env    # set PERSIST_API_KEY and VITE_PERSIST_API_KEY to the same secret
 npm install
-npm run dev      # starts Vite (http://localhost:5173) + persist server (http://localhost:3001)
-npm run build    # type-check + production build
-npm run preview  # serve the production build locally
-npm test         # vitest — money-math unit tests (xirr, FIFO matcher, net dividends)
+npm run dev             # web on http://localhost:5173, persist server on :3001
+npm test                # money-math unit tests
 ```
 
-`npm run dev` runs both servers via `concurrently`. Both must be running for data to be saved to disk.
-
-If port 3001 is already in use:
-```bash
-kill $(lsof -ti:3001)
-```
+`npm run dev` still works without `.env` (the server logs a warning), but production refuses to start without a key. If port 3001 is taken, run `kill $(lsof -ti:3001)`.
 
 ## Docker
 
-### Build and push
+```bash
+docker compose up -d --build     # port 8080, data + backups bind-mounted
+```
+
+Or build the image and run it on a server:
 
 ```bash
-# Build image — VITE_PERSIST_API_KEY is baked into the frontend bundle at build time,
-# so it must be passed as a build-arg (same value as PERSIST_API_KEY in .env)
-docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY=<same-secret> .
-
-# Push to Docker Hub
+docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY=<secret> .
 docker push 59man/stock-tracker:latest
-```
 
-Or run locally with compose (data + backups bind-mounted, log rotation configured):
-
-```bash
-docker compose up -d --build
-```
-
-### Deploy on a server via SSH
-
-**1. SSH into your server**
-```bash
-ssh your_user@your_server_ip
-```
-
-**2. Install Docker (Ubuntu/Debian, if not already installed)**
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-**3. Create the data directory and copy your portfolio data**
-
-On your local machine:
-```bash
-# Create the target directory on the server first
-ssh your_user@your_server_ip "mkdir -p /DATA/stock-tracker"
-
-# Copy your data file across
-scp server/data.json your_user@your_server_ip:/DATA/stock-tracker/data.json
-```
-
-**4. Pull the image**
-```bash
-docker pull 59man/stock-tracker:latest
-```
-
-**5. Run the container**
-
-Replace `4000` with any free port on your server:
-```bash
-docker run -d \
-  --name stock-tracker \
-  -p 4000:8080 \
-  -v /DATA/stock-tracker/data.json:/app/server/data.json \
-  -v /DATA/stock-tracker/backups:/app/server/backups \
-  --log-opt max-size=10m --log-opt max-file=3 \
-  --restart unless-stopped \
-  59man/stock-tracker:latest
-```
-
-The backups mount keeps the daily `data-YYYY-MM-DD.json` snapshots on the host; the log options cap `docker logs` disk usage. The image has a built-in `HEALTHCHECK` — `docker ps` shows `healthy`/`unhealthy`.
-
-The app is now at `http://your_server_ip:4000`.
-
-> **Important:** always use the **absolute path** for the volume mount (e.g. `/DATA/stock-tracker/data.json`), not `~/...`. A wrong path mounts a different file and the app starts empty.
-
-**6. Open the firewall port if needed**
-```bash
-# Ubuntu/Debian
-sudo ufw allow 4000/tcp && sudo ufw reload
-
-# CentOS/RHEL
-sudo firewall-cmd --permanent --add-port=4000/tcp && sudo firewall-cmd --reload
-```
-
-### Useful container commands
-
-```bash
-docker ps                        # check status and port mapping
-docker logs stock-tracker        # view logs
-docker logs -f stock-tracker     # follow live logs
-docker stop stock-tracker        # stop
-docker start stock-tracker       # start again
-```
-
-### Update to a new image version
-
-```bash
-docker pull 59man/stock-tracker:latest
-docker stop stock-tracker && docker rm stock-tracker
 docker run -d --name stock-tracker -p 4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
   -v /DATA/stock-tracker/backups:/app/server/backups \
+  -e PERSIST_API_KEY=<secret> \
   --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
 
-### Update portfolio data on the server
+- **Use absolute paths for the volume mounts.** A `~/…` path can point to a different file, and the app would then start empty.
+- **Changing `VITE_PERSIST_API_KEY` needs a rebuild.** It's baked into the frontend when the image is built.
+- **`PERSIST_API_KEY` only needs a restart.** The server reads it at runtime.
+- **To update,** run `docker pull`, then `docker stop stock-tracker && docker rm stock-tracker`, then repeat the `docker run` command above.
 
-```bash
-# From your local machine:
-scp server/data.json your_user@your_server_ip:/DATA/stock-tracker/data.json
-# No container restart needed — file is bind-mounted and read on every request.
-```
+## Android
 
-## Android Companion App
-
-A native Android app (Kotlin + Jetpack Compose) that reads and writes the same portfolio data as the web app, syncing through the persist server described above. Full CRUD (add, edit, sell, delete), works fully offline — positions, P&L, IRR, and dividend tax are all computed on-device — and syncs opportunistically whenever connectivity is available.
-
-**[⬇ Download the latest APK](https://github.com/59man/STOCK_APP_2/releases/latest)** — debug build, install by enabling "Install from unknown sources" in Android Settings for the browser/file manager you use to open it. After installing, open the app's **Settings** screen and enter your persist server's URL and API key to start syncing.
-
-- **Offline-first** — the phone only needs connectivity to sync with the web app and to fetch live quotes, price history, and dividends (direct from Yahoo/Stooq, never routed through your own server)
-- **Full CRUD** — add, edit, sell, and delete positions from the phone, not just a read-only mirror of the web app
-- **Charts** — per-ticker price history, portfolio Total Return / Portfolio Value (Cost Basis vs. Current Value), and three distribution donuts (Cost Basis / Current Value / Total Return), matching the web app's charts
-- **Import** — all five broker statement formats (XTB, Fio banka, Revolut, Trading 212, Degiro) parsed entirely on-device, no network required
-- **Conflict-safe sync** — a three-way merge reconciles edits made on the phone and the web app while one was offline; a genuine same-record conflict (e.g. a sell price edited on both) surfaces a one-tap resolution prompt instead of silently picking a winner
-- **Disconnect** — Settings has a one-tap Disconnect that unregisters the phone from the server's device list and clears the saved Server URL/API key, stopping sync until you reconnect
-
-See `android/docs/mobile-sync-blueprint.md` for the full design writeup, or `CLAUDE.md` for build commands and module layout.
+Install the APK from [Releases](https://github.com/59man/STOCK_APP_2/releases/latest). You'll need to allow installing from unknown sources. Then open **Settings** in the app and enter your server URL and API key. The web app's 🔑 button shows the API key.
 
 Build from source:
+
 ```bash
 cd android
-./gradlew :app:assembleDebug   # → android/app/build/outputs/apk/debug/app-debug.apk
+./gradlew :app:assembleDebug   # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew test                 # unit tests
 ```
 
 ## Architecture
 
-React 18 + Vite + TypeScript SPA. No routing — `App.tsx` manages global state (portfolios, active portfolio, display currency); per-portfolio state lives in `PortfolioContent`.
+- **Web.** React 18 + Vite + TypeScript. Express serves the build, proxies Yahoo, Stooq, and the fund providers, and stores data in `server/data.json`.
+- **Android.** A multi-module Gradle project in `android/`: Room, WorkManager sync, and Hilt, with the calculations in `core:calc`.
+- **Details.** `CLAUDE.md` has the data flow, storage keys, and calculation rules. `android/docs/mobile-sync-blueprint.md` covers the sync design.
 
-### Key hooks
-
-| Hook | Responsibility |
-|---|---|
-| `usePortfolios` | Manages the list of portfolios and active selection; two-phase init; legacy key migration on first load |
-| `usePortfolio(portfolioId)` | Owns positions list for one portfolio; two-phase init; persists to server + localStorage under `stock_tracker_positions_${id}` |
-| `useFxRates` | Fetches 7 FX pairs (USD, EUR, GBP, CHF, JPY, CAD, AUD vs CZK) from Yahoo Finance in parallel; provides `convert(amount, from, to)` helper; per-pair fallback to defaults if a rate fetch fails |
-| `useQuotes` | Fetches live prices; Yahoo Finance first, Stooq fallback; FX conversion for XAU / 4GLD.DE / EXUS.DE with a date-aware `prevDailyClose` for the Today column; shared 120 s cooldown after a Yahoo 429; serves stale cache when all sources fail; never fetches `NO_FEED_TICKERS` (manual-priced funds) |
-| `useDividends` | Fetches dividend events from Yahoo Finance `range=max&events=div`; module-level cache; ticker aliases for renames + static events for history Yahoo lost (COLT.PR 2021–2025) |
-| `useManualPrices(portfolioId)` | Stores user-entered current values for funds with no live feed; two-phase init; persists under `stock_tracker_manual_prices_${id}` |
-
-### Key types
-
-- `Position` — a single purchase lot: ticker, qty, buyPrice, buyDate, currency, type; optional `broker`, `isin`, `sellPrice` / `sellDate`; fully closed when both sell fields are set
-- `Quote` — live price data from the API
-- `PortfolioRow` — one row per ticker: aggregated lots + computed financials (pnl, dividendIncome, totalReturn, irr, isClosed, dailyChange) + individual `positions[]`
-
-### Closed position logic (`PortfolioContent.tsx`)
-
-Each ticker's lots are split into `openLots` and `closedLots`:
-
-- **Current value** — only open lots contribute (`currentPrice × openQty`)
-- **Realized P&L** — `sum((sellPrice − buyPrice) × qty)` for closed lots
-- **Unrealized P&L** — `(currentPrice − avgBuyOpen) × openQty` for open lots
-- **IRR** — outflows on buy dates, sell proceeds on sell dates, dividend inflows (skipped if lot was sold before ex-date), terminal value of open lots today
-- **`isClosed = true`** when all lots are sold — the row displays the avg sell price, contributes 0 to portfolio current value, and is hidden by default
-
-### Storage
-
-Data is stored in two layers:
-
-1. **`server/data.json`** (primary) — written by the Express persist server at `server/index.js`. Keys follow a per-portfolio pattern: `stock_tracker_positions_${id}`, `stock_tracker_manual_prices_${id}`, and `stock_tracker_portfolios` (list). In dev the server runs on port 3001; in Docker it shares port 8080 with the frontend.
-2. **`localStorage`** (fallback) — updated in sync; used for instant display on load and as fallback when the server is unreachable.
-
-On startup, hooks read from localStorage immediately (no flash), then async-fetch from the server. If the server has data it takes priority.
-
-The Express server keeps an **in-memory store** loaded once at startup and flushes to disk with a debounced atomic write: `.tmp` → `renameSync` → `data.json`, with a `.bak` copy before each write. The first flush of each day also snapshots to `server/backups/data-YYYY-MM-DD.json` (last 7 kept). SIGINT/SIGTERM flush before exit. Portfolio create/rename/delete and all server errors are logged to stdout with ISO timestamps.
-
-**Legacy migration:** on first load, if the old single-key `stock_tracker_positions` is found it is copied to `stock_tracker_positions_${defaultId}` and a "Main Portfolio" is created automatically.
-
-### Price sources
-
-| Asset | Price ticker | FX ticker |
-|---|---|---|
-| Czech/Prague stocks (`.PR`) | Yahoo Finance direct | — |
-| Gold (Revolut XAU) | `GC=F` (USD/oz) | `USDCZK=X` |
-| Xetra-Gold (4GLD.DE) | `4GLD.DE` (EUR) | `EURCZK=X` |
-| iShares MSCI World ex USA (EXUS.DE) | `EXUS.DE` (EUR) | `EURCZK=X` |
-| onemarkets funds (LU ISINs) | none — manual price only | — |
-| FIO Global Fond (FIOG.PR) | none — manual price only | — |
-
-### Production vs dev proxy
-
-In **dev** (`npm run dev`), Vite proxies `/api/yahoo/*`, `/api/stooq/*`, and `/api/persist/*`.  
-In **production / Docker** (`NODE_ENV=production`), Express handles all routes:
-- Serves static files from `dist/`
-- Forwards `/api/yahoo/*` → Yahoo Finance with a browser-like User-Agent
-- Forwards `/api/stooq/*` → Stooq (CSV fallback for price quotes; direct browser fetch blocked by CORS)
-- Handles `/api/persist/*` read/write to `data.json`
-
-### Column configuration
-
-Click **⚙ Columns** in the table toolbar to open the column config panel. Each of the 15 configurable columns can be independently shown/hidden and reordered with ↑ ↓ arrows. The configuration is saved to `localStorage` key `stock_tracker_column_config`. On ≤ 640 px screens the panel opens as a **bottom sheet** with a dark backdrop.
-
-Column visibility is **JS-controlled** — there are no CSS `display: none` rules per column. `COLUMN_DEFS` in `PortfolioTable.tsx` has a `hideBelow?: number` field; `loadColConfig()` reads `window.innerWidth` on first visit to set defaults matching the former CSS breakpoints. After that, the stored user config is used — explicitly enabled columns always show regardless of viewport width.
-
-| Default hidden below | Columns |
-|---|---|
-| 960 px | Avg Buy, First Buy, Lots, Broker, Today, Cost Basis, Dividends, IRR |
-| 640 px | Type, Cur. Price, Total Return |
-| 400 px | Qty |
-
-### Styling
-
-Single flat CSS file (`src/App.css`) with CSS custom properties on `:root`. Dark theme (`--bg: #0f0f1a`), gain/loss via `--gain` / `--loss`. Full-width layout — no `max-width` cap on the main container.
-
-## Column calculations
-
-Each column in the portfolio table is derived as follows. All monetary values are in CZK.
-
-| Column | Formula |
-|---|---|
-| **Qty** | Sum of `quantity` across all lots for the ticker (open + closed). |
-| **Avg Buy** | `Σ(buyPrice × qty) / Σqty` — weighted average buy price across all lots. |
-| **First Buy** | Earliest `buyDate` among all lots for the ticker. |
-| **Lots** | Number of individual purchase lots stored for the ticker. |
-| **Cur. Price** | Live price from Yahoo Finance (or Stooq fallback). For manual-price funds it is `totalValueEntered / openQty`. For fully-closed tickers it shows the weighted-average sell price instead. Falls back to avg buy price if no quote is available yet. |
-| **Cur. Value** | `currentPrice × openQty`. Zero for fully-closed tickers (no open lots). |
-| **Cost Basis** | `Σ(buyPrice × qty)` for **all** lots — open and closed combined. Used as the denominator for return percentages. |
-| **P&L** | `realizedP&L + unrealizedP&L` where: <br>• **Realized** = `Σ(sellPrice − buyPrice) × qty` for closed lots <br>• **Unrealized** = `(currentPrice − avgBuyOpen) × openQty` (`avgBuyOpen` is the weighted avg buy price of open lots only) |
-| **P&L %** | `P&L / costBasis × 100` — price-only return relative to total amount invested. |
-| **Dividends** | Net dividend income after per-country withholding tax. For each ex-dividend event from Yahoo Finance: shares held on that date (lots whose `buyDate ≤ exDate` and not yet sold) × gross dividend per share × `(1 − rate)`. The rate is a two-level lookup in `dividends.ts`: `TICKER_COUNTRY` maps the ticker to an ISO country code, then `COUNTRY_WITHHOLDING_RATES` returns the rate for that country. Czech tickers (`.PR`) fall through to the **15 %** default. See the country table below for all configured rates. |
-| **Total Return** | `P&L + dividendIncome` — combines price gains/losses with net dividend income. |
-| **Return %** | `totalReturn / costBasis × 100` — total return (price + dividends) relative to total amount invested. |
-| **IRR p.a.** | Annualised XIRR via Newton-Raphson (bisection fallback). Cash flows: negative outflow on each `buyDate`, positive inflow on each `sellDate` (closed lots), positive inflow for each dividend received (shares × grossDiv × `(1 − rate)`, skipped if the lot was sold before ex-date), and a positive terminal value of `currentValue` dated today (omitted for fully-closed tickers). |
-
-### Dividend withholding tax rates
-
-Configured in `src/utils/dividends.ts`. Rates reflect what is typically withheld at source for Czech (EU) resident investors. Where the Czech DTA treaty rate is lower but not enforced at source, the full domestic rate is listed — the excess can be reclaimed from the foreign tax authority.
-
-| Country | Code | Rate | Notes |
-|---|---|---|---|
-| Czech Republic | CZ | 15 % | Default for all `.PR` tickers |
-| Austria | AT | 27.5 % | Full KeSt at source; DTA allows 10–15 %, claim refund for excess |
-| Belgium | BE | 30 % | Full rate at source; DTA 15 % requires prior exemption filing |
-| Germany | DE | 26.375 % | 25 % + 5.5 % solidarity; refund to DTA 15 % via German tax office |
-| Denmark | DK | 27 % | At source for non-residents |
-| Spain | ES | 19 % | EU resident rate |
-| Finland | FI | 20 % | Non-resident rate at source |
-| France | FR | 12.8 % | Flat PFU rate for EU residents (social charges waived for non-French EU) |
-| Hungary | HU | 0 % | No dividend WHT |
-| Ireland | IE | 0 % | UCITS distributions to non-Irish EU investors (statutory exemption) |
-| Italy | IT | 26 % | At source; refund to DTA 15 % possible |
-| Luxembourg | LU | 0 % | Non-resident EU investors on UCITS / fund distributions |
-| Netherlands | NL | 15 % | Matches CZ-NL DTA — no refund needed |
-| Norway | NO | 15 % | EEA; CZ-NO DTA rate enforced at source |
-| Poland | PL | 19 % | At source; DTA lower rate with prior exemption |
-| Portugal | PT | 25 % | Non-resident rate |
-| Sweden | SE | 30 % | At source; refund to DTA 15 % possible |
-| Slovenia | SI | 15 % | CZ-SI DTA |
-| Slovakia | SK | 15 % | CZ-SK DTA |
-| Switzerland | CH | 35 % | Non-EU; full rate at source, refund to 15 % under CZ-CH DTA |
-| United Kingdom | GB | 0 % | No dividend WHT |
-| USA | US | 15 % | CZ-US DTA, enforced at source with IRS Form W-8BEN |
-
-**To add a new foreign position:** add one line to `TICKER_COUNTRY` in `dividends.ts` mapping the ticker to its ISO country code. If the country is not yet in `COUNTRY_WITHHOLDING_RATES`, add it there too.
-
-### Portfolio summary bar
-
-- **Total Return** — `Σ P&L` across all rows + `Σ dividendIncome` across all rows, with percentage `totalReturn / totalCostBasis × 100`.
-- **IRR p.a.** — single XIRR over every buy, sell, and dividend cash flow from every lot, with a terminal value of `Σ currentValue` today.
-
-## Notes
-
-- Your portfolio data is stored in `server/data.json` on disk — excluded from git via `.gitignore` and from Docker images via `.dockerignore`.
-- For unlisted funds (UniCredit onemarkets, FIO Global), enter the total position value from your bank report in the **Cur. Value** column. Click the orange **M** badge to update; **×** to clear.
-- The persist server must be running (`npm run dev`) for changes to be saved to disk. If unreachable, data is saved to localStorage only.
-- To sell an open position, click the amber **Sell** button on the row or on any individual lot in the expanded view; enter a sell date and sell price, then confirm.
-- To record a position that was already sold in the past, click **+ Add Position**, fill in the buy details, check **Closed position (already sold)**, and enter the sell date and sell price.
-- Use **↑ Import** in the portfolio tab bar to load positions from a JSON export, XTB XLSX, Fio banka PDF, Revolut XAU PDF, Trading 212 CSV, Degiro CSV, or any tabular file (a column-mapping wizard appears for unknown formats). Sells are FIFO-matched; types are auto-detected via Yahoo Finance.
-- Use **↓ Export** in the toolbar to download a JSON backup of all positions at any time.
-- To switch between CZK, USD, and EUR display, use the currency buttons in the top-right of the header — all values and charts update immediately.
+Portfolio data lives in `server/data.json` and `server/backups/`. Both are excluded from git and from the Docker image.
