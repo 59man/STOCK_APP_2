@@ -3,6 +3,7 @@ package com.stocktracker.core.database
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -37,4 +38,15 @@ interface DivTaxOverrideDao {
 
     @Query("DELETE FROM div_tax_overrides WHERE portfolioId = :portfolioId")
     suspend fun deleteByPortfolio(portfolioId: String)
+
+    /**
+     * Delete-then-insert as one transaction, so Room's observers see a single
+     * change instead of an intermediate empty list — without it every sync pull
+     * briefly blanks the UI (the list flashes empty on each app resume).
+     */
+    @Transaction
+    suspend fun replaceByPortfolio(portfolioId: String, rows: List<DivTaxOverrideEntity>) {
+        deleteByPortfolio(portfolioId)
+        upsertAll(rows)
+    }
 }

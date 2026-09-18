@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -31,4 +32,15 @@ interface PortfolioDao {
     /** Replaces the whole table — used when a pull overwrites local state with the server's array. */
     @Query("DELETE FROM portfolios")
     suspend fun deleteAll()
+
+    /**
+     * Delete-then-insert as one transaction, so Room's observers see a single
+     * change instead of an intermediate empty list — without it every sync pull
+     * briefly blanks the UI (the list flashes empty on each app resume).
+     */
+    @Transaction
+    suspend fun replaceAll(rows: List<PortfolioEntity>) {
+        deleteAll()
+        upsertAll(rows)
+    }
 }

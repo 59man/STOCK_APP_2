@@ -10,7 +10,10 @@ data class PortfolioListUiState(
     val activePortfolioId: String? = null,
     val rows: List<PortfolioRow> = emptyList(),
     val showClosed: Boolean = false,
+    /** App-startup gate only (see PortfolioListViewModel.startupReady) — latched false once the first full screen is ready. */
     val isLoading: Boolean = true,
+    /** Active portfolio just changed and Room hasn't emitted its lots yet — rows still belong to the previous one. */
+    val isSwitchingPortfolio: Boolean = false,
     val lastSyncedAt: String? = null,
     val conflictCount: Int = 0,
     val displayCurrency: String = "CZK",

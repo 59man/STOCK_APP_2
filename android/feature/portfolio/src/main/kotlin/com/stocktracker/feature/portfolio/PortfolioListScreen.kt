@@ -176,7 +176,7 @@ internal fun PortfolioListScreen(
                 }
             }
 
-            if (uiState.isLoading) {
+            if (uiState.isLoading || uiState.isSwitchingPortfolio) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else if (uiState.rows.isEmpty()) {
                 EmptyPortfolioState(

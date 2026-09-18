@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Shown until portfolioUiState.isLoading flips false — no fixed timer, just the real data-ready signal. */
+/** Shown until portfolioUiState.isLoading flips false — lots loaded + first quote/dividend round settled (10 s cap), see PortfolioListViewModel.startupReady. */
 @Composable
 private fun AppLoadingScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

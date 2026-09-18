@@ -7,6 +7,7 @@ import com.stocktracker.core.database.SyncStateDao
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -30,6 +31,8 @@ class DivTaxOverrideRepository @Inject constructor(
 
     fun observe(portfolioId: String): Flow<Map<String, Double>> =
         dao.observeByPortfolio(portfolioId).map { list -> list.associate { key(it.ticker, it.date) to it.rate } }
+            // A sync pull rewrites the table even when nothing changed; skip those no-op re-emissions.
+            .distinctUntilChanged()
 
     suspend fun set(portfolioId: String, ticker: String, date: String, rate: Double) {
         dao.upsertAll(listOf(DivTaxOverrideEntity(portfolioId, ticker.uppercase(), date, rate)))
@@ -53,22 +56,19 @@ class DivTaxOverrideRepository @Inject constructor(
             PersistKeys.divTaxOverrides(portfolioId), recordKey, keepLocal,
             readLocal = { dao.getByPortfolio(portfolioId).associate { key(it.ticker, it.date) to it.rate } },
             writeLocal = { merged ->
-                dao.deleteByPortfolio(portfolioId)
-                dao.upsertAll(toEntities(portfolioId, merged))
+                dao.replaceByPortfolio(portfolioId, toEntities(portfolioId, merged))
             },
         )
 
     suspend fun pull(portfolioId: String): Boolean = syncEngine.pull(PersistKeys.divTaxOverrides(portfolioId)) { remote ->
-        dao.deleteByPortfolio(portfolioId)
-        dao.upsertAll(toEntities(portfolioId, remote))
+        dao.replaceByPortfolio(portfolioId, toEntities(portfolioId, remote))
     }
 
     suspend fun push(portfolioId: String) = syncEngine.push(
         PersistKeys.divTaxOverrides(portfolioId),
         readLocal = { dao.getByPortfolio(portfolioId).associate { key(it.ticker, it.date) to it.rate } },
         writeLocal = { merged ->
-            dao.deleteByPortfolio(portfolioId)
-            dao.upsertAll(toEntities(portfolioId, merged))
+            dao.replaceByPortfolio(portfolioId, toEntities(portfolioId, merged))
         },
     )
 }

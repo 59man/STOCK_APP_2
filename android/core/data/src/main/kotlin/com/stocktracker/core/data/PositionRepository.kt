@@ -8,6 +8,7 @@ import com.stocktracker.core.model.Position
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import javax.inject.Inject
@@ -25,6 +26,8 @@ class PositionRepository @Inject constructor(
 
     fun observe(portfolioId: String): Flow<List<Position>> =
         positionDao.observeByPortfolio(portfolioId).map { list -> list.map { it.toDomain() } }
+            // A sync pull rewrites the table even when nothing changed; skip those no-op re-emissions.
+            .distinctUntilChanged()
 
     suspend fun upsert(portfolioId: String, position: Position) {
         positionDao.upsertAll(listOf(position.toEntity(portfolioId)))
@@ -51,8 +54,7 @@ class PositionRepository @Inject constructor(
 
     suspend fun pull(portfolioId: String): Boolean =
         syncEngine.pull(PersistKeys.positions(portfolioId)) { remote ->
-            positionDao.deleteByPortfolio(portfolioId)
-            positionDao.upsertAll(remote.map { it.toEntity(portfolioId) })
+            positionDao.replaceByPortfolio(portfolioId, remote.map { it.toEntity(portfolioId) })
         }
 
     suspend fun resolveConflict(portfolioId: String, recordKey: String, keepLocal: Boolean) =
@@ -60,8 +62,7 @@ class PositionRepository @Inject constructor(
             PersistKeys.positions(portfolioId), recordKey, keepLocal,
             readLocal = { positionDao.getByPortfolio(portfolioId).map { it.toDomain() } },
             writeLocal = { merged ->
-                positionDao.deleteByPortfolio(portfolioId)
-                positionDao.upsertAll(merged.map { it.toEntity(portfolioId) })
+                positionDao.replaceByPortfolio(portfolioId, merged.map { it.toEntity(portfolioId) })
             },
         )
 
@@ -70,8 +71,7 @@ class PositionRepository @Inject constructor(
             PersistKeys.positions(portfolioId),
             readLocal = { positionDao.getByPortfolio(portfolioId).map { it.toDomain() } },
             writeLocal = { merged ->
-                positionDao.deleteByPortfolio(portfolioId)
-                positionDao.upsertAll(merged.map { it.toEntity(portfolioId) })
+                positionDao.replaceByPortfolio(portfolioId, merged.map { it.toEntity(portfolioId) })
             },
         )
 }

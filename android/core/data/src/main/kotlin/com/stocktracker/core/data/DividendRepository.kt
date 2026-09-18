@@ -33,6 +33,14 @@ class DividendRepository @Inject constructor(
     private val _dividends = MutableStateFlow<Map<String, List<DividendEvent>>>(emptyMap())
     val dividends: StateFlow<Map<String, List<DividendEvent>>> = _dividends
 
+    /**
+     * Tickers whose fetch has finished at least once this session, success or failure —
+     * lets the startup loading screen wait for the first dividend round without hanging
+     * on a ticker that errored (errors aren't cached in [dividends]).
+     */
+    private val _settled = MutableStateFlow<Set<String>>(emptySet())
+    val settled: StateFlow<Set<String>> = _settled
+
     suspend fun fetchTickers(tickers: List<String>) = coroutineScope {
         val cached = _dividends.value.keys
         val candidates = tickers.map { it.uppercase() }.distinct()
@@ -55,10 +63,12 @@ class DividendRepository @Inject constructor(
                 try {
                     val events = source.fetchDividendEvents(ticker)
                     _dividends.update { it + (ticker to events) }
+                    _settled.update { it + ticker }
                 } catch (e: CancellationException) {
                     throw e // cancellation is not a fetch failure — let it propagate
                 } catch (_: Exception) {
                     // Don't cache errors — allow retry on the next fetch cycle.
+                    _settled.update { it + ticker }
                 } finally {
                     // NonCancellable: withLock is itself suspending, so under cancellation
                     // it would throw immediately and skip the removal, recreating the leak.

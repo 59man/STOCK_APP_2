@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -40,7 +41,9 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
             PortfolioTabs(uiState, onAction)
             CurrencyTabs(uiState, onAction)
 
-            if (uiState.visibleRows.isEmpty()) {
+            if (uiState.isLoading || uiState.isSwitchingPortfolio) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else if (uiState.visibleRows.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         "Add a position to see charts",

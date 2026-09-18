@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import com.stocktracker.core.model.PositionType
 import kotlinx.coroutines.flow.Flow
@@ -49,4 +50,15 @@ interface PositionDao {
     /** Replaces one portfolio's whole lot list — used when a pull overwrites local state. */
     @Query("DELETE FROM positions WHERE portfolioId = :portfolioId")
     suspend fun deleteByPortfolio(portfolioId: String)
+
+    /**
+     * Delete-then-insert as one transaction, so Room's observers see a single
+     * change instead of an intermediate empty list — without it every sync pull
+     * briefly blanks the UI (the list flashes empty on each app resume).
+     */
+    @Transaction
+    suspend fun replaceByPortfolio(portfolioId: String, rows: List<PositionEntity>) {
+        deleteByPortfolio(portfolioId)
+        upsertAll(rows)
+    }
 }

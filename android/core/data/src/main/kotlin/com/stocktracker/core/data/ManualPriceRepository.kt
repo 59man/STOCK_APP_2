@@ -8,6 +8,7 @@ import com.stocktracker.core.model.ManualPriceEntry
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -30,6 +31,8 @@ class ManualPriceRepository @Inject constructor(
 
     fun observe(portfolioId: String): Flow<Map<String, ManualPriceEntry>> =
         dao.observeByPortfolio(portfolioId).map { list -> list.associate { it.ticker to it.toDomain() } }
+            // A sync pull rewrites the table even when nothing changed; skip those no-op re-emissions.
+            .distinctUntilChanged()
 
     suspend fun set(portfolioId: String, ticker: String, price: Double, updatedAt: String) {
         dao.upsertAll(listOf(ManualPriceEntity(portfolioId, ticker.uppercase(), price, updatedAt)))
@@ -42,16 +45,14 @@ class ManualPriceRepository @Inject constructor(
     }
 
     suspend fun pull(portfolioId: String): Boolean = syncEngine.pull(PersistKeys.manualPrices(portfolioId)) { remote ->
-        dao.deleteByPortfolio(portfolioId)
-        dao.upsertAll(remote.map { (ticker, entry) -> ManualPriceEntity(portfolioId, ticker, entry.price, entry.updatedAt) })
+        dao.replaceByPortfolio(portfolioId, remote.map { (ticker, entry) -> ManualPriceEntity(portfolioId, ticker, entry.price, entry.updatedAt) })
     }
 
     suspend fun push(portfolioId: String) = syncEngine.push(
         PersistKeys.manualPrices(portfolioId),
         readLocal = { dao.getByPortfolio(portfolioId).associate { it.ticker to it.toDomain() } },
         writeLocal = { merged ->
-            dao.deleteByPortfolio(portfolioId)
-            dao.upsertAll(merged.map { (ticker, entry) -> ManualPriceEntity(portfolioId, ticker, entry.price, entry.updatedAt) })
+            dao.replaceByPortfolio(portfolioId, merged.map { (ticker, entry) -> ManualPriceEntity(portfolioId, ticker, entry.price, entry.updatedAt) })
         },
     )
 }

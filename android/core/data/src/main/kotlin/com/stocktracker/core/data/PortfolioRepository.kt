@@ -8,6 +8,7 @@ import com.stocktracker.core.model.Portfolio
 import com.stocktracker.core.network.PersistApi
 import com.stocktracker.core.network.PersistKeys
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import java.util.UUID
@@ -25,6 +26,8 @@ class PortfolioRepository @Inject constructor(
     )
 
     fun observe(): Flow<List<Portfolio>> = portfolioDao.observeAll().map { list -> list.map { it.toDomain() } }
+        // A sync pull rewrites the table even when nothing changed; skip those no-op re-emissions.
+        .distinctUntilChanged()
 
     suspend fun add(name: String): Portfolio {
         val portfolio = Portfolio(id = UUID.randomUUID().toString(), name = name)
@@ -51,14 +54,12 @@ class PortfolioRepository @Inject constructor(
             PersistKeys.PORTFOLIOS, recordKey, keepLocal,
             readLocal = { portfolioDao.getAll().map { it.toDomain() } },
             writeLocal = { merged ->
-                portfolioDao.deleteAll()
-                portfolioDao.upsertAll(merged.map { it.toEntity() })
+                portfolioDao.replaceAll(merged.map { it.toEntity() })
             },
         )
 
     suspend fun pull(): Boolean = syncEngine.pull(PersistKeys.PORTFOLIOS) { remote ->
-        portfolioDao.deleteAll()
-        portfolioDao.upsertAll(remote.map { it.toEntity() })
+        portfolioDao.replaceAll(remote.map { it.toEntity() })
     }
 
     /**
@@ -70,8 +71,7 @@ class PortfolioRepository @Inject constructor(
         PersistKeys.PORTFOLIOS,
         readLocal = { portfolioDao.getAll().map { it.toDomain() } },
         writeLocal = { merged ->
-            portfolioDao.deleteAll()
-            portfolioDao.upsertAll(merged.map { it.toEntity() })
+            portfolioDao.replaceAll(merged.map { it.toEntity() })
         },
     )
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.stocktracker.core.calc.computePortfolioIrr
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.calc.deriveRow
+import com.stocktracker.core.data.AppSettings
 import com.stocktracker.core.data.DivTaxOverrideRepository
 import com.stocktracker.core.data.DividendRepository
 import com.stocktracker.core.data.FxRateRepository
@@ -24,6 +25,11 @@ import com.stocktracker.core.model.Position
 import com.stocktracker.core.model.Quote
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.stocktracker.core.model.NO_FEED_TICKERS
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +46,19 @@ import javax.inject.Inject
 
 /** [SyncCoordinator.enqueuePush] only needs a string to build a unique work name for the PORTFOLIOS key — it isn't a real portfolio id. */
 private const val GLOBAL_SYNC_SCOPE = "portfolios"
+
+/** Upper bound on the startup loading screen — past this, show whatever has loaded rather than hang on a slow feed. */
+private const val STARTUP_TIMEOUT_MS = 10_000L
+
+/** Resume-triggered syncs closer together than this are skipped (every tab switch back to Portfolio fires ON_RESUME). */
+private const val RESUME_REFRESH_MIN_INTERVAL_MS = 30_000L
+
+private fun openTickersOf(positions: List<Position>): List<String> =
+    positions
+        .groupBy { it.ticker }
+        .filterValues { lots -> lots.any { it.sellPrice == null || it.sellPrice == 0.0 || it.sellDate.isNullOrEmpty() } }
+        .keys
+        .toList()
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -60,7 +79,21 @@ class PortfolioListViewModel @Inject constructor(
     private val activePortfolioId = MutableStateFlow<String?>(null)
     private val showClosed = MutableStateFlow(false)
 
+    /** Bumped by [refresh] so quotes/FX re-fetch on resume even when the position list itself didn't change. */
+    private val refreshTick = MutableStateFlow(0)
+    private var lastRefreshAtMs = 0L
+
+    /**
+     * Startup gate for the app-wide loading screen. Latched: once true it never goes back,
+     * so a later sync, portfolio switch or quote refresh can't tear the NavHost down again.
+     */
+    private val startupComplete = MutableStateFlow(false)
+    private val startupTimedOut = MutableStateFlow(false)
+    private val initialSyncDone = MutableStateFlow(false)
+
     private data class PortfolioData(
+        /** Which portfolio these rows belong to — null before Room's first emission for it. */
+        val portfolioId: String?,
         val positions: List<Position>,
         val manualPrices: Map<String, ManualPriceEntry>,
         val divTaxOverrides: Map<String, Double>,
@@ -76,19 +109,20 @@ class PortfolioListViewModel @Inject constructor(
         val data: PortfolioData,
         val quotes: QuoteState,
         val divs: Map<String, List<DividendEvent>>,
+        val divsSettled: Set<String>,
         val conflicts: List<PendingConflict>,
         val rates: Map<String, Double>,
     )
 
     private val portfolioData = activePortfolioId.flatMapLatest { id ->
         if (id == null) {
-            flowOf(PortfolioData(emptyList(), emptyMap(), emptyMap()))
+            flowOf(PortfolioData(null, emptyList(), emptyMap(), emptyMap()))
         } else {
             combine(
                 positionRepository.observe(id),
                 manualPriceRepository.observe(id),
                 divTaxOverrideRepository.observe(id),
-            ) { positions, manualPrices, overrides -> PortfolioData(positions, manualPrices, overrides) }
+            ) { positions, manualPrices, overrides -> PortfolioData(id, positions, manualPrices, overrides) }
         }
     }
 
@@ -97,14 +131,13 @@ class PortfolioListViewModel @Inject constructor(
     }
 
     init {
-        // Fetch live quotes for every ticker with at least one open lot whenever the position set changes.
+        // Fetch live quotes for every ticker with at least one open lot whenever the position set
+        // changes, or a resume refresh asks for fresh prices (QuoteRepository's 60 s cache absorbs
+        // any overlap).
         viewModelScope.launch {
-            portfolioData.collectLatest { data ->
-                val openTickers = data.positions
-                    .groupBy { it.ticker }
-                    .filterValues { lots -> lots.any { it.sellPrice == null || it.sellPrice == 0.0 || it.sellDate.isNullOrEmpty() } }
-                    .keys
-                if (openTickers.isNotEmpty()) quoteRepository.fetchTickers(openTickers.toList())
+            combine(portfolioData, refreshTick) { data, _ -> data }.collectLatest { data ->
+                val openTickers = openTickersOf(data.positions)
+                if (openTickers.isNotEmpty()) quoteRepository.fetchTickers(openTickers)
             }
         }
         // Dividend income counts for closed lots too (received while the lot was still open), so
@@ -115,23 +148,44 @@ class PortfolioListViewModel @Inject constructor(
                 if (allTickers.isNotEmpty()) dividendRepository.fetchTickers(allTickers)
             }
         }
-        viewModelScope.launch { fxRateRepository.refresh() }
+        viewModelScope.launch { refreshTick.collect { fxRateRepository.refresh() } }
+        viewModelScope.launch {
+            delay(STARTUP_TIMEOUT_MS)
+            startupTimedOut.value = true
+        }
+        // Initial sync starts here rather than waiting for PortfolioListRoute's ON_RESUME: the
+        // route isn't composed until the loading screen clears, and on a fresh install the
+        // loading screen is itself waiting for this pull to bring down the portfolio list.
+        refresh(force = true)
     }
 
     val uiState: StateFlow<PortfolioListUiState> = combine(
         portfolioRepository.observe(),
         activePortfolioId,
         combine(
-            portfolioData, quoteState, dividendRepository.dividends, conflictCenter.pending, fxRateRepository.rates,
-        ) { data, quotes, divs, conflicts, rates ->
-            CombinedState(data, quotes, divs, conflicts, rates)
+            portfolioData, quoteState,
+            combine(dividendRepository.dividends, dividendRepository.settled) { d, s -> d to s },
+            conflictCenter.pending, fxRateRepository.rates,
+        ) { data, quotes, (divs, divsSettled), conflicts, rates ->
+            CombinedState(data, quotes, divs, divsSettled, conflicts, rates)
         },
         showClosed,
-        settingsRepository.settings,
-    ) { portfolios, activeId, combined, closedVisible, settings ->
-        val (data, quotes, divs, conflicts, rates) = combined
+        combine(settingsRepository.settings, startupComplete, startupTimedOut, initialSyncDone) { settings, done, timedOut, synced ->
+            StartupFlags(settings, done, timedOut, synced)
+        },
+    ) { portfolios, activeId, combined, closedVisible, flags ->
+        val (data, quotes, divs, divsSettled, conflicts, rates) = combined
+        val settings = flags.settings
         val resolvedActiveId = activeId ?: portfolios.firstOrNull()?.id
         if (activeId == null && resolvedActiveId != null) activePortfolioId.value = resolvedActiveId
+
+        // Rows are only trustworthy once Room has emitted for the portfolio actually selected —
+        // before that (startup, or right after a switch) they belong to nobody / the old portfolio.
+        val dataReady = resolvedActiveId == null || data.portfolioId == resolvedActiveId
+        val isLoading = !flags.startupComplete && !flags.timedOut && !startupReady(
+            portfolios.isEmpty(), flags.initialSyncDone, dataReady, data.positions, quotes, divsSettled,
+        )
+        if (!isLoading && !flags.startupComplete) startupComplete.value = true
 
         val today = LocalDate.now().toString()
         val rows = data.positions
@@ -167,7 +221,8 @@ class PortfolioListViewModel @Inject constructor(
             activePortfolioId = resolvedActiveId,
             rows = rows,
             showClosed = closedVisible,
-            isLoading = false,
+            isLoading = isLoading,
+            isSwitchingPortfolio = !dataReady,
             lastSyncedAt = settings.lastSyncedAt,
             conflictCount = conflicts.size,
             displayCurrency = settings.displayCurrency,
@@ -176,7 +231,44 @@ class PortfolioListViewModel @Inject constructor(
             divTaxOverrides = data.divTaxOverrides,
             portfolioIrr = portfolioIrr,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioListUiState())
+    }
+        // Row derivation + portfolio XIRR re-run on every quote arrival; keep them off the main thread.
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioListUiState())
+
+    private data class StartupFlags(
+        val settings: AppSettings,
+        val startupComplete: Boolean,
+        val timedOut: Boolean,
+        val initialSyncDone: Boolean,
+    )
+
+    /**
+     * True once the first screen can be shown complete: the active portfolio's lots are loaded
+     * and every open ticker's first quote fetch — and every ticker's first dividend fetch — has
+     * finished (success or error). An empty local DB waits for the initial sync so a fresh
+     * install doesn't flash the "no positions" state before the server's data arrives.
+     */
+    private fun startupReady(
+        noPortfolios: Boolean,
+        initialSyncDone: Boolean,
+        dataReady: Boolean,
+        positions: List<Position>,
+        quotes: QuoteState,
+        divsSettled: Set<String>,
+    ): Boolean {
+        if (noPortfolios) return initialSyncDone
+        if (!dataReady) return false
+        if (positions.isEmpty() && !initialSyncDone) return false
+        val quotesSettled = openTickersOf(positions)
+            .map { it.uppercase() }
+            .filterNot { it in NO_FEED_TICKERS }
+            .all { it in quotes.quotes || it in quotes.errors }
+        val divsDone = positions.map { it.ticker.uppercase() }.distinct()
+            .filterNot { it in NO_FEED_TICKERS }
+            .all { it in divsSettled }
+        return quotesSettled && divsDone
+    }
 
     fun onAction(action: PortfolioListAction) {
         when (action) {
@@ -196,7 +288,7 @@ class PortfolioListViewModel @Inject constructor(
                 syncCoordinator.enqueuePush(GLOBAL_SYNC_SCOPE, SyncTarget.PORTFOLIOS)
             }
             PortfolioListAction.ToggleShowClosed -> showClosed.update { !it }
-            PortfolioListAction.Refresh -> refresh()
+            PortfolioListAction.Refresh -> refresh(force = true)
             is PortfolioListAction.DeletePosition -> viewModelScope.launch {
                 val portfolioId = activePortfolioId.value ?: return@launch
                 positionRepository.delete(portfolioId, action.positionId)
@@ -234,13 +326,25 @@ class PortfolioListViewModel @Inject constructor(
         return importRepository.exportPortfolio(portfolioId)
     }
 
-    fun onEnterForeground() = refresh()
+    fun onEnterForeground() = refresh(force = false)
 
-    private fun refresh() {
+    private fun refresh(force: Boolean) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastRefreshAtMs < RESUME_REFRESH_MIN_INTERVAL_MS) return
+        lastRefreshAtMs = now
+        refreshTick.update { it + 1 }
         viewModelScope.launch {
-            // Pulls every portfolio, not just the active one — see
-            // SyncCoordinator.pullAllPortfolios for why that matters.
-            syncCoordinator.pullAllPortfolios()
+            try {
+                // Pulls every portfolio, not just the active one — see
+                // SyncCoordinator.pullAllPortfolios for why that matters.
+                syncCoordinator.pullAllPortfolios()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Offline / server down: fall through with local data rather than hold the loading screen.
+            } finally {
+                initialSyncDone.value = true
+            }
         }
     }
 }
