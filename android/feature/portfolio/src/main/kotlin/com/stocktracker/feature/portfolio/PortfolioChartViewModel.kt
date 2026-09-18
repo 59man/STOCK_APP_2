@@ -19,6 +19,7 @@ import com.stocktracker.core.model.PriceHistory
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.network.HistoryClient
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -144,17 +146,20 @@ class PortfolioChartViewModel @Inject constructor(
         val rates: Map<String, Double>,
     )
 
-    private data class Prefs(val range: ChartRange, val view: PnlView, val displayCurrency: String)
+    private data class Prefs(val range: ChartRange, val displayCurrency: String)
 
     private val inputs1 = combine(positions, manualPrices, taxOverrides) { p, m, t -> Inputs1(p, m, t) }
     private val inputs2 = combine(quoteRepository.quotes, dividendRepository.dividends, fxRateRepository.rates) { q, d, r -> Inputs2(q, d, r) }
-    private val prefs = combine(range, view, settingsRepository.settings) { r, v, s -> Prefs(r, v, s.displayCurrency) }
+    private val prefs = combine(range, settingsRepository.settings) { r, s -> Prefs(r, s.displayCurrency) }.distinctUntilChanged()
 
-    val uiState: StateFlow<PortfolioChartUiState> = combine(inputs1, inputs2, historyState, prefs) { in1, in2, hist, p ->
+    // The series is computed without `view` — Total Return vs. Portfolio Value are two
+    // projections of the same points, so toggling between them is combined in afterwards
+    // and never re-runs buildPortfolioChartData.
+    private val seriesState = combine(inputs1, inputs2, historyState, prefs) { in1, in2, hist, p ->
         when {
-            in1.positions.isEmpty() -> PortfolioChartUiState(range = p.range, view = p.view, displayCurrency = p.displayCurrency)
-            hist.loading -> PortfolioChartUiState(range = p.range, view = p.view, loading = true, displayCurrency = p.displayCurrency)
-            hist.error != null -> PortfolioChartUiState(range = p.range, view = p.view, error = hist.error, displayCurrency = p.displayCurrency)
+            in1.positions.isEmpty() -> PortfolioChartUiState(range = p.range, displayCurrency = p.displayCurrency)
+            hist.loading -> PortfolioChartUiState(range = p.range, loading = true, displayCurrency = p.displayCurrency)
+            hist.error != null -> PortfolioChartUiState(range = p.range, error = hist.error, displayCurrency = p.displayCurrency)
             else -> {
                 val tickers = in1.positions.map { it.ticker }.distinct()
                 val effectiveHistories = buildEffectiveHistories(
@@ -174,10 +179,15 @@ class PortfolioChartViewModel @Inject constructor(
                     taxOverrides = in1.taxOverrides,
                     spotConvert = { amount, from, to -> convert(amount, from, to, in2.rates) },
                 )
-                PortfolioChartUiState(range = p.range, view = p.view, loading = false, points = points, displayCurrency = p.displayCurrency)
+                PortfolioChartUiState(range = p.range, loading = false, points = points, displayCurrency = p.displayCurrency)
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioChartUiState())
+    }
+        // Chart series math runs over every date × lot; never on the main thread.
+        .flowOn(Dispatchers.Default)
+
+    val uiState: StateFlow<PortfolioChartUiState> = combine(seriesState, view) { series, v -> series.copy(view = v) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioChartUiState())
 
     fun onAction(action: PortfolioChartAction) {
         when (action) {

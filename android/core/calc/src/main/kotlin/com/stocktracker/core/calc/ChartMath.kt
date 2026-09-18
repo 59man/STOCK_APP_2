@@ -52,10 +52,25 @@ fun priceAt(history: PriceHistory, date: String): Double? {
     val after = history.getOrNull(lo)
     if (before == null) return after?.second
     if (after == null) return before.second
-    val targetDay = LocalDate.parse(date).toEpochDay()
-    val beforeGapDays = targetDay - LocalDate.parse(before.first).toEpochDay()
-    val afterGapDays = LocalDate.parse(after.first).toEpochDay() - targetDay
+    val targetDay = isoEpochDay(date)
+    val beforeGapDays = targetDay - isoEpochDay(before.first)
+    val afterGapDays = isoEpochDay(after.first) - targetDay
     return if (afterGapDays <= 1 && afterGapDays <= beforeGapDays) after.second else before.second
+}
+
+/**
+ * Epoch day of a `YYYY-MM-DD` string without [LocalDate.parse]'s formatter machinery —
+ * [priceAt] runs this on every chart date × lot × FX lookup, where parsing dominated.
+ * Falls back to [LocalDate.parse] for anything not in that exact shape.
+ */
+internal fun isoEpochDay(date: String): Long {
+    if (date.length == 10 && date[4] == '-' && date[7] == '-') {
+        val y = date.substring(0, 4).toIntOrNull()
+        val m = date.substring(5, 7).toIntOrNull()
+        val d = date.substring(8, 10).toIntOrNull()
+        if (y != null && m != null && d != null) return LocalDate.of(y, m, d).toEpochDay()
+    }
+    return LocalDate.parse(date).toEpochDay()
 }
 
 /**
@@ -181,49 +196,92 @@ fun buildPortfolioChartData(
         return if (f != null && t != null) (amount * f) / t else spotConvert(amount, from, to)
     }
 
+    // Everything below that doesn't depend on the chart date is computed once per lot / per
+    // dividend event instead of once per (date × lot) — the naive per-date loop re-converted
+    // cost bases and re-walked every lot's full dividend history (hundreds of events for a
+    // long-held payer) at each of ~500+ dates, which took seconds on a phone. The per-date
+    // work is now just the open lots' price lookup plus a binary search into dividend prefix sums.
+    class LotPrep(
+        val pos: Position,
+        /** Non-null when the lot is sold — its realized P&L in display currency, fixed at the sell date's FX rate. */
+        val realized: Double?,
+        val costBasisInDisplay: Double,
+        val hist: TickerChartHistory?,
+        val buyInHistCurrency: Double,
+    )
+    val lots = positions.map { pos ->
+        val sellDate = pos.sellDate
+        val sellPrice = pos.sellPrice
+        val realized = if (sellDate != null && sellPrice != null) {
+            convertAt((sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency, sellDate)
+        } else null
+        val hist = effectiveHistories[pos.ticker.uppercase()]?.takeIf { it.points.isNotEmpty() }
+        LotPrep(
+            pos = pos,
+            realized = realized,
+            costBasisInDisplay = convertAt(pos.buyPrice * pos.quantity, pos.currency, displayCurrency, pos.buyDate),
+            hist = hist,
+            buyInHistCurrency = if (hist != null) convertAt(pos.buyPrice, pos.currency, hist.currency, pos.buyDate) else 0.0,
+        )
+    }
+
+    // Each received dividend's net amount is fixed (converted at its own ex-date), so the
+    // dividend line at any chart date is just the running total of events on or before it.
+    val divEvents = mutableListOf<Pair<String, Double>>()
+    positions.forEach { pos ->
+        val divs = dividendsByTicker[pos.ticker.uppercase()] ?: return@forEach
+        val defaultRate = getDividendTaxRate(pos.ticker)
+        val posSellDate = pos.sellDate
+        for (div in divs) {
+            if (pos.buyDate <= div.date && (posSellDate == null || posSellDate > div.date)) {
+                val rate = taxOverrides["${pos.ticker.uppercase()}::${div.date}"] ?: defaultRate
+                divEvents += div.date to convertAt(pos.quantity * div.amount * (1 - rate), div.currency, displayCurrency, div.date)
+            }
+        }
+    }
+    divEvents.sortBy { it.first }
+    val divDates = Array(divEvents.size) { divEvents[it].first }
+    val divPrefix = DoubleArray(divEvents.size + 1)
+    divEvents.forEachIndexed { i, (_, v) -> divPrefix[i + 1] = divPrefix[i] + v }
+    /** Index one past the last dividend dated on or before [date]. */
+    fun divCountThrough(date: String): Int {
+        var lo = 0
+        var hi = divDates.size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (divDates[mid] <= date) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
     return dateSet.map { date ->
         var pricePnl = 0.0
         var costBasis = 0.0
         var currentValue = 0.0
 
-        positions.forEach { pos ->
-            if (pos.buyDate > date) return@forEach
+        for (lot in lots) {
+            val pos = lot.pos
+            if (pos.buyDate > date) continue
 
-            val sellDate = pos.sellDate
-            val sellPrice = pos.sellPrice
-            if (sellDate != null && sellDate <= date && sellPrice != null) {
-                pricePnl += convertAt((sellPrice - pos.buyPrice) * pos.quantity, pos.currency, displayCurrency, sellDate)
-                return@forEach
+            if (lot.realized != null && pos.sellDate!! <= date) {
+                pricePnl += lot.realized
+                continue
             }
 
-            val costBasisInDisplay = convertAt(pos.buyPrice * pos.quantity, pos.currency, displayCurrency, pos.buyDate)
-            costBasis += costBasisInDisplay
+            costBasis += lot.costBasisInDisplay
 
-            val hist = effectiveHistories[pos.ticker.uppercase()]
-            val price = if (hist != null && hist.points.isNotEmpty()) priceAt(hist.points, date) else null
+            val hist = lot.hist
+            val price = if (hist != null) priceAt(hist.points, date) else null
             if (hist == null || price == null) {
-                currentValue += costBasisInDisplay
-                return@forEach
+                currentValue += lot.costBasisInDisplay
+                continue
             }
-            val buyInHistCurrency = convertAt(pos.buyPrice, pos.currency, hist.currency, pos.buyDate)
-            val lotPricePnl = convertAt((price - buyInHistCurrency) * pos.quantity, hist.currency, displayCurrency, date)
+            val lotPricePnl = convertAt((price - lot.buyInHistCurrency) * pos.quantity, hist.currency, displayCurrency, date)
             pricePnl += lotPricePnl
-            currentValue += costBasisInDisplay + lotPricePnl
+            currentValue += lot.costBasisInDisplay + lotPricePnl
         }
 
-        var divPnl = 0.0
-        positions.forEach { pos ->
-            val divs = dividendsByTicker[pos.ticker.uppercase()] ?: emptyList()
-            val defaultRate = getDividendTaxRate(pos.ticker)
-            for (div in divs) {
-                if (div.date > date) break
-                val posSellDate = pos.sellDate
-                if (pos.buyDate <= div.date && (posSellDate == null || posSellDate > div.date)) {
-                    val rate = taxOverrides["${pos.ticker.uppercase()}::${div.date}"] ?: defaultRate
-                    divPnl += convertAt(pos.quantity * div.amount * (1 - rate), div.currency, displayCurrency, div.date)
-                }
-            }
-        }
+        val divPnl = divPrefix[divCountThrough(date)]
 
         PortfolioChartPoint(
             date = date,
