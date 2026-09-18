@@ -43,7 +43,11 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
 
             if (uiState.isLoading || uiState.isSwitchingPortfolio) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            } else if (uiState.visibleRows.isEmpty()) {
+            // All rows, closed included — matches the web summary + pie charts (PortfolioTable /
+            // PortfolioContent pass the full row list). visibleRows is the Portfolio tab's
+            // "Show closed" list filter; Insights has no such toggle, so using it here silently
+            // dropped fully-sold tickers' realized P&L and dividends from every total.
+            } else if (uiState.rows.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         "Add a position to see charts",
@@ -57,11 +61,11 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item(key = "summary") {
-                        SummaryHeader(uiState.visibleRows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
+                        SummaryHeader(uiState.rows, uiState.displayCurrency, uiState.rates, uiState.portfolioIrr)
                     }
                     item(key = "pnl-chart") { PortfolioPnlChartCard(portfolioId = uiState.activePortfolioId) }
                     item(key = "pie-charts") {
-                        PortfolioPieChartsCard(uiState.visibleRows, uiState.displayCurrency, uiState.rates)
+                        PortfolioPieChartsCard(uiState.rows, uiState.displayCurrency, uiState.rates)
                     }
                 }
             }
