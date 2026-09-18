@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -132,7 +133,9 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 }
             }
 
-            Button(onClick = { onAction(SettingsAction.TestConnection) }, modifier = Modifier.fillMaxWidth()) {
+            // Sync now is the everyday action; Test connection is a setup/diagnostic step, so it
+            // gets the quieter outlined style instead of competing as a second primary button.
+            OutlinedButton(onClick = { onAction(SettingsAction.TestConnection) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Test connection")
             }
             ConnectionStatusLabel(uiState.connectionTest)
@@ -141,8 +144,9 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 Text("Sync now")
             }
             Text(
-                text = uiState.lastSyncedAt?.let { "Last synced: $it" } ?: "Never synced",
+                text = uiState.lastSyncedAt?.let { "Last synced: ${formatLastSynced(it)}" } ?: "Never synced",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             var showDisconnectConfirm by remember { mutableStateOf(false) }
@@ -167,6 +171,20 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                     },
                 )
             }
+
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val versionName = remember {
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
+            }
+            if (versionName != null) {
+                Text(
+                    "Stock Tracker v$versionName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
         }
     }
 }
@@ -180,4 +198,21 @@ private fun ConnectionStatusLabel(state: ConnectionTestState) {
         is ConnectionTestState.Failed -> "Failed: ${state.message}"
     }
     if (text != null) Text(text)
+}
+
+private val LastSyncedFormat = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", java.util.Locale.US)
+
+/** "2026-08-29T17:01:44.741366Z" → "29 Aug 2026, 19:01 · 20 days ago" in the device's time zone. */
+internal fun formatLastSynced(iso: String, now: java.time.Instant = java.time.Instant.now()): String {
+    val instant = runCatching { java.time.Instant.parse(iso) }.getOrNull() ?: return iso
+    val local = instant.atZone(java.time.ZoneId.systemDefault()).format(LastSyncedFormat)
+    val minutes = java.time.Duration.between(instant, now).toMinutes().coerceAtLeast(0)
+    val ago = when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes min ago"
+        minutes < 60 * 24 -> "${minutes / 60} h ago"
+        minutes < 60 * 24 * 2 -> "yesterday"
+        else -> "${minutes / (60 * 24)} days ago"
+    }
+    return "$local · $ago"
 }

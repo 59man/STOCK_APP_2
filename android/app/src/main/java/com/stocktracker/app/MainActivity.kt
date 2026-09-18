@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.IntentCompat
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -97,7 +98,14 @@ class MainActivity : ComponentActivity() {
 
     private var sharedUriState = mutableStateOf<Uri?>(null)
 
+    // Activity-scoped: read by the splash keep-condition below and shared by every route in setContent.
+    private val portfolioViewModel: PortfolioListViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Hold the system splash until the portfolio is ready (same gate as AppLoadingScreen:
+        // lots + first quote/dividend round, 10 s cap) so startup is a single screen instead of
+        // splash → spinner screen → content.
+        installSplashScreen().setKeepOnScreenCondition { portfolioViewModel.uiState.value.isLoading }
         super.onCreate(savedInstanceState)
         sharedUriState.value = extractSharedUri(intent)
         setContent {
@@ -108,13 +116,10 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> systemDark
             }
-            // Hoisted here (Activity-scoped, created before the NavHost exists) instead of the
-            // former per-destination `getBackStackEntry(MAIN_GRAPH)` lookup, so its uiState.isLoading
-            // can gate the startup loading screen below — a second hiltViewModel() call would spin
-            // up its own instance and double every quote/dividend/FX network fetch in this
-            // ViewModel's init block. The Portfolio/Insights/PositionDetail routes now all take
-            // this single instance directly instead of re-deriving it from the nav back stack.
-            val portfolioViewModel: PortfolioListViewModel = hiltViewModel()
+            // Activity-scoped (the `portfolioViewModel` property above), not a per-destination
+            // lookup: its uiState.isLoading gates the splash + loading screen, and the
+            // Portfolio/Insights/PositionDetail routes all share this single instance — a second
+            // instance would double every quote/dividend/FX fetch in its init block.
             val portfolioUiState by portfolioViewModel.uiState.collectAsState()
 
             StockTrackerTheme(darkTheme = darkTheme) {

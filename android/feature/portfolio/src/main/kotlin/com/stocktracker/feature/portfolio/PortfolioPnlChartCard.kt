@@ -73,7 +73,7 @@ fun PortfolioPnlChartCard(
                 val finalPnl = uiState.points.last().pnl
                 val color = if (finalPnl >= 0) StockTrackerColors.Gain else StockTrackerColors.Loss
                 Text(
-                    fmtCurrencyChart(finalPnl, uiState.displayCurrency),
+                    (if (finalPnl > 0) "+" else "") + fmtCurrencyChart(finalPnl, uiState.displayCurrency),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = color,

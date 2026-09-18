@@ -1,3 +1,17 @@
 <resources>
-    <style name="Theme.StockTracker" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.StockTracker" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Window colour behind the first Compose frame — dark, so there's no white flash after the splash. -->
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <!--
+      Launch theme: the system splash is held (MainActivity.setKeepOnScreenCondition) until the
+      portfolio is loaded, then swaps to Theme.StockTracker. Always dark, matching the app's
+      brand/launcher-icon background, so startup is one continuous dark screen.
+    -->
+    <style name="Theme.StockTracker.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.StockTracker</item>
+    </style>
 </resources>

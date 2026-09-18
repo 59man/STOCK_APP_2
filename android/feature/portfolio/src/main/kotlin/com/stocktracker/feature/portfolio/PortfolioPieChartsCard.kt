@@ -3,6 +3,8 @@ package com.stocktracker.feature.portfolio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
@@ -70,7 +72,19 @@ private data class GroupTotals(var costBasis: Double = 0.0, var currentValue: Do
 @Composable
 fun PortfolioPieChartsCard(rows: List<PortfolioRow>, displayCurrency: String, rates: Map<String, Double>) {
     if (rows.isEmpty()) return
-    var groupBy by remember { mutableStateOf(GroupBy.TYPE) }
+    // A grouping with a single group renders three identical 100% discs — pure noise (e.g.
+    // "By Type" on an all-stock portfolio). Only offer groupings that actually split the
+    // portfolio; By Ticker stays as the fallback so there's always something to show.
+    val available = remember(rows) {
+        val counts = mapOf(
+            GroupBy.TYPE to rows.map { it.type }.distinct().size,
+            GroupBy.TICKER to rows.size,
+            GroupBy.CURRENCY to rows.map { it.nativeCurrency }.distinct().size,
+        )
+        GroupBy.entries.filter { (counts[it] ?: 0) >= 2 }.ifEmpty { listOf(GroupBy.TICKER) }
+    }
+    var selectedGroupBy by remember { mutableStateOf<GroupBy?>(null) }
+    val groupBy = selectedGroupBy?.takeIf { it in available } ?: available.first()
     fun cv(amount: Double, from: String) = convert(amount, from, displayCurrency, rates)
 
     val tickerColors = remember(rows) {
@@ -126,10 +140,19 @@ fun PortfolioPieChartsCard(rows: List<PortfolioRow>, displayCurrency: String, ra
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Portfolio Distribution", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-            ToggleChip("By Type", groupBy == GroupBy.TYPE) { groupBy = GroupBy.TYPE }
-            ToggleChip("By Ticker", groupBy == GroupBy.TICKER) { groupBy = GroupBy.TICKER }
-            ToggleChip("By Currency", groupBy == GroupBy.CURRENCY) { groupBy = GroupBy.CURRENCY }
+        if (available.size > 1) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
+                available.forEach { option ->
+                    val label = when (option) {
+                        GroupBy.TYPE -> "By Type"
+                        GroupBy.TICKER -> "By Ticker"
+                        GroupBy.CURRENCY -> "By Currency"
+                    }
+                    ToggleChip(label, groupBy == option) { selectedGroupBy = option }
+                }
+            }
+        } else {
+            Spacer(Modifier.height(8.dp))
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp)) {

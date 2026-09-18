@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.materialIcon
+import androidx.compose.material.icons.materialPath
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -149,8 +151,12 @@ internal fun PortfolioListScreen(
             TopAppBar(
                 title = { Text("Stock Tracker") },
                 actions = {
-                    TextButton(onClick = onExport, enabled = uiState.activePortfolioId != null) { Text("Export") }
-                    TextButton(onClick = { onOpenImport(uiState.activePortfolioId) }) { Text("Import") }
+                    IconButton(onClick = { onOpenImport(uiState.activePortfolioId) }) {
+                        Icon(ImportIcon, contentDescription = "Import statement")
+                    }
+                    IconButton(onClick = onExport, enabled = uiState.activePortfolioId != null) {
+                        Icon(ExportIcon, contentDescription = "Export portfolio")
+                    }
                 },
             )
         },
@@ -359,16 +365,19 @@ internal fun CurrencyTabs(uiState: PortfolioListUiState, onAction: (PortfolioLis
     ) {
         DISPLAY_CURRENCIES.forEach { currency ->
             val active = currency == uiState.displayCurrency
-            val badgeColor = currencyBadgeColor(currency)
+            // Same selected/unselected language as PortfolioTabs above: accent fill when active,
+            // quiet neutral otherwise. The old per-currency colours made the *selected* CZK tab
+            // (grey badge colour) look disabled next to the brightly tinted unselected ones.
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = if (active) badgeColor else badgeColor.copy(alpha = 0.25f),
+                color = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                border = if (active) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.padding(2.dp),
             ) {
                 Text(
                     text = currency,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (active) Color.White else badgeColor,
+                    color = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .clickable { onAction(PortfolioListAction.SetDisplayCurrency(currency)) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -431,69 +440,40 @@ internal fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, ra
             )
             Row(modifier = Modifier.padding(top = Spacing.sm)) {
                 Text(
-                    "${if (totalReturn >= 0) "▲" else "▼"} ${formatMoney(totalReturn)} (${formatPercent(returnPercent)})",
+                    "${if (totalReturn >= 0) "▲" else "▼"} ${signedMoney(totalReturn)} (${signedPercent(returnPercent)})",
                     style = NumericTypography.bodyMedium,
                     color = pnlColor(totalReturn),
                 )
             }
         }
-        Column(
+        val pnlPercent = if (totalCostBasis > 0) totalPnl / totalCostBasis * 100 else null
+        DetailMetricGrid(
             modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-        ) {
-            SummaryCard("P&L", formatMoney(totalPnl), Modifier.fillMaxWidth(), color = pnlColor(totalPnl))
-            SummaryCard("Total return", formatMoney(totalReturn), Modifier.fillMaxWidth(), color = pnlColor(totalReturn))
-            SummaryCard(
-                "Today's change",
-                "${if (totalDailyChange >= 0) "+" else ""}${formatMoney(totalDailyChange)} (${formatPercent(dailyChangePercent)})",
-                Modifier.fillMaxWidth(),
-                color = pnlColor(totalDailyChange),
-                valueStyle = NumericTypography.titleSmall,
-            )
-            SummaryCard(
-                "Net dividends",
-                if (totalDividends > 0) "+" + formatMoney(totalDividends) else "—",
-                Modifier.fillMaxWidth(),
-                color = if (totalDividends > 0) StockTrackerColors.gain else null,
-                valueStyle = NumericTypography.titleSmall,
-            )
-            SummaryCard(
-                "IRR p.a.",
-                if (portfolioIrr != null) formatPercent(portfolioIrr * 100) else "…",
-                Modifier.fillMaxWidth(),
-                color = if (portfolioIrr != null) pnlColor(portfolioIrr) else null,
-                valueStyle = NumericTypography.titleSmall,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SummaryCard(
-    label: String,
-    value: String,
-    modifier: Modifier,
-    color: Color? = null,
-    valueStyle: androidx.compose.ui.text.TextStyle = NumericTypography.titleMedium,
-) {
-    AppCard(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        contentPadding = Spacing.md,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            value,
-            style = valueStyle,
-            fontWeight = FontWeight.SemiBold,
-            color = color ?: MaterialTheme.colorScheme.onSurface,
-            // These cards get narrow in a 3-up row (Today's change / Net dividends / IRR p.a.).
-            // Today's change's value has a deliberate \n between the amount and the (percent) —
-            // maxLines must allow that second line, or it gets ellipsized before ever reaching
-            // it. 2 lines comfortably covers every value this card renders; Ellipsis stays only
-            // as a last-resort guard against something even longer than that.
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            cells = listOf(
+                DetailMetric(
+                    "Today's change", signedMoney(totalDailyChange),
+                    sub = signedPercent(dailyChangePercent), color = pnlColorRounded(dailyChangePercent),
+                ),
+                DetailMetric(
+                    "Total return", signedMoney(totalReturn),
+                    sub = signedPercent(returnPercent), color = pnlColor(totalReturn),
+                ),
+                DetailMetric(
+                    "Price P&L", signedMoney(totalPnl),
+                    sub = pnlPercent?.let(::signedPercent), color = pnlColor(totalPnl),
+                ),
+                DetailMetric(
+                    "Net dividends",
+                    if (totalDividends > 0) signedMoney(totalDividends) else "—",
+                    color = if (totalDividends > 0) StockTrackerColors.gain else null,
+                ),
+                DetailMetric("Cost basis", formatMoney(totalCostBasis), muted = true),
+                DetailMetric(
+                    "IRR p.a.",
+                    if (portfolioIrr != null) signedPercent(portfolioIrr * 100) else "…",
+                    color = portfolioIrr?.let { pnlColor(it) },
+                ),
+            ),
         )
     }
 }
@@ -563,13 +543,13 @@ internal fun PositionCard(
                 )
                 Row(modifier = Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Badge(
-                        formatPercent(dailyPct),
-                        containerColor = pnlColor(dailyPct).copy(alpha = 0.16f),
-                        contentColor = pnlColor(dailyPct),
+                        signedPercent(dailyPct),
+                        containerColor = pnlColorRounded(dailyPct).copy(alpha = 0.16f),
+                        contentColor = pnlColorRounded(dailyPct),
                         emphasized = true,
                     )
                     Badge(
-                        formatMoney(dc(row.totalReturn)),
+                        signedMoney(dc(row.totalReturn)),
                         containerColor = pnlColor(row.totalReturn).copy(alpha = 0.16f),
                         contentColor = pnlColor(row.totalReturn),
                         emphasized = true,
@@ -719,8 +699,8 @@ fun PositionDetailRoute(
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 run {
                     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
-                    fun signed(v: Double) = "${if (v > 0) "+" else ""}${formatMoney(v)}"
-                    fun signedPct(v: Double) = "${if (v > 0) "+" else ""}${formatPercent(v)}"
+                    fun signed(v: Double) = signedMoney(v)
+                    fun signedPct(v: Double) = signedPercent(v)
                     val dailyPct = dailyChangePercent(row)
                     val totalReturnPct = if (row.costBasis > 0) row.totalReturn / row.costBasis * 100 else null
                     val cur = uiState.displayCurrency
@@ -732,7 +712,7 @@ fun PositionDetailRoute(
                             DetailMetric("Current price", "${formatMoney(dc(row.currentPrice))} $cur"),
                             DetailMetric(
                                 "Today's change", signed(dc(row.dailyChange)),
-                                sub = signedPct(dailyPct), color = pnlColor(row.dailyChange),
+                                sub = signedPct(dailyPct), color = pnlColorRounded(dailyPct),
                             ),
                             DetailMetric(
                                 "Price P&L", signed(dc(row.pnl)),
@@ -884,7 +864,41 @@ internal fun pnlColor(formatted: String): Color = if (formatted.startsWith("-"))
 internal fun formatMoney(value: Double): String = String.format(Locale.US, "%,.2f", value)
 internal fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
 
-private data class DetailMetric(
+/** Gain/loss money with an explicit sign: "+1,234.56" / "-1,234.56" / "0.00" — never "-0.00". */
+internal fun signedMoney(value: Double): String {
+    val v = Math.round(value * 100) / 100.0
+    return when {
+        v > 0 -> "+" + formatMoney(v)
+        v < 0 -> formatMoney(v)
+        else -> formatMoney(0.0)
+    }
+}
+
+/** Gain/loss percent with an explicit sign; anything that rounds to 0.0 prints "0.0%" (no "-0.0%"). */
+internal fun signedPercent(value: Double): String {
+    val v = Math.round(value * 10) / 10.0
+    return when {
+        v > 0 -> "+" + formatPercent(v)
+        v < 0 -> formatPercent(v)
+        else -> formatPercent(0.0)
+    }
+}
+
+/** Colour for a value as it will be *displayed* — a -0.004 that prints as "0.0%" is neutral, not red. */
+@Composable
+internal fun pnlColorRounded(value: Double, decimals: Int = 1): Color {
+    val factor = Math.pow(10.0, decimals.toDouble())
+    val v = Math.round(value * factor) / factor
+    return if (v < 0) StockTrackerColors.loss else if (v > 0) StockTrackerColors.gain else MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+private val DisplayDateFormat = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US)
+
+/** "2022-05-23" → "23 May 2022"; anything unparseable is returned unchanged. */
+internal fun formatDisplayDate(isoDate: String): String =
+    runCatching { java.time.LocalDate.parse(isoDate.take(10)).format(DisplayDateFormat) }.getOrDefault(isoDate)
+
+internal data class DetailMetric(
     val label: String,
     val value: String,
     val sub: String? = null,
@@ -898,7 +912,7 @@ private data class DetailMetric(
  * optional percent sub-line, hairline dividers between cells.
  */
 @Composable
-private fun DetailMetricGrid(cells: List<DetailMetric>, modifier: Modifier = Modifier) {
+internal fun DetailMetricGrid(cells: List<DetailMetric>, modifier: Modifier = Modifier) {
     val borderColor = MaterialTheme.colorScheme.outlineVariant
     val shape = RoundedCornerShape(12.dp)
     Column(
@@ -951,5 +965,23 @@ private fun DetailMetricCell(cell: DetailMetric, modifier: Modifier) {
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+    }
+}
+
+// Material "file_download" / "file_upload" glyphs, built inline so the module doesn't need the
+// multi-megabyte material-icons-extended artifact for two icons.
+private val ImportIcon = materialIcon(name = "StockTracker.Import") {
+    materialPath {
+        moveTo(19f, 9f); horizontalLineToRelative(-4f); verticalLineTo(3f); horizontalLineTo(9f)
+        verticalLineToRelative(6f); horizontalLineTo(5f); lineToRelative(7f, 7f); lineToRelative(7f, -7f); close()
+        moveTo(5f, 18f); verticalLineToRelative(2f); horizontalLineToRelative(14f); verticalLineToRelative(-2f); horizontalLineTo(5f); close()
+    }
+}
+
+private val ExportIcon = materialIcon(name = "StockTracker.Export") {
+    materialPath {
+        moveTo(9f, 16f); horizontalLineToRelative(6f); verticalLineToRelative(-6f); horizontalLineToRelative(4f)
+        lineToRelative(-7f, -7f); lineToRelative(-7f, 7f); horizontalLineToRelative(4f); close()
+        moveTo(5f, 18f); horizontalLineToRelative(14f); verticalLineToRelative(2f); horizontalLineTo(5f); close()
     }
 }

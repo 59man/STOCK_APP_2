@@ -34,7 +34,7 @@ internal fun LotCard(lot: Position, onEdit: () -> Unit) {
     val isSold = lot.sellDate != null && lot.sellPrice != null
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(lot.buyDate, style = NumericTypography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(formatDisplayDate(lot.buyDate), style = NumericTypography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
             Badge(
                 if (isSold) "Sold" else "Open",
                 containerColor = if (isSold) MaterialTheme.colorScheme.surfaceVariant else StockTrackerColors.gain.copy(alpha = 0.16f),
@@ -45,7 +45,7 @@ internal fun LotCard(lot: Position, onEdit: () -> Unit) {
         LotField("Buy price", "${formatMoney(lot.buyPrice)} ${lot.currency}")
         lot.broker?.let { LotField("Broker", it) }
         if (isSold) {
-            LotField("Sell date", lot.sellDate!!)
+            LotField("Sell date", formatDisplayDate(lot.sellDate!!))
             LotField("Sell price", "${formatMoney(lot.sellPrice!!)} ${lot.currency}")
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

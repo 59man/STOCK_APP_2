@@ -94,7 +94,7 @@ internal fun DividendCard(
     onEdit: () -> Unit,
 ) {
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(div.date, style = NumericTypography.labelMedium, maxLines = 1)
+        Text(formatDisplayDate(div.date), style = NumericTypography.labelMedium, maxLines = 1)
         DividendField("Gross", formatMoney(grossDisplay))
         Row(
             Modifier.fillMaxWidth().padding(top = Spacing.xs),

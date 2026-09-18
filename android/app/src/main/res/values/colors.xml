@@ -1,0 +1,4 @@
+<resources>
+    <!-- Same as the launcher icon background (ic_launcher_background.xml) and close to the app's DarkBackground. -->
+    <color name="splash_background">#0B0B10</color>
+</resources>
