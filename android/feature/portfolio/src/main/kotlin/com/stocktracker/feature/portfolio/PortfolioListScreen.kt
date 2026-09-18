@@ -4,6 +4,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
@@ -714,34 +719,40 @@ fun PositionDetailRoute(
                 Text(row.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 run {
                     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
+                    fun signed(v: Double) = "${if (v > 0) "+" else ""}${formatMoney(v)}"
+                    fun signedPct(v: Double) = "${if (v > 0) "+" else ""}${formatPercent(v)}"
                     val dailyPct = dailyChangePercent(row)
-                    Column(Modifier.fillMaxWidth().padding(top = Spacing.sm)) {
-                        com.stocktracker.core.designsystem.components.MetricBlock(
-                            label = "Current price",
-                            value = "${formatMoney(dc(row.currentPrice))} ${uiState.displayCurrency}",
-                        )
-                        com.stocktracker.core.designsystem.components.MetricBlock(
-                            label = "Today's change",
-                            value = "${formatMoney(dc(row.dailyChange))} (${formatPercent(dailyPct)})",
-                            valueColor = pnlColor(row.dailyChange),
-                        )
-                        com.stocktracker.core.designsystem.components.MetricBlock(
-                            label = "P&L",
-                            value = "${formatMoney(dc(row.pnl))} (${formatPercent(row.pnlPercent)})",
-                            valueColor = pnlColor(row.pnl),
-                        )
-                        com.stocktracker.core.designsystem.components.MetricBlock(
-                            label = "Total return incl. dividends",
-                            value = formatMoney(dc(row.totalReturn)),
-                            valueColor = pnlColor(row.totalReturn),
-                        )
-                        row.irr?.let { irr ->
-                            com.stocktracker.core.designsystem.components.MetricBlock(
-                                label = "IRR p.a.",
-                                value = formatPercent(irr * 100),
-                            )
-                        }
-                    }
+                    val totalReturnPct = if (row.costBasis > 0) row.totalReturn / row.costBasis * 100 else null
+                    val cur = uiState.displayCurrency
+                    DetailMetricGrid(
+                        modifier = Modifier.fillMaxWidth().padding(top = Spacing.md),
+                        cells = listOf(
+                            DetailMetric("Current value", "${formatMoney(dc(row.currentValue))} $cur"),
+                            DetailMetric("Cost basis", "${formatMoney(dc(row.costBasis))} $cur", muted = true),
+                            DetailMetric("Current price", "${formatMoney(dc(row.currentPrice))} $cur"),
+                            DetailMetric(
+                                "Today's change", signed(dc(row.dailyChange)),
+                                sub = signedPct(dailyPct), color = pnlColor(row.dailyChange),
+                            ),
+                            DetailMetric(
+                                "Price P&L", signed(dc(row.pnl)),
+                                sub = signedPct(row.pnlPercent), color = pnlColor(row.pnl),
+                            ),
+                            DetailMetric(
+                                "Net dividends",
+                                if (row.dividendIncome > 0) signed(dc(row.dividendIncome)) else "—",
+                                color = if (row.dividendIncome > 0) StockTrackerColors.gain else null,
+                            ),
+                            DetailMetric(
+                                "Total return", signed(dc(row.totalReturn)),
+                                sub = totalReturnPct?.let(::signedPct), color = pnlColor(row.totalReturn),
+                            ),
+                            DetailMetric(
+                                "IRR p.a.", row.irr?.let { formatPercent(it * 100) } ?: "—",
+                                color = row.irr?.let { pnlColor(it) },
+                            ),
+                        ),
+                    )
                 }
                 if (!row.isClosed) {
                     Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.End) {
@@ -872,3 +883,73 @@ internal fun pnlColor(formatted: String): Color = if (formatted.startsWith("-"))
 
 internal fun formatMoney(value: Double): String = String.format(Locale.US, "%,.2f", value)
 internal fun formatPercent(value: Double): String = String.format(Locale.US, "%.1f%%", value)
+
+private data class DetailMetric(
+    val label: String,
+    val value: String,
+    val sub: String? = null,
+    val color: Color? = null,
+    val muted: Boolean = false,
+)
+
+/**
+ * Two-column bordered grid of metric boxes — the phone-sized twin of the web app's
+ * `.summary-grid` / `.summary-card` block: uppercase letter-spaced label, bold value,
+ * optional percent sub-line, hairline dividers between cells.
+ */
+@Composable
+private fun DetailMetricGrid(cells: List<DetailMetric>, modifier: Modifier = Modifier) {
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .border(1.dp, borderColor, shape)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        cells.chunked(2).forEachIndexed { rowIndex, pair ->
+            if (rowIndex > 0) HorizontalDivider(color = borderColor)
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                pair.forEachIndexed { i, cell ->
+                    if (i > 0) VerticalDivider(color = borderColor)
+                    DetailMetricCell(cell, Modifier.weight(1f).fillMaxHeight())
+                }
+                if (pair.size == 1) {
+                    VerticalDivider(color = borderColor)
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailMetricCell(cell: DetailMetric, modifier: Modifier) {
+    Column(modifier.padding(horizontal = Spacing.md, vertical = Spacing.md)) {
+        Text(
+            cell.label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 1.2.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            cell.value,
+            style = NumericTypography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = cell.color ?: if (cell.muted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = Spacing.xs),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        cell.sub?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.labelMedium,
+                color = cell.color ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+    }
+}
