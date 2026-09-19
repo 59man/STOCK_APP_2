@@ -4,13 +4,20 @@ A self-hosted portfolio tracker for Czech and international stocks, ETFs, funds,
 
 **📱 [Download the latest Android APK](https://github.com/59man/STOCK_APP_2/releases/latest)**
 
+![The web app's position table: one row per ticker with live price, today's change, P&L, dividends and IRR, above a portfolio total-return chart](docs/screenshots/web-portfolio.png)
+
+*All screenshots show a demo portfolio of invented positions, not real holdings.*
+
 ## Features
 
 - **Multiple portfolios, any currency.** Totals and charts switch between CZK, USD, and EUR instantly.
 - **Live prices.** Prices come from Yahoo Finance, with Stooq as a fallback. Onemarkets and Fio funds are fetched from the providers' own sites. You can still set a price by hand for anything without a feed.
 - **Returns.** Shows realized and unrealized P&L, net dividends after per-country withholding tax (editable per payout), and IRR per position and per portfolio.
 - **Full position lifecycle.** Buy, sell partially or fully, record past closed positions, and edit individual lots.
+- **Today's change that means today.** The figure resets at midnight in *your* time zone, not at the exchange's previous close, and includes the currency's own move. On a closed market it reads `0.00` and says why, rather than quietly showing Friday's number.
 - **Charts.** Portfolio total return and value over time (converted at each day's historical FX rate), distribution pies, and a price chart per position.
+
+![Portfolio total return chart over the full holding period, with cost-basis, current-value and total-return distribution pies below it](docs/screenshots/web-charts.png)
 - **Import.** Reads XTB, Fio banka, Revolut, Trading 212, and Degiro statements, plus any CSV or XLSX through a column-mapping wizard. Sells are matched FIFO, and tickers and types are resolved from ISINs automatically.
 - **Export.** One JSON backup covers positions, manual prices, and tax overrides.
 - **Durable storage.** Writes are atomic, and the server keeps daily backups for the last 7 days. The Docker image includes a healthcheck.
@@ -19,10 +26,19 @@ A self-hosted portfolio tracker for Czech and international stocks, ETFs, funds,
 
 The Android app is native Kotlin + Jetpack Compose.
 
+<table>
+<tr>
+<td width="33%"><img alt="Android position list: one card per holding with its logo, type and currency badges, value, today's change and total return" src="docs/screenshots/android-portfolio.png"></td>
+<td width="33%"><img alt="Android instrument detail: market hours shown in the user's own time zone, an essentials grid, and 1D/1W/1M/3M return chips" src="docs/screenshots/android-instrument.png"></td>
+<td width="33%"><img alt="Android insights tab: portfolio value, today's change, total return, price P&amp;L, net dividends, cost basis and IRR, above the total-return chart" src="docs/screenshots/android-insights.png"></td>
+</tr>
+</table>
+
 - **Offline-first.** Everything is calculated on the phone. Quotes and history come straight from Yahoo, and your server is used only for sync.
 - **Full add/edit/sell/delete.** It's not a read-only mirror of the web app.
 - **Statement import on the phone.** Handles all five broker formats.
 - **Conflict-safe sync.** Edits made offline on both devices are merged. If the same record changed in both places, the app asks you which version to keep.
+- **Instrument detail.** Market hours drawn in your own time zone, an essentials grid (exchange, ISIN, 52-week range, distribution type, fees), period returns, and the fund or company description.
 
 ## Quick start
 
@@ -30,7 +46,8 @@ The Android app is native Kotlin + Jetpack Compose.
 cp .env.example .env    # set PERSIST_API_KEY and VITE_PERSIST_API_KEY to the same secret
 npm install
 npm run dev             # web on http://localhost:5173, persist server on :3001
-npm test                # money-math unit tests
+npm test                # unit tests
+npm run test:ui         # Playwright layout checks across five viewports
 ```
 
 `npm run dev` still works without `.env` (the server logs a warning), but production refuses to start without a key. If port 3001 is taken, run `kill $(lsof -ti:3001)`.
