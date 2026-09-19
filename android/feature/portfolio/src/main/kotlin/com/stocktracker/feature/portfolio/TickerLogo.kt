@@ -32,15 +32,28 @@ import java.net.URI
  */
 internal val TICKER_LOGO_DOMAINS: Map<String, String> = mapOf(
     "VIG.PR" to "vig.com",
+    "VIG.VI" to "vig.com",
     "UCG.MI" to "unicreditgroup.eu",
     "DTE.DE" to "telekom.com",
+    // No favicon service carries these two, so they are bundled under app/src/main/assets/logos.
+    // The domains stay listed anyway: if a bundled file is ever removed, the chain still has
+    // something to try.
     "8306.T" to "mufg.jp",
     "8591.T" to "orix.co.jp",
-    "CSG.AS" to "csgroup.cz",
-    "CSG.PR" to "csgroup.cz",
+    // csg.com, not csgroup.cz — the old domain no longer resolves, which is why both favicon
+    // services returned 404 for it.
+    "CSG.AS" to "csg.com",
+    "CSG.PR" to "csg.com",
     "COLT.PR" to "coltcz.com",
     "CZG.PR" to "coltcz.com",
     "FIOG.PR" to "fio.cz",
+    "KOMB.PR" to "kb.cz",
+    "MONET.PR" to "moneta.cz",
+    "KOFOL.PR" to "kofola.cz",
+    // Philip Morris ČR: philipmorris.cz has no favicon on either service, the group domain does.
+    "TABAK.PR" to "pmi.com",
+    "AMEW.DE" to "amundietf.com",
+    "CW8.PA" to "amundietf.com",
     "LU2606422355" to "onemarkets.cz",
     "LU2606421548" to "onemarkets.cz",
     "LU2595011649" to "onemarkets.cz",

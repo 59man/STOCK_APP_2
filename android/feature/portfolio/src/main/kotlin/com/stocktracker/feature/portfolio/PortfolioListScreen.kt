@@ -1,6 +1,7 @@
 package com.stocktracker.feature.portfolio
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -536,6 +537,7 @@ internal fun PositionCard(
 ) {
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
     val dailyPct = dailyChangePercent(row)
+    val context = LocalContext.current
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
         // XTB-style compact row: logo, ticker/name, and only today's %, total return incl.
@@ -547,7 +549,11 @@ internal fun PositionCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                TickerLogo(row.ticker, row.type)
+                // A local override is just a file path, so it is resolved per row rather than
+                // hoisted: LogoStore only touches the filesystem when TickerLogo asks whether
+                // the file exists.
+                val logoStore = remember { LogoStore(context.filesDir) }
+                TickerLogo(row.ticker, row.type, localFile = logoStore.fileFor(row.ticker))
                 Column(modifier = Modifier.padding(start = Spacing.sm)) {
                     // Ticker symbol is deliberately not shown here — it's the detail screen's
                     // TopAppBar title (PositionDetailRoute). The card leads with the full name;
@@ -660,6 +666,22 @@ fun PositionDetailRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val row = uiState.rows.firstOrNull { it.ticker == ticker }
+    val context = LocalContext.current
+    val detailScope = rememberCoroutineScope()
+    val logoStore = remember { LogoStore(context.filesDir) }
+    // Bumped whenever the stored file changes. Coil keys its cache on the model, and the File
+    // object is equal across a re-save, so without this a newly picked logo would not repaint.
+    var logoVersion by remember { mutableStateOf(0) }
+    val pickLogo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null && row != null) {
+            detailScope.launch {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { logoStore.save(row.ticker, it) }
+                }
+                logoVersion += 1
+            }
+        }
+    }
     var editTarget by remember { mutableStateOf<com.stocktracker.core.model.Position?>(null) }
     var editTickerTarget by remember { mutableStateOf(false) }
     var sellTarget by remember { mutableStateOf(false) }
@@ -736,6 +758,22 @@ fun PositionDetailRoute(
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
+                    if (logoStore.has(row.ticker)) {
+                        AppButton(
+                            text = "Reset logo",
+                            onClick = { logoStore.clear(row.ticker); logoVersion += 1 },
+                            variant = AppButtonVariant.Secondary,
+                        )
+                    }
+                    AppButton(
+                        text = "Set logo",
+                        onClick = {
+                            pickLogo.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                        variant = AppButtonVariant.Secondary,
+                    )
                     AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
                 if (row.positions.isNotEmpty()) {
