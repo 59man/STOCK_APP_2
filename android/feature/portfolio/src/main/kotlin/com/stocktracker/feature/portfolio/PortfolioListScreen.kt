@@ -466,7 +466,7 @@ internal fun SortChips(uiState: PortfolioListUiState, onAction: (PortfolioListAc
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
     ) {
         SORT_LABELS.forEach { (field, label) ->
             val active = uiState.sortOrder.field == field
@@ -477,7 +477,7 @@ internal fun SortChips(uiState: PortfolioListUiState, onAction: (PortfolioListAc
             ) {
                 Text(
                     text = if (active) "$label ${if (uiState.sortOrder.ascending) "\u25B2" else "\u25BC"}" else label,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
                     color = if (active) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -487,7 +487,7 @@ internal fun SortChips(uiState: PortfolioListUiState, onAction: (PortfolioListAc
                     maxLines = 1,
                     modifier = Modifier
                         .clickable { onAction(PortfolioListAction.SetSort(field)) }
-                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        .padding(horizontal = Spacing.sm, vertical = Spacing.sm),
                 )
             }
         }

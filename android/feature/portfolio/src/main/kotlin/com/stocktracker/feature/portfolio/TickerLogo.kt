@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
@@ -131,9 +132,16 @@ internal fun InitialAvatar(ticker: String, type: PositionType, modifier: Modifie
         modifier = modifier.size(40.dp).clip(CircleShape).background(typeBadgeColor(type)),
         contentAlignment = Alignment.Center,
     ) {
+        // Font size *and* line height are pinned in dp-derived sp so the glyph ignores the
+        // system font scale. It stands in for a logo image inside a fixed 40dp circle: at font
+        // scale 2.0 the scaled line height alone overflowed that circle and cut the letter off.
+        val density = LocalDensity.current
         Text(
             ticker.take(1).uppercase(),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = with(density) { 18.dp.toSp() },
+                lineHeight = with(density) { 22.dp.toSp() },
+            ),
             fontWeight = FontWeight.Bold,
             color = Color.White,
         )
