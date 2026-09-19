@@ -5,7 +5,7 @@ Status: Design approved, ready for implementation planning
 
 ## Summary
 
-Four related pieces of work, covered by Parts 1–6 below:
+Five related pieces of work, covered by Parts 1–7 below:
 
 1. **Instrument info sections** on the position detail screen (Parts 1–3), modelled on XTB's
    instrument page: About, Market hours (rendered in the user's time zone),
@@ -16,10 +16,12 @@ Four related pieces of work, covered by Parts 1–6 below:
    no longer resolves at all, so every ticker the primary source misses falls
    straight through to an initials avatar. Replace the chain with one that
    actually covers non-US holdings.
-4. **README rewrite with screenshots** (Part 6) of both the web and Android apps, done
-   last so the screenshots show the finished features.
+4. **Labelled Import and Export actions** (Part 6) — the two icon-only top-bar
+   actions gain visible captions.
+5. **README rewrite with screenshots** (Part 7) of both the web and Android apps,
+   done last so the screenshots show the finished features.
 
-Parts 1–5 are Android-only. Part 6 touches the README and adds a `DATA_FILE`
+Parts 1–6 are Android-only. Part 7 touches the README and adds a `DATA_FILE`
 environment override to `server/index.js` so screenshots can be captured
 against a demo dataset instead of the real portfolio.
 
@@ -340,7 +342,39 @@ Coil's `ImageLoader` is configured explicitly with a disk cache so a resolved
 remote logo survives a restart and renders offline. It is currently constructed
 with defaults.
 
-## Part 6 — README rewrite with screenshots
+## Part 6 — Labelled Import and Export actions
+
+The portfolio list's top bar currently offers two icon-only actions
+(`PortfolioListScreen.kt:154-159`), whose meaning is carried entirely by a
+`contentDescription` that only a screen reader sees. Custom glyphs —
+`ImportIcon` and `ExportIcon` are hand-drawn vectors defined at the bottom of
+the same file — make this worse than a standard Material icon would.
+
+Both become icon-over-label actions: the icon stays in place and a small caption
+sits directly beneath it, inside the existing `TopAppBar` actions slot. The
+"Stock Tracker" title is unaffected.
+
+```
+┌────────────────────────────────┐
+│ Stock Tracker      ↓      ↑    │
+│                 Import  Export │
+└────────────────────────────────┘
+```
+
+A new private `LabelledAction` composable in `PortfolioListScreen.kt` replaces
+both `IconButton`s: a `Column` with the icon above and a `labelSmall` caption
+below, centred, wrapped in a clickable with a minimum 48 dp touch target so the
+smaller visual footprint does not shrink the tap area. A 24 dp icon plus a
+caption fits inside the `TopAppBar`'s 64 dp height without raising it.
+
+Accessibility: the visible label now carries the meaning, so the `Icon` takes
+`contentDescription = null` and the button's semantics come from the text,
+avoiding a screen reader announcing "Import statement, Import".
+
+The disabled state of Export (no active portfolio) carries through to both the
+icon and the label.
+
+## Part 7 — README rewrite with screenshots
 
 Sequenced **after** Parts 1–5 ship, so the screenshots show the instrument info
 sections, the sort chips, and working logos rather than needing to be retaken.
@@ -428,7 +462,9 @@ re-expanding the text.
   alone.
 - `core:database` — migration 1→2 test asserting the new table exists and the
   existing tables and rows survive.
-- `feature:portfolio` — Compose tests for the four info cards (following the
+- `feature:portfolio` — a test asserting the Import and Export actions expose
+  their visible labels and that Export's disabled state covers icon and label;
+  Compose tests for the four info cards (following the
   existing `PositionCardTest` pattern), with the market-hours bar driven by a
   fixed clock and a fixed zone; a sort-chip test asserting order and direction
   flip; a logo test asserting fallthrough reaches the initials avatar when every
