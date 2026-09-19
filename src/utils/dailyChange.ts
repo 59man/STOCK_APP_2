@@ -8,7 +8,8 @@
 export type AnchorMethod =
   /** Measured against the price at the user's local midnight. */
   | 'anchored'
-  /** Nothing traded since local midnight, so the change is exactly zero. */
+  /** The instrument has not traded since local midnight. The price component is therefore
+   *  zero; the headline can still move if the currency did. */
   | 'noTradeToday'
   /** No anchor could be resolved; this is the old exchange-session figure, and the UI says so. */
   | 'prevCloseFallback'
@@ -74,6 +75,8 @@ export function dailyChange(input: DailyChangeInput): DailyChangeResult {
     change,
     changePercent: anchorValue > 0 ? (change / anchorValue) * 100 : 0,
     priceOnlyChange,
-    method: currentPrice === anchorPrice && anchorFx === currentFx ? 'noTradeToday' : 'anchored',
+    // About the instrument, not the currency: a market that has not opened today is the thing
+    // worth telling the user about, and it stays true even if FX drifted underneath.
+    method: currentPrice === anchorPrice ? 'noTradeToday' : 'anchored',
   }
 }

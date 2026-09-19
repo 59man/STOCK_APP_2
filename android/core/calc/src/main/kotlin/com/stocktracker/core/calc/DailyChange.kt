@@ -10,7 +10,10 @@ enum class AnchorMethod {
     /** Measured against the price at the user's local midnight. */
     ANCHORED,
 
-    /** Nothing traded since local midnight, so the change is exactly zero. */
+    /**
+     * The instrument has not traded since local midnight. The price component is therefore
+     * zero; the headline can still move if the currency did.
+     */
     NO_TRADE_TODAY,
 
     /** No anchor could be resolved; this is the old exchange-session figure, and the UI says so. */
@@ -64,10 +67,8 @@ fun dailyChange(
         change = change,
         changePercent = if (anchorValue > 0) change / anchorValue * 100 else 0.0,
         priceOnlyChange = quantity * (currentPrice - anchorPrice) * currentFx,
-        method = if (currentPrice == anchorPrice && resolvedAnchorFx == currentFx) {
-            AnchorMethod.NO_TRADE_TODAY
-        } else {
-            AnchorMethod.ANCHORED
-        },
+        // About the instrument, not the currency: a market that has not opened today is the
+        // thing worth telling the user about, and it stays true even if FX drifted underneath.
+        method = if (currentPrice == anchorPrice) AnchorMethod.NO_TRADE_TODAY else AnchorMethod.ANCHORED,
     )
 }

@@ -14,7 +14,10 @@ import com.stocktracker.core.data.ManualPriceRepository
 import com.stocktracker.core.data.PortfolioRepository
 import com.stocktracker.core.data.PositionRepository
 import com.stocktracker.core.data.QuoteRepository
+import com.stocktracker.core.data.Anchor
+import com.stocktracker.core.data.DailyAnchorRepository
 import com.stocktracker.core.data.SettingsRepository
+import com.stocktracker.core.data.effectiveZoneId
 import com.stocktracker.core.data.sync.ConflictCenter
 import com.stocktracker.core.data.sync.PendingConflict
 import com.stocktracker.core.data.sync.SyncCoordinator
@@ -70,6 +73,7 @@ class PortfolioListViewModel @Inject constructor(
     private val manualPriceRepository: ManualPriceRepository,
     private val divTaxOverrideRepository: DivTaxOverrideRepository,
     private val settingsRepository: SettingsRepository,
+    private val dailyAnchorRepository: DailyAnchorRepository,
     private val quoteRepository: QuoteRepository,
     private val dividendRepository: DividendRepository,
     private val fxRateRepository: FxRateRepository,
@@ -114,6 +118,8 @@ class PortfolioListViewModel @Inject constructor(
         val divsSettled: Set<String>,
         val conflicts: List<PendingConflict>,
         val rates: Map<String, Double>,
+        val anchors: Map<String, Anchor>,
+        val fxAnchors: Map<String, Double>,
     )
 
     private val portfolioData = activePortfolioId.flatMapLatest { id ->
@@ -151,6 +157,27 @@ class PortfolioListViewModel @Inject constructor(
             }
         }
         viewModelScope.launch { refreshTick.collect { fxRateRepository.refresh() } }
+        // Midnight anchors for today's change. Cached per ticker per local date, so this is a
+        // no-op after the first pass of the day and costs nothing on a resume refresh.
+        viewModelScope.launch {
+            combine(portfolioData, quoteState, settingsRepository.settings) { data, quotes, settings ->
+                Triple(openTickersOf(data.positions), quotes, settings)
+            }.collectLatest { (tickers, quotes, settings) ->
+                if (tickers.isEmpty()) return@collectLatest
+                val currencies = tickers
+                    .mapNotNull { quotes.quotes[it.uppercase()]?.currency }
+                    .distinct()
+                    .filterNot { it.equals(settings.displayCurrency, ignoreCase = true) }
+                runCatching {
+                    dailyAnchorRepository.refresh(
+                        tickers = tickers,
+                        currencies = currencies,
+                        displayCurrency = settings.displayCurrency,
+                        zone = settings.effectiveZoneId(),
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             delay(STARTUP_TIMEOUT_MS)
             startupTimedOut.value = true
@@ -167,9 +194,15 @@ class PortfolioListViewModel @Inject constructor(
         combine(
             portfolioData, quoteState,
             combine(dividendRepository.dividends, dividendRepository.settled) { d, s -> d to s },
-            conflictCenter.pending, fxRateRepository.rates,
-        ) { data, quotes, (divs, divsSettled), conflicts, rates ->
-            CombinedState(data, quotes, divs, divsSettled, conflicts, rates)
+            conflictCenter.pending,
+            combine(
+                fxRateRepository.rates,
+                dailyAnchorRepository.anchors,
+                dailyAnchorRepository.fxAnchors,
+            ) { rates, anchors, fxAnchors -> Triple(rates, anchors, fxAnchors) },
+        ) { data, quotes, (divs, divsSettled), conflicts, ratesAndAnchors ->
+            val (rates, anchors, fxAnchors) = ratesAndAnchors
+            CombinedState(data, quotes, divs, divsSettled, conflicts, rates, anchors, fxAnchors)
         },
         showClosed,
         combine(settingsRepository.settings, startupComplete, startupTimedOut, initialSyncDone) { settings, done, timedOut, synced ->
@@ -177,6 +210,8 @@ class PortfolioListViewModel @Inject constructor(
         },
     ) { portfolios, activeId, combined, closedVisible, flags ->
         val (data, quotes, divs, divsSettled, conflicts, rates) = combined
+        val anchors = combined.anchors
+        val fxAnchors = combined.fxAnchors
         val settings = flags.settings
         val resolvedActiveId = activeId ?: portfolios.firstOrNull()?.id
         if (activeId == null && resolvedActiveId != null) activePortfolioId.value = resolvedActiveId
@@ -204,6 +239,13 @@ class PortfolioListViewModel @Inject constructor(
                     taxOverrides = data.divTaxOverrides,
                     today = today,
                     convert = { amount, from, to -> convert(amount, from, to, rates) },
+                    anchorPrice = anchors[key]?.price,
+                    lastTradedAt = anchors[key]?.lastTradedAt,
+                    anchorFx = quotes.quotes[key]?.currency?.let { cur ->
+                        fxAnchors["$cur->${settings.displayCurrency}"]
+                            ?: if (cur.equals(settings.displayCurrency, true)) 1.0 else null
+                    },
+                    displayCurrency = settings.displayCurrency,
                 )
             }
             .sortedBy { it.ticker }

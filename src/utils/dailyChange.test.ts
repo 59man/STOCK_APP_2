@@ -27,7 +27,9 @@ describe('dailyChange', () => {
     const r = dailyChange({ quantity: 10, currentPrice: 100, anchorPrice: 100, currentFx: 23.46, anchorFx: 23 })
     expect(r.change).toBeCloseTo(10 * 100 * (23.46 - 23), 9)
     expect(r.priceOnlyChange).toBe(0)
-    expect(r.method).toBe('anchored')
+    // The instrument did not trade, which is what the method reports — the headline moved
+    // only because the koruna did, and the UI still says the market is closed.
+    expect(r.method).toBe('noTradeToday')
   })
 
   it('nets price and currency moving in opposite directions', () => {

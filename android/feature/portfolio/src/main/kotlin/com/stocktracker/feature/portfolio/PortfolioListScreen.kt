@@ -594,7 +594,7 @@ internal fun PositionCard(
     onOpenDetail: () -> Unit,
 ) {
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
-    val dailyPct = dailyChangePercent(row)
+    val dailyPct = row.dailyChangePercent
     val context = LocalContext.current
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
@@ -668,15 +668,38 @@ internal fun PositionCard(
                         emphasized = true,
                     )
                 }
+                // Explains a zero on a closed market, or marks a figure the midnight anchor
+                // could not produce, so neither reads as a broken price feed.
+                dailyChangeNote(row)?.let { note ->
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
     }
 }
 
 /** `dailyChange` on [PortfolioRow] is absolute money only — derive today's % the same way SummaryHeader does at portfolio level. */
-private fun dailyChangePercent(row: PortfolioRow): Double {
-    val prevValue = row.currentValue - row.dailyChange
-    return if (prevValue > 0) (row.dailyChange / prevValue) * 100 else 0.0
+/**
+ * A muted note explaining a zero, or marking a number the anchor could not produce.
+ *
+ * A zero on a closed market is correct, but on its own it is indistinguishable from a failed
+ * price fetch — which is the main risk the anchored figure introduces.
+ */
+internal fun dailyChangeNote(row: PortfolioRow): String? = when (row.dailyChangeMethod) {
+    "noTradeToday" -> "closed" + (row.lastTradedAt?.let { epoch ->
+        " · last traded " + java.time.Instant.ofEpochSecond(epoch)
+            .atZone(java.time.ZoneId.systemDefault())
+            .dayOfWeek
+            .getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH)
+    } ?: "")
+    "prevCloseFallback" -> "prev. close"
+    else -> null
 }
 
 private fun typeBadgeLabel(type: PositionType): String = when (type) {
@@ -767,7 +790,7 @@ fun PositionDetailRoute(
                     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, uiState.displayCurrency, uiState.rates)
                     fun signed(v: Double) = signedMoney(v)
                     fun signedPct(v: Double) = signedPercent(v)
-                    val dailyPct = dailyChangePercent(row)
+                    val dailyPct = row.dailyChangePercent
                     val totalReturnPct = if (row.costBasis > 0) row.totalReturn / row.costBasis * 100 else null
                     val cur = uiState.displayCurrency
                     DetailMetricGrid(
@@ -777,8 +800,9 @@ fun PositionDetailRoute(
                             DetailMetric("Cost basis", "${formatMoney(dc(row.costBasis))} $cur", muted = true),
                             DetailMetric("Current price", "${formatMoney(dc(row.currentPrice))} $cur"),
                             DetailMetric(
-                                "Today's change", signed(dc(row.dailyChange)),
-                                sub = signedPct(dailyPct), color = pnlColorRounded(dailyPct),
+                                "Today's change", signed(row.dailyChangeDisplay),
+                                sub = dailyChangeNote(row) ?: signedPct(dailyPct),
+                                color = pnlColorRounded(dailyPct),
                             ),
                             DetailMetric(
                                 "Price P&L", signed(dc(row.pnl)),

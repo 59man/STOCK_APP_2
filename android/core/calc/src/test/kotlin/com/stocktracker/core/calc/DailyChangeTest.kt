@@ -31,7 +31,9 @@ class DailyChangeTest {
         val r = dailyChange(10.0, 100.0, 100.0, 23.46, 23.0)
         assertEquals(10 * 100 * (23.46 - 23.0), r.change, 1e-9)
         assertEquals(0.0, r.priceOnlyChange, 1e-9)
-        assertEquals(AnchorMethod.ANCHORED, r.method)
+        // The instrument did not trade, which is what the method reports — the headline moved
+        // only because the koruna did, and the UI still says the market is closed.
+        assertEquals(AnchorMethod.NO_TRADE_TODAY, r.method)
     }
 
     @Test fun `nets price and currency moving in opposite directions`() {

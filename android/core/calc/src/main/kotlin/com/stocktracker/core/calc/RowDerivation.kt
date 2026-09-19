@@ -40,6 +40,12 @@ fun deriveRow(
     taxOverrides: DivTaxOverrides = emptyMap(),
     today: String,
     convert: Convert,
+    /** Midnight anchor for this ticker, in the quote's own currency; null leaves the row on the fallback. */
+    anchorPrice: Double? = null,
+    lastTradedAt: Long? = null,
+    /** Quote currency -> display currency at local midnight; null holds FX flat. */
+    anchorFx: Double? = null,
+    displayCurrency: String? = null,
 ): PortfolioRow {
     require(lots.isNotEmpty()) { "lots must not be empty" }
     val ticker = lots.first().ticker
@@ -107,6 +113,22 @@ fun deriveRow(
 
     val dailyChange = if (isClosed || quote == null) 0.0 else toRow(quote.change, quote.currency) * openQty
 
+    // Today's change measured from midnight in the user's own zone rather than the exchange's
+    // previous close. Worked in the quote's own currency, because that is what both the anchor
+    // price and the FX anchor are quoted in.
+    val quoteCurrency = quote?.currency ?: rowCurrency
+    val display = displayCurrency ?: rowCurrency
+    val daily = dailyChange(
+        quantity = if (isClosed || quote == null) 0.0 else openQty,
+        currentPrice = quote?.price ?: 0.0,
+        anchorPrice = anchorPrice,
+        currentFx = convert(1.0, quoteCurrency, display),
+        anchorFx = anchorFx,
+        // Reconstructed from the change the quote already carries, so the fallback reports
+        // exactly what the app showed before this feature existed.
+        prevClose = quote?.let { it.price - it.change },
+    )
+
     return PortfolioRow(
         ids = lots.map { it.id },
         ticker = ticker,
@@ -133,6 +155,15 @@ fun deriveRow(
         irr = irr,
         isClosed = isClosed,
         dailyChange = dailyChange,
+        dailyChangeDisplay = daily.change,
+        dailyChangePercent = daily.changePercent,
+        dailyPriceOnlyDisplay = daily.priceOnlyChange,
+        dailyChangeMethod = when (daily.method) {
+            AnchorMethod.ANCHORED -> "anchored"
+            AnchorMethod.NO_TRADE_TODAY -> "noTradeToday"
+            AnchorMethod.PREV_CLOSE_FALLBACK -> "prevCloseFallback"
+        },
+        lastTradedAt = lastTradedAt,
     )
 }
 

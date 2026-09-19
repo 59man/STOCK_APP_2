@@ -13,8 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DivTaxOverrideEntity::class,
         SyncStateEntity::class,
         InstrumentProfileEntity::class,
+        DailyAnchorEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class StockTrackerDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class StockTrackerDatabase : RoomDatabase() {
     abstract fun divTaxOverrideDao(): DivTaxOverrideDao
     abstract fun syncStateDao(): SyncStateDao
     abstract fun instrumentProfileDao(): InstrumentProfileDao
+    abstract fun dailyAnchorDao(): DailyAnchorDao
 }
 
 /**
@@ -50,6 +52,26 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
                 `expenseRatio` REAL, `totalNetAssets` REAL, `category` TEXT,
                 `fetchedAt` INTEGER NOT NULL,
                 PRIMARY KEY(`ticker`)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+/**
+ * Adds the midnight-anchor cache. One new table, nothing else touched — same reasoning as
+ * [MIGRATION_1_2]: this database is the offline-first source of truth.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `daily_anchors` (
+                `ticker` TEXT NOT NULL,
+                `localDate` TEXT NOT NULL,
+                `price` REAL,
+                `lastTradedAt` INTEGER,
+                PRIMARY KEY(`ticker`, `localDate`)
             )
             """.trimIndent(),
         )

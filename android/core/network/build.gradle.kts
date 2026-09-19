@@ -24,6 +24,8 @@ android {
 
 dependencies {
     implementation(project(":core:model"))
+    // Pure anchor/date helpers live in core:calc, which depends only on core:model — no cycle.
+    implementation(project(":core:calc"))
 
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.kotlinx.serialization)

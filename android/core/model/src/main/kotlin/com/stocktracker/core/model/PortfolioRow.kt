@@ -32,5 +32,15 @@ data class PortfolioRow(
     val manualPriceDate: String? = null,
     val irr: Double? = null,
     val isClosed: Boolean,
+    /** Price-only change in row currency, kept for existing consumers. */
     val dailyChange: Double,
+    /** Headline today's change in the DISPLAY currency, anchored to local midnight, FX included. */
+    val dailyChangeDisplay: Double = 0.0,
+    val dailyChangePercent: Double = 0.0,
+    /** Broker-style figure: price move only, FX held at today's rate, in the display currency. */
+    val dailyPriceOnlyDisplay: Double = 0.0,
+    /** Which rule produced the number — the UI marks a fallback and explains a zero. */
+    val dailyChangeMethod: String = "anchored",
+    /** Epoch seconds of the last trade, for the "closed since Fri" hint. */
+    val lastTradedAt: Long? = null,
 )
