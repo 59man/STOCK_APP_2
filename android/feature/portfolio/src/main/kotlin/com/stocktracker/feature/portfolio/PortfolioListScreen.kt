@@ -10,8 +10,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -82,6 +84,7 @@ import com.stocktracker.core.designsystem.components.AppDialog
 import com.stocktracker.core.designsystem.components.Badge
 import com.stocktracker.core.model.PortfolioRow
 import com.stocktracker.core.model.PositionType
+import com.stocktracker.core.model.SortField
 import coil3.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -189,6 +192,7 @@ internal fun PortfolioListScreen(
             }
             PortfolioTabs(uiState, onAction)
             CurrencyTabs(uiState, onAction)
+            SortChips(uiState, onAction)
 
             if (uiState.closedCount > 0) {
                 TextButton(onClick = { onAction(PortfolioListAction.ToggleShowClosed) }) {
@@ -431,6 +435,59 @@ internal fun CurrencyTabs(uiState: PortfolioListUiState, onAction: (PortfolioLis
                     modifier = Modifier
                         .clickable { onAction(PortfolioListAction.SetDisplayCurrency(currency)) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+private val SORT_LABELS = listOf(
+    SortField.NAME to "Name",
+    SortField.TYPE to "Type",
+    SortField.VALUE to "Value",
+    SortField.TODAY to "Today",
+    SortField.TOTAL_RETURN to "Return",
+)
+
+/**
+ * Sort selector for the position list. Same selected/unselected language as [CurrencyTabs]:
+ * accent fill when active, quiet outline otherwise.
+ *
+ * The chip stays dumb — tapping any chip emits the same [PortfolioListAction.SetSort] and the
+ * ViewModel decides whether that means "select this field" or "flip direction". That keeps the
+ * row testable without a ViewModel, and keeps one rule for the default direction.
+ *
+ * Scrolls horizontally because five chips do not fit a 320dp screen at a large font scale.
+ */
+@Composable
+internal fun SortChips(uiState: PortfolioListUiState, onAction: (PortfolioListAction) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        SORT_LABELS.forEach { (field, label) ->
+            val active = uiState.sortOrder.field == field
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                border = if (active) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Text(
+                    text = if (active) "$label ${if (uiState.sortOrder.ascending) "\u25B2" else "\u25BC"}" else label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                    color = if (active) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clickable { onAction(PortfolioListAction.SetSort(field)) }
+                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 )
             }
         }

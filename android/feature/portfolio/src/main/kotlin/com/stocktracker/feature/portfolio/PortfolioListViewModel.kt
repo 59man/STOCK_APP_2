@@ -20,6 +20,8 @@ import com.stocktracker.core.data.sync.PendingConflict
 import com.stocktracker.core.data.sync.SyncCoordinator
 import com.stocktracker.core.data.sync.SyncTarget
 import com.stocktracker.core.model.DividendEvent
+import com.stocktracker.core.model.SortField
+import com.stocktracker.core.model.SortOrder
 import com.stocktracker.core.model.ManualPriceEntry
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.model.Quote
@@ -230,6 +232,7 @@ class PortfolioListViewModel @Inject constructor(
             dividendsByTicker = divs,
             divTaxOverrides = data.divTaxOverrides,
             portfolioIrr = portfolioIrr,
+            sortOrder = settings.sortOrder,
         )
     }
         // Row derivation + portfolio XIRR re-run on every quote arrival; keep them off the main thread.
@@ -316,6 +319,19 @@ class PortfolioListViewModel @Inject constructor(
             }
             is PortfolioListAction.SetDisplayCurrency -> viewModelScope.launch {
                 settingsRepository.setDisplayCurrency(action.currency)
+            }
+            is PortfolioListAction.SetSort -> viewModelScope.launch {
+                val current = uiState.value.sortOrder
+                // Tapping the chip that is already active means "flip direction" — a separate
+                // direction control would cost a row of screen for one bit of state.
+                val next = if (current.field == action.field) {
+                    current.copy(ascending = !current.ascending)
+                } else {
+                    // A-Z reads naturally for a name; every other field is most useful largest
+                    // first, which is also what the list showed before sorting existed.
+                    SortOrder(action.field, ascending = action.field == SortField.NAME)
+                }
+                settingsRepository.setSortOrder(next)
             }
         }
     }

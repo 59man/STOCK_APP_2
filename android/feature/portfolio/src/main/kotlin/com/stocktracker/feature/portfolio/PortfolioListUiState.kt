@@ -2,8 +2,10 @@ package com.stocktracker.feature.portfolio
 
 import com.stocktracker.core.model.DividendEvent
 import com.stocktracker.core.model.Portfolio
+import com.stocktracker.core.calc.sortedForDisplay
 import com.stocktracker.core.model.PortfolioRow
 import com.stocktracker.core.model.Position
+import com.stocktracker.core.model.SortOrder
 
 data class PortfolioListUiState(
     val portfolios: List<Portfolio> = emptyList(),
@@ -21,8 +23,15 @@ data class PortfolioListUiState(
     val dividendsByTicker: Map<String, List<DividendEvent>> = emptyMap(),
     val divTaxOverrides: Map<String, Double> = emptyMap(),
     val portfolioIrr: Double? = null,
+    val sortOrder: SortOrder = SortOrder(),
 ) {
-    val visibleRows: List<PortfolioRow> get() = if (showClosed) rows else rows.filterNot { it.isClosed }
+    /**
+     * Sorted after the closed filter, so "Show closed" and the sort compose rather than fight:
+     * hiding closed rows never reorders the ones that stay.
+     */
+    val visibleRows: List<PortfolioRow>
+        get() = (if (showClosed) rows else rows.filterNot { it.isClosed })
+            .sortedForDisplay(sortOrder, displayCurrency, rates)
     val closedCount: Int get() = rows.count { it.isClosed }
 }
 
@@ -39,4 +48,6 @@ sealed interface PortfolioListAction {
     data class SetDivTax(val ticker: String, val date: String, val rate: Double) : PortfolioListAction
     data class ClearDivTax(val ticker: String, val date: String) : PortfolioListAction
     data class SetDisplayCurrency(val currency: String) : PortfolioListAction
+    /** Selects [field]; passing the field that is already active flips the direction. */
+    data class SetSort(val field: com.stocktracker.core.model.SortField) : PortfolioListAction
 }
