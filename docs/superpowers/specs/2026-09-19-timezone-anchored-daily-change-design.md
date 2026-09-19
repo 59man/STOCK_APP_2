@@ -203,6 +203,43 @@ precedent.
 One end-to-end check per app with the device clock set either side of local
 midnight, confirming the figure resets.
 
+### Layout robustness
+
+This feature makes the today cell the most crowded cell in the table: a value, a
+percentage, a price-only sub-line, and sometimes a `closed · last traded Fri` or
+`prev. close` hint, all inside a column that already fits on a phone only
+barely. That is a layout risk, not just a logic one, so it is tested as such.
+
+**Web — Playwright.** Added as a devDependency, run with `npm run test:ui`
+against a dev server pointed at a fixed demo dataset (via the `DATA_FILE`
+override introduced in Part 7 of the companion spec), so runs are deterministic.
+
+Viewports 360, 390, 640, 960 and 1440 px, asserting:
+
+- No horizontal page overflow: `documentElement.scrollWidth` is not greater than
+  `clientWidth`. This is the check that catches a table column silently pushing
+  the page sideways.
+- No clipped text: for every cell, badge, summary card and chip,
+  `scrollWidth` is not greater than `clientWidth`.
+- The today cell renders all of its lines at 360 px without the row's height
+  collapsing or the sub-line disappearing.
+- Every modal fits at 360 px without inner scrolling of its own chrome.
+- The column-visibility bottom sheet opens and is fully reachable at 360 px.
+
+The same harness produces the README screenshots in Part 7 of the companion
+spec, so those are scripted and reproducible rather than hand-captured.
+
+**Android.** The today cell and the Insights summary join the layout matrix
+described in the companion spec's "Layout robustness" section — widths 320/360/
+411 dp, font scales 1.0/1.3/2.0, both themes, with the same no-overflow,
+no-clipping and touch-target assertions, plus Roborazzi goldens for the position
+card and detail header.
+
+**Hostile fixtures for both.** A position with an eight-digit value, a negative
+change with both a sign and a percentage, a long ticker, and a row in the
+fallback state showing its `prev. close` hint — rendered together, since the
+worst case is several of them in one column.
+
 ## Risks
 
 | Risk | Mitigation |

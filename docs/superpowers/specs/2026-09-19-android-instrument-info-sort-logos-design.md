@@ -415,6 +415,10 @@ Capture procedure:
 
 ### Screens captured
 
+Captured with the Playwright harness introduced by the time-zone-anchored
+today's change spec, so the shots are scripted and reproducible rather than
+hand-taken.
+
 Web (desktop viewport, dark theme, the app's only theme):
 
 - Portfolio table with one row expanded, showing the lot mini-table and
@@ -469,6 +473,53 @@ re-expanding the text.
   fixed clock and a fixed zone; a sort-chip test asserting order and direction
   flip; a logo test asserting fallthrough reaches the initials avatar when every
   candidate fails.
+
+### Layout robustness
+
+Everything this spec adds is dense text in constrained space — a two-column
+Essentials grid, a market-hours bar with time labels, five sort chips in one
+row, and two captioned top-bar actions. Those are exactly the things that clip,
+ellipsise, or collapse on a small screen or at a large system font size, and
+none of it is caught by the behavioural tests above. So the new UI is tested for
+layout as well as behaviour.
+
+**Matrix.** Each new screen and card is rendered across widths 320, 360 and
+411 dp (small, typical and large phone), font scales 1.0, 1.3 and 2.0, and both
+themes. Compose's `DeviceConfigurationOverride` (`ForcedSize`, `FontScale`,
+`DarkMode`) drives this, and Robolectric is already configured, so these stay
+plain JVM tests under `./gradlew test` with no emulator and no new dependency.
+
+**Assertions.** A shared helper in the test source set, applied to every new
+screen:
+
+- No text overflows. For each text node, invoke its
+  `SemanticsActions.GetTextLayoutResult` and assert
+  `hasVisualOverflow == false` — a real assertion about the laid-out text, not a
+  guess from string length.
+- Nothing is clipped by its parent: each node's bounds sit inside its
+  container's bounds.
+- Interactive elements keep a touch target of at least 48 dp in both
+  dimensions, which the icon-over-label action in Part 6 makes worth checking
+  explicitly.
+- No visible node collapses to zero width or height.
+
+**Worst-case fixtures.** The tests use deliberately hostile data rather than
+tidy examples, because the real portfolio contains all of it: the longest
+instrument name held (`Xtrackers MSCI World ex USA UCITS ETF 1C USD`), a long
+exchange name, eight-digit values with thousands separators, negative values
+with sign and percentage suffix, Czech diacritics, and a fund family string long
+enough to wrap.
+
+**Golden screenshots.** Roborazzi is added as a test-only dependency, rendering
+each new card and screen to a PNG and diffing against a committed golden under
+`feature/portfolio/src/test/screenshots/`. `./gradlew recordRoborazziDebug`
+regenerates, `verifyRoborazziDebug` checks. This catches the regressions
+assertions cannot describe — spacing, alignment, colour, a chart that renders
+blank. The cost is real and accepted: an intentional UI change means
+regenerating goldens and reviewing the diff, and the PNGs live in the
+repository. Goldens are recorded at 360 dp, font scale 1.0, dark theme only, to
+keep the golden count and repository churn down; the wider matrix above stays
+assertion-based.
 
 ## Risks and mitigations
 
