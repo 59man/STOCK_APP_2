@@ -27,8 +27,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.materialIcon
 import androidx.compose.material.icons.materialPath
@@ -69,6 +71,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stocktracker.core.designsystem.NumericTypography
+import com.stocktracker.core.designsystem.Radius
 import com.stocktracker.core.designsystem.Spacing
 import com.stocktracker.core.designsystem.StockTrackerColors
 import com.stocktracker.core.designsystem.components.AppButton
@@ -151,12 +154,17 @@ internal fun PortfolioListScreen(
             TopAppBar(
                 title = { Text("Stock Tracker") },
                 actions = {
-                    IconButton(onClick = { onOpenImport(uiState.activePortfolioId) }) {
-                        Icon(ImportIcon, contentDescription = "Import statement")
-                    }
-                    IconButton(onClick = onExport, enabled = uiState.activePortfolioId != null) {
-                        Icon(ExportIcon, contentDescription = "Export portfolio")
-                    }
+                    LabelledAction(
+                        icon = ImportIcon,
+                        label = "Import",
+                        onClick = { onOpenImport(uiState.activePortfolioId) },
+                    )
+                    LabelledAction(
+                        icon = ExportIcon,
+                        label = "Export",
+                        enabled = uiState.activePortfolioId != null,
+                        onClick = onExport,
+                    )
                 },
             )
         },
@@ -216,6 +224,47 @@ internal fun PortfolioListScreen(
 }
 
 /** Shown for a brand-new portfolio with zero positions — the moment that decides whether this install ever gets used again. */
+/**
+ * Top-bar action with the icon above a caption. The two glyphs here are hand-drawn (see
+ * [ImportIcon]/[ExportIcon] at the bottom of this file), so an icon alone carried no meaning
+ * to anyone who had not already learned it — the only description of what they did lived in a
+ * contentDescription that just a screen reader ever saw.
+ *
+ * The visible label now carries the meaning, which is why the Icon passes a null
+ * contentDescription: otherwise a screen reader announces the action twice.
+ */
+@Composable
+private fun LabelledAction(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    val tint = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .padding(horizontal = Spacing.xs)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(Radius.sm))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = tint,
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 private fun EmptyPortfolioState(onImportStatement: () -> Unit, onAddManually: () -> Unit) {
     Column(
