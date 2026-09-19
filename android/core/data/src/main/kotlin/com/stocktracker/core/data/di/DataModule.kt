@@ -8,6 +8,8 @@ import com.stocktracker.core.database.ManualPriceDao
 import com.stocktracker.core.database.PortfolioDao
 import com.stocktracker.core.database.PositionDao
 import com.stocktracker.core.database.InstrumentProfileDao
+import com.stocktracker.core.network.createInstrumentProfileSource
+import com.stocktracker.core.network.InstrumentProfileSource
 import com.stocktracker.core.database.MIGRATION_1_2
 import com.stocktracker.core.database.StockTrackerDatabase
 import com.stocktracker.core.database.SyncStateDao
@@ -43,6 +45,14 @@ object DataModule {
     @Provides fun providePositionDao(db: StockTrackerDatabase): PositionDao = db.positionDao()
     @Provides fun provideManualPriceDao(db: StockTrackerDatabase): ManualPriceDao = db.manualPriceDao()
     @Provides fun provideInstrumentProfileDao(db: StockTrackerDatabase): InstrumentProfileDao = db.instrumentProfileDao()
+
+    /**
+     * The other market-data clients are Kotlin objects called directly; this one is a class so
+     * its crumb cache has a lifetime and the repository can be tested against a fake.
+     */
+    @Provides
+    @Singleton
+    fun provideInstrumentProfileSource(): InstrumentProfileSource = createInstrumentProfileSource()
     @Provides fun provideDivTaxOverrideDao(db: StockTrackerDatabase): DivTaxOverrideDao = db.divTaxOverrideDao()
     @Provides fun provideSyncStateDao(db: StockTrackerDatabase): SyncStateDao = db.syncStateDao()
 

@@ -173,6 +173,21 @@ private const val BROWSER_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 /**
+ * What the repository needs from the network. Keeping it an interface lets the cache be tested
+ * without OkHttp, and leaves room for a second source if Yahoo's profile data disappears.
+ */
+interface InstrumentProfileSource {
+    suspend fun fetch(ticker: String): InstrumentProfile?
+}
+
+/**
+ * Builds the real source. Exists so `core:data` can construct one without OkHttp on its own
+ * classpath — the client's constructor defaults mention OkHttpClient, which would otherwise
+ * leak the dependency across the module boundary.
+ */
+fun createInstrumentProfileSource(): InstrumentProfileSource = InstrumentProfileClient()
+
+/**
  * Instrument metadata, direct from Yahoo like every other market-data client.
  *
  * Two calls. The chart-meta one always works and carries exchange, trading periods, the
@@ -185,7 +200,7 @@ class InstrumentProfileClient(
     private val client: OkHttpClient = defaultClient,
     private val baseUrl: String = "https://query1.finance.yahoo.com",
     private val crumbProvider: CrumbProvider = CrumbProvider(client = client),
-) {
+) : InstrumentProfileSource {
     companion object {
         private val defaultClient = OkHttpClient.Builder()
             .connectTimeout(9, TimeUnit.SECONDS)
@@ -195,7 +210,7 @@ class InstrumentProfileClient(
         private const val MODULES = "assetProfile,fundProfile,summaryDetail,defaultKeyStatistics,quoteType"
     }
 
-    suspend fun fetch(ticker: String): InstrumentProfile? {
+    override suspend fun fetch(ticker: String): InstrumentProfile? {
         val meta = fetchMeta(ticker) ?: return null
         return meta.withDetail(runCatching { fetchDetail(ticker) }.getOrNull())
     }
