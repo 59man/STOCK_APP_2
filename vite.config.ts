@@ -42,4 +42,9 @@ export default defineConfig({
       },
     },
   },
+  // tests/ui holds Playwright specs, which import @playwright/test and cannot run under
+  // vitest — without this, `npm test` reports a failing file alongside its 105 passes.
+  test: {
+    exclude: ['tests/ui/**', 'node_modules/**', 'dist/**'],
+  },
 })
