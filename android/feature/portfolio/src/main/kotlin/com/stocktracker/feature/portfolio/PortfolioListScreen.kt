@@ -547,7 +547,7 @@ internal fun PositionCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                PositionLogo(row.ticker, row.type)
+                TickerLogo(row.ticker, row.type)
                 Column(modifier = Modifier.padding(start = Spacing.sm)) {
                     // Ticker symbol is deliberately not shown here — it's the detail screen's
                     // TopAppBar title (PositionDetailRoute). The card leads with the full name;
@@ -623,7 +623,7 @@ private fun typeBadgeLabel(type: PositionType): String = when (type) {
     PositionType.CRYPTO -> "Crypto"
 }
 
-private fun typeBadgeColor(type: PositionType): Color = when (type) {
+internal fun typeBadgeColor(type: PositionType): Color = when (type) {
     PositionType.STOCK -> Color(0xFF3B82F6)
     PositionType.ETF -> Color(0xFF22C55E)
     PositionType.FUND -> Color(0xFFA855F7)
@@ -644,70 +644,6 @@ private fun currencyBadgeColor(currency: String): Color = when (currency.upperca
     else -> Color(0xFF6B7280)
 }
 
-/**
- * Company domains for tickers FMP's image-stock endpoint doesn't cover (mostly non-US listings),
- * used as a second logo source via Clearbit's free no-key domain-based logo API. Same
- * one-line-per-ticker curated-map pattern as TICKER_COUNTRY (core/calc/Dividends.kt). XAU/4GLD.DE
- * are deliberately absent — a commodity ETC has no company logo to fetch, so it should fall
- * straight through to the initials avatar.
- */
-private val TICKER_LOGO_DOMAINS: Map<String, String> = mapOf(
-    "VIG.PR" to "vig.com",
-    "UCG.MI" to "unicreditgroup.eu",
-    "DTE.DE" to "telekom.com",
-    "8306.T" to "mufg.jp",
-    "8591.T" to "orix.co.jp",
-    "CSG.AS" to "csgroup.cz",
-    "CSG.PR" to "csgroup.cz",
-    "COLT.PR" to "coltcz.com",
-    "CZG.PR" to "coltcz.com",
-    "FIOG.PR" to "fio.cz",
-    "LU2606422355" to "onemarkets.cz",
-    "LU2606421548" to "onemarkets.cz",
-    "LU2595011649" to "onemarkets.cz",
-    "EXUS.DE" to "ishares.com",
-)
-
-/** 40dp circular avatar: FMP logo, falling back to a Clearbit domain logo (if known), falling back to a colored initial letter. */
-@Composable
-private fun PositionLogo(ticker: String, type: PositionType) {
-    val baseSymbol = ticker.substringBefore(".")
-    val clearbitDomain = TICKER_LOGO_DOMAINS[ticker.uppercase()]
-    SubcomposeAsyncImage(
-        model = "https://financialmodelingprep.com/image-stock/$baseSymbol.png",
-        contentDescription = null,
-        modifier = Modifier.size(40.dp).clip(CircleShape),
-        loading = { InitialAvatar(ticker, type) },
-        error = {
-            if (clearbitDomain != null) {
-                SubcomposeAsyncImage(
-                    model = "https://logo.clearbit.com/$clearbitDomain",
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp).clip(CircleShape),
-                    loading = { InitialAvatar(ticker, type) },
-                    error = { InitialAvatar(ticker, type) },
-                )
-            } else {
-                InitialAvatar(ticker, type)
-            }
-        },
-    )
-}
-
-@Composable
-private fun InitialAvatar(ticker: String, type: PositionType) {
-    Box(
-        modifier = Modifier.size(40.dp).clip(CircleShape).background(typeBadgeColor(type)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            ticker.take(1).uppercase(),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-        )
-    }
-}
 
 /**
  * Full-screen destination for one ticker's lots, dividends, and price chart — split out of
