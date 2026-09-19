@@ -84,6 +84,38 @@ docker run -d --name stock-tracker -p 4000:8080 \
 
 8. `PortfolioContent` (`src/components/PortfolioContent.tsx`) — extracted from App.tsx; mounts once per portfolio (via `key={portfolioId}`). Runs hooks 2, 4, 5, 6, 7 above and derives `PortfolioRow[]` via `useMemo`, merging lots with quotes, manual prices, and dividends. Renders `PortfolioTable`, `PortfolioPnLChart`, `PortfolioPieCharts`, and `AddPositionModal`. `App.tsx` passes `displayCurrency` + `convert` down as props.
 
+### Today's change (`src/utils/dailyChange.ts` + `core/calc/DailyChange.kt`)
+
+**"Today" means midnight in the user's own time zone, not the exchange's previous close.** One pure function, written twice against an identical test table — if you change a case in one, change it in the other, that pairing is the only thing keeping the apps in agreement.
+
+```
+todaysChange = qty × (price_now × fx_now − anchorPrice × anchorFx)
+```
+
+The headline **includes the currency's own move**, so it describes what the position is worth in the display currency; the broker-style price-only figure is shown as a sub-line whenever the two differ.
+
+**A closed market reports exactly `0.00`, deliberately** — on a Saturday a US holding shows zero, not Friday's move. Because that is indistinguishable from a broken feed, the UI always annotates it: `closed · last traded Fri`. `method` is about whether the **instrument** traded, not whether FX moved, so a flat-priced foreign holding still gets the note.
+
+If no anchor resolves, the row falls back to the old previous-close figure and is marked `prev. close` — a silent zero would quietly under-report the portfolio total.
+
+**Anchor resolution** (`src/utils/anchorResolution.ts`, `core/calc/AnchorResolution.kt`, fetched by `useDailyAnchors` / `AnchorClient`), three steps:
+
+1. `meta.regularMarketTime <= localMidnight` → nothing traded today → anchor is the current price, **no further request**. This is the common case: every weekend, every morning before the open.
+2. Otherwise daily bars (`range=5d&interval=1d`): the close of the last session that *ended* before local midnight. A daily bar is stamped at its session **open**, so the session length is what turns it into an end.
+3. Only if a session was in progress at local midnight — always for crypto — 5-minute bars (`range=2d&interval=5m`), ~150–400 bars.
+
+An anchor is fixed for a local day, so it is fetched **once per ticker per day**: module-level cache on the web, the `daily_anchors` Room table (**database version 3**, `MIGRATION_2_3`) on Android, where a null is cached too so an unsupported ticker is not retried every refresh.
+
+> **Gotchas, all found by running it against the real portfolio rather than fixtures.** Fund-provider tickers do not exist on Yahoo — asking produced three 404s each per load; skip them. FX-converted tickers name **themselves** as their own price ticker, so expanding them recurses forever, and the swallowed exception left 4GLD.DE and EXUS.DE permanently on the fallback. `FX_CONVERTED_TICKERS` stores **pre-encoded** symbols, so `encodeURIComponent` on top yields `EURCZK%253DX` and 404s — the web encoder decodes first to stay idempotent.
+
+Local midnight is computed by **formatting in the zone**, never by adding a fixed offset: the offset changes at a DST boundary.
+
+Web zone setting: header `<select>`, per-browser (`localStorage['stock_tracker_timezone']`), defaulting to the browser's zone, deliberately **not** synced to Android's own setting.
+
+### UI layout tests (web)
+
+`npm run test:ui` runs Playwright (`tests/ui/layout.spec.ts`) at 360/390/640/960/1440 px, asserting no horizontal page overflow and no clipped cells. It serves an invented dataset through the `DATA_FILE` env override on the persist server (`server/demo-data.json`), so runs are deterministic and never touch real data — `BACKUP_DIR` and the `.bak` path derive from `DATA_FILE`, so a demo run cannot write beside `data.json` either.
+
 ### Storage layer (`src/utils/storage.ts`)
 
 `getItem(key)` / `setItem(key, value)` — async wrapper around the persist server with `localStorage` fallback. `setItem` logs a warning if the server returns a non-OK status.
