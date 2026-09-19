@@ -20,6 +20,17 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
+    // MigrationTestHelper reads the exported schema JSON from the test classpath.
+    sourceSets.getByName("test") {
+        assets.srcDir("$projectDir/schemas")
+    }
 }
 
 ksp {
@@ -34,5 +45,8 @@ dependencies {
     ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(libs.room.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
 }

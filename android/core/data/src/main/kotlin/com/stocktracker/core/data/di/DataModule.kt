@@ -7,6 +7,8 @@ import com.stocktracker.core.database.DivTaxOverrideDao
 import com.stocktracker.core.database.ManualPriceDao
 import com.stocktracker.core.database.PortfolioDao
 import com.stocktracker.core.database.PositionDao
+import com.stocktracker.core.database.InstrumentProfileDao
+import com.stocktracker.core.database.MIGRATION_1_2
 import com.stocktracker.core.database.StockTrackerDatabase
 import com.stocktracker.core.database.SyncStateDao
 import com.stocktracker.core.network.DeviceApi
@@ -31,11 +33,16 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): StockTrackerDatabase =
-        Room.databaseBuilder(context, StockTrackerDatabase::class.java, "stock-tracker.db").build()
+        Room.databaseBuilder(context, StockTrackerDatabase::class.java, "stock-tracker.db")
+            // Real migrations, never fallbackToDestructiveMigration: this database is the
+            // offline-first source of truth and holds unresolved sync conflicts.
+            .addMigrations(MIGRATION_1_2)
+            .build()
 
     @Provides fun providePortfolioDao(db: StockTrackerDatabase): PortfolioDao = db.portfolioDao()
     @Provides fun providePositionDao(db: StockTrackerDatabase): PositionDao = db.positionDao()
     @Provides fun provideManualPriceDao(db: StockTrackerDatabase): ManualPriceDao = db.manualPriceDao()
+    @Provides fun provideInstrumentProfileDao(db: StockTrackerDatabase): InstrumentProfileDao = db.instrumentProfileDao()
     @Provides fun provideDivTaxOverrideDao(db: StockTrackerDatabase): DivTaxOverrideDao = db.divTaxOverrideDao()
     @Provides fun provideSyncStateDao(db: StockTrackerDatabase): SyncStateDao = db.syncStateDao()
 
