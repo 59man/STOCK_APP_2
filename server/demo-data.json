@@ -1,0 +1,93 @@
+{
+  "stock_tracker_portfolios": "[{\"id\":\"demo\",\"name\":\"Demo Portfolio\"}]",
+  "stock_tracker_active_portfolio": "demo",
+  "stock_tracker_positions_demo": "[{\"id\":\"d1\",\"ticker\":\"AAPL\",\"name\":\"Apple Inc.\",\"type\":\"stock\",\"quantity\":12,\"buyPrice\":178.5,\"buyDate\":\"2024-03-11\",\"currency\":\"USD\",\"broker\":\"XTB\"},{\"id\":\"d2\",\"ticker\":\"MSFT\",\"name\":\"Microsoft Corp.\",\"type\":\"stock\",\"quantity\":8,\"buyPrice\":402.1,\"buyDate\":\"2024-05-02\",\"currency\":\"USD\",\"broker\":\"XTB\"},{\"id\":\"d3\",\"ticker\":\"EXUS.DE\",\"name\":\"Xtrackers MSCI World ex USA UCITS ETF\",\"type\":\"etf\",\"quantity\":140,\"buyPrice\":33.2,\"buyDate\":\"2024-06-18\",\"currency\":\"EUR\",\"broker\":\"Degiro\"},{\"id\":\"d4\",\"ticker\":\"KOMB.PR\",\"name\":\"Komerční banka\",\"type\":\"stock\",\"quantity\":40,\"buyPrice\":712,\"buyDate\":\"2023-11-06\",\"currency\":\"CZK\",\"broker\":\"Fio banka\"},{\"id\":\"d5\",\"ticker\":\"JNJ\",\"name\":\"Johnson & Johnson\",\"type\":\"stock\",\"quantity\":15,\"buyPrice\":155.4,\"buyDate\":\"2023-08-21\",\"currency\":\"USD\",\"broker\":\"IBKR\"},{\"id\":\"d6\",\"ticker\":\"XAU\",\"name\":\"Gold\",\"type\":\"commodity\",\"quantity\":3.5,\"buyPrice\":52000,\"buyDate\":\"2024-01-15\",\"currency\":\"CZK\",\"broker\":\"Revolut\"}]",
+  "devices": [
+    {
+      "id": "a6ee7cde-ca2d-4221-99ea-4362c52c0ff3",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:32.531Z",
+      "lastSeen": "2026-09-19T15:52:32.646Z"
+    },
+    {
+      "id": "b5fc5bfb-d065-446c-8b8e-c145e36fa8fc",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:32.652Z",
+      "lastSeen": "2026-09-19T15:52:32.656Z"
+    },
+    {
+      "id": "d02b0a33-f5cf-4a44-984e-37dffecadd65",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:36.835Z",
+      "lastSeen": "2026-09-19T15:52:36.837Z"
+    },
+    {
+      "id": "045add0a-408d-4f93-a1c8-159dfd4a892d",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:41.002Z",
+      "lastSeen": "2026-09-19T15:52:41.003Z"
+    },
+    {
+      "id": "3832acf1-a55a-40ee-84ba-5da85018a630",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:45.198Z",
+      "lastSeen": "2026-09-19T15:52:45.199Z"
+    },
+    {
+      "id": "456038df-3ae3-4fb1-bd24-f1ab172fd8ea",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:49.356Z",
+      "lastSeen": "2026-09-19T15:52:49.358Z"
+    },
+    {
+      "id": "0dc502f1-d4cd-48e8-af55-518a74c83b91",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:53.560Z",
+      "lastSeen": "2026-09-19T15:52:53.563Z"
+    },
+    {
+      "id": "56f62f88-9e1d-4be4-8ba6-63e753239e2c",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:52:57.702Z",
+      "lastSeen": "2026-09-19T15:52:57.703Z"
+    },
+    {
+      "id": "44f92bf9-64ff-4768-92ee-88122d7eed51",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:53:01.889Z",
+      "lastSeen": "2026-09-19T15:53:01.894Z"
+    },
+    {
+      "id": "6c82e95c-73cc-484d-8b6a-c4cd1a99a344",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:53:06.056Z",
+      "lastSeen": "2026-09-19T15:53:06.059Z"
+    },
+    {
+      "id": "a4e8b5c2-d9e4-4f0f-a18e-6e5929c2ce12",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:53:10.232Z",
+      "lastSeen": "2026-09-19T15:53:10.233Z"
+    },
+    {
+      "id": "95bae23c-3fe4-4dea-ba62-70d14b9976e3",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-19T15:53:14.400Z",
+      "lastSeen": "2026-09-19T15:53:14.402Z"
+    }
+  ],
+  "stock_tracker_manual_prices_demo": "{}",
+  "stock_tracker_div_tax_demo": "{}"
+}

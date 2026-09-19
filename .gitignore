@@ -3,6 +3,9 @@ dist/
 vite.config.ts.timestamp-*.mjs
 Transactions_folder/
 server/*.json
+# Invented positions used by the UI tests and the README screenshots. Explicitly allowed
+# because it contains no real holdings; the blanket rule above still covers data.json.
+!server/demo-data.json
 audits/
 server/*.bak
 .playwright-mcp/
@@ -26,3 +29,8 @@ android/*.apk
 android/*.aab
 # Brainstorming visual companion sessions
 .superpowers/
+
+# Playwright
+/test-results/
+/playwright-report/
+/.playwright-mcp/

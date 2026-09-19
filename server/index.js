@@ -5,9 +5,14 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const DATA_FILE = join(__dirname, 'data.json')
-const DATA_BAK  = join(__dirname, 'data.json.bak')
-const BACKUP_DIR = join(__dirname, 'backups')
+// DATA_FILE can point somewhere else so a throwaway dataset can be served without touching
+// the real portfolio — used by the UI tests and by the README screenshot capture. Everything
+// derived from it moves with it, so a demo run never writes a backup next to real data.
+const DATA_FILE = process.env.DATA_FILE ?? join(__dirname, 'data.json')
+const DATA_BAK  = `${DATA_FILE}.bak`
+const BACKUP_DIR = process.env.DATA_FILE
+  ? join(dirname(DATA_FILE), 'backups')
+  : join(__dirname, 'backups')
 const BACKUP_KEEP = 7
 const DIST_DIR  = join(__dirname, '../dist')
 const IS_PROD   = process.env.NODE_ENV === 'production'
