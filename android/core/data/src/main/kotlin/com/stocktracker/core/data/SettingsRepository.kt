@@ -1,12 +1,15 @@
 package com.stocktracker.core.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import com.stocktracker.core.model.SortField
+import com.stocktracker.core.model.SortOrder
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
@@ -21,6 +24,8 @@ data class AppSettings(
     val lastSyncedAt: String? = null,
     /** "system" | "light" | "dark" */
     val themeMode: String = "system",
+    /** How the position list is ordered. Shared by every portfolio. */
+    val sortOrder: SortOrder = SortOrder(),
 )
 
 /**
@@ -39,6 +44,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         val LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val DEVICE_ID = stringPreferencesKey("device_id")
+        val SORT_FIELD = stringPreferencesKey("sort_field")
+        val SORT_ASCENDING = booleanPreferencesKey("sort_ascending")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -48,6 +55,14 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
             displayCurrency = prefs[Keys.DISPLAY_CURRENCY] ?: "CZK",
             lastSyncedAt = prefs[Keys.LAST_SYNCED_AT],
             themeMode = prefs[Keys.THEME_MODE] ?: "system",
+            sortOrder = SortOrder(
+                // A stored name that no longer parses (a field renamed or removed in a later
+                // version) falls back to the default rather than crashing on launch.
+                field = prefs[Keys.SORT_FIELD]
+                    ?.let { raw -> runCatching { SortField.valueOf(raw) }.getOrNull() }
+                    ?: SortField.VALUE,
+                ascending = prefs[Keys.SORT_ASCENDING] ?: false,
+            ),
         )
     }
 
@@ -56,6 +71,12 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
     suspend fun setDisplayCurrency(currency: String): Unit { dataStore.edit { it[Keys.DISPLAY_CURRENCY] = currency } }
     suspend fun setLastSyncedAt(isoTimestamp: String): Unit { dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp } }
     suspend fun setThemeMode(mode: String): Unit { dataStore.edit { it[Keys.THEME_MODE] = mode } }
+    suspend fun setSortOrder(order: SortOrder): Unit {
+        dataStore.edit {
+            it[Keys.SORT_FIELD] = order.field.name
+            it[Keys.SORT_ASCENDING] = order.ascending
+        }
+    }
 
     /**
      * Stable per-install id sent to the server's device registry — generated once,
