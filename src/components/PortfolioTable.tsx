@@ -238,6 +238,16 @@ function DivTaxCell({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
+/**
+ * " · last traded Fri" for the muted hint beside a zero. Empty when the timestamp is unknown,
+ * so the hint degrades to a bare "closed" rather than printing a placeholder date.
+ */
+function lastTradedLabel(epochSeconds: number | null): string {
+  if (!epochSeconds) return ''
+  const day = new Date(epochSeconds * 1000).toLocaleDateString(undefined, { weekday: 'short' })
+  return ` · last traded ${day}`
+}
+
 export function PortfolioTable({
   rows, onRemove, onSellPositions, onUpdatePosition, onRefresh, portfolioIrr,
   onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed,
@@ -456,7 +466,7 @@ export function PortfolioTable({
         return brokers.length === 0 ? '' : brokers.length === 1 ? (brokers[0] as string) : 'Mixed'
       }
       case 'curPrice': return cv(r.currentPrice, r.currency)
-      case 'today': return cv(r.dailyChange, r.currency)
+      case 'today': return r.dailyChangeDisplay
       case 'costBasis': return cv(r.costBasis, r.currency)
       case 'curValue': return cv(r.currentValue, r.currency)
       case 'pricePnl': return cv(r.pnl, r.currency)
@@ -487,7 +497,7 @@ export function PortfolioTable({
   const totalPricePnl = rows.reduce((s, r) => s + cv(r.pnl, r.currency), 0)
   const totalReturn = totalPricePnl + totalDivs
   const totalReturnPct = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
-  const totalDailyChange = rows.reduce((s, r) => s + cv(r.dailyChange, r.currency), 0)
+  const totalDailyChange = rows.reduce((s, r) => s + r.dailyChangeDisplay, 0)
   const prevTotalValue = totalValue - totalDailyChange
   const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
 
@@ -643,9 +653,10 @@ export function PortfolioTable({
               const brokers = [...new Set(r.positions.map((p) => p.broker).filter(Boolean))]
               const brokerDisplay = brokers.length === 0 ? null : brokers.length === 1 ? brokers[0] : 'Mixed'
               const noLivePrice = r.isClosed || r.priceIsManual || (!!r.error && !r.priceIsManual)
-              const dailyVal = cv(r.dailyChange, r.currency)
-              const prevVal = cv(r.currentValue, r.currency) - dailyVal
-              const dailyPct = prevVal > 0 ? (dailyVal / prevVal) * 100 : 0
+              // Already in the display currency: the anchored figure carries the currency's
+              // own move, which cv() would double-count by converting it a second time.
+              const dailyVal = r.dailyChangeDisplay
+              const dailyPct = r.dailyChangePercent
 
               const editInline = (
                 <span className="price-edit-inline">
@@ -812,13 +823,32 @@ export function PortfolioTable({
 
                         case 'today':
                           return (
-                            <td key={col.key} className={`${cls}${!r.loading && !noLivePrice && r.dailyChange !== 0 ? (r.dailyChange >= 0 ? ' gain' : ' loss') : ''}`}>
+                            <td key={col.key} className={`${cls}${!r.loading && !noLivePrice && dailyVal !== 0 ? (dailyVal >= 0 ? ' gain' : ' loss') : ''}`}>
                               {r.loading ? <span className="loading-dot">…</span>
                                 : noLivePrice ? <span className="muted">—</span>
                                 : (
                                   <>
-                                    {dailyVal >= 0 ? '+' : ''}{fmt(dailyVal, displayCurrency)}
+                                    {/* No sign on an exact zero: "+CZK 0.00" reads as a tiny
+                                        gain rather than as nothing having happened. */}
+                                    {dailyVal > 0 ? '+' : ''}{fmt(dailyVal, displayCurrency)}
                                     <span className="summary-sub">{pct(dailyPct)}</span>
+                                    {/* The broker-style number, shown only when the currency
+                                        moved too — otherwise it would just repeat the headline. */}
+                                    {Math.abs(r.dailyPriceOnlyDisplay - dailyVal) > 0.005 && (
+                                      <span className="daily-sub" title="Price move only, excluding the currency's own move — the figure broker apps show">
+                                        {r.dailyPriceOnlyDisplay > 0 ? '+' : ''}{fmt(r.dailyPriceOnlyDisplay, displayCurrency)} px
+                                      </span>
+                                    )}
+                                    {/* A zero on a closed market is correct but looks exactly
+                                        like a failed fetch, so it says why. */}
+                                    {r.dailyChangeMethod === 'noTradeToday' && (
+                                      <span className="daily-hint">closed{lastTradedLabel(r.lastTradedAt)}</span>
+                                    )}
+                                    {r.dailyChangeMethod === 'prevCloseFallback' && (
+                                      <span className="daily-hint" title="No midnight anchor available — showing the change since the exchange's previous close">
+                                        prev. close
+                                      </span>
+                                    )}
                                   </>
                                 )}
                             </td>

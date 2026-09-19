@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { proxyFetch } from '../utils/proxyFetch'
+import { FX_CONVERTED_TICKERS } from '../data/fxConvertedTickers'
+import { FUND_PROVIDER_SET } from '../data/fundProviderTickers'
 import {
   Bar,
   localMidnightEpoch,
@@ -45,7 +47,11 @@ interface ChartResult {
 }
 
 async function fetchChart(ticker: string, query: string): Promise<ChartResult | null> {
-  const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${encodeURIComponent(ticker)}?${query}`)
+  // decode-then-encode rather than a bare encode: FX_CONVERTED_TICKERS stores its symbols
+  // already percent-encoded ("GC%3DF"), and encoding those a second time yields "GC%253DF",
+  // which 404s. Round-tripping makes the call idempotent for both conventions.
+  const symbol = encodeURIComponent(decodeURIComponent(ticker))
+  const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${symbol}?${query}`)
   if (!res.ok) return null
   const json = await res.json()
   return json?.chart?.result?.[0] ?? null
@@ -69,10 +75,35 @@ function barsOf(result: ChartResult | null): Bar[] {
  * nothing has traded since local midnight and the anchor is simply the current price — so the
  * common case performs a single small request and never touches intraday data at all.
  */
-async function resolveAnchor(ticker: string, midnight: number): Promise<Anchor> {
+async function resolveAnchor(ticker: string, midnight: number, expandFx = true): Promise<Anchor> {
+  const key = ticker.toUpperCase()
+
+  // Fund-provider tickers are priced through their provider's own endpoint and do not exist on
+  // Yahoo at all. Asking anyway produced three 404s each on every load; they fall back to the
+  // exchange-session figure, which the row marks.
+  if (FUND_PROVIDER_SET.has(key)) return { price: null, lastTradedAt: null }
+
+  // FX-converted tickers (XAU, 4GLD.DE, EXUS.DE) have no single Yahoo symbol either: their
+  // price is a foreign quote multiplied by an FX pair, so the anchor is the product of the two
+  // anchors — exactly how useQuotes builds the live price.
+  // expandFx guards against a self-referential entry: 4GLD.DE and EXUS.DE name *themselves*
+  // as their own price ticker (only the currency conversion differs), so recursing without it
+  // never terminates.
+  const fx = expandFx ? FX_CONVERTED_TICKERS[key] : undefined
+  if (fx) {
+    const [price, rate] = await Promise.all([
+      resolveAnchor(fx.priceTicker, midnight, false),
+      resolveAnchor(fx.fxTicker, midnight, false),
+    ])
+    if (price.price === null || rate.price === null) return { price: null, lastTradedAt: price.lastTradedAt }
+    return { price: price.price * rate.price, lastTradedAt: price.lastTradedAt }
+  }
+
   const daily = await fetchChart(ticker, 'interval=1d&range=5d')
   const meta = daily?.meta
   const lastTradedAt = meta?.regularMarketTime ?? null
+
+  if (daily === null) return { price: null, lastTradedAt: null }
 
   if (lastTradedAt !== null && lastTradedAt <= midnight) {
     // Step 1 — nothing has traded today, so the anchor is where we already are.

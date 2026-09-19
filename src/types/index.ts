@@ -48,5 +48,15 @@ export interface PortfolioRow {
   manualPriceDate?: string    // YYYY-MM-DD when manual price was last set
   irr: number | null          // annualised XIRR including dividends, null while loading
   isClosed: boolean           // all lots have been sold
-  dailyChange: number         // today's absolute P&L change (quote.change × openQty), 0 for closed/manual
+  dailyChange: number         // price-only change in row currency, kept for existing consumers
+  /** Headline today's change in the DISPLAY currency, anchored to the user's local midnight and
+   *  including the currency's own move. */
+  dailyChangeDisplay: number
+  dailyChangePercent: number
+  /** Broker-style figure: price move only, FX held at today's rate, in the display currency. */
+  dailyPriceOnlyDisplay: number
+  /** Which rule produced the number — the UI marks a fallback and explains a zero. */
+  dailyChangeMethod: 'anchored' | 'noTradeToday' | 'prevCloseFallback'
+  /** Epoch seconds of the last trade, for the "closed since Fri" hint. */
+  lastTradedAt: number | null
 }

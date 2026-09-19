@@ -15,10 +15,29 @@ import './App.css'
 
 const CURRENCIES: DisplayCurrency[] = ['CZK', 'USD', 'EUR']
 
+/**
+ * Zones offered in the header picker. A full IANA list is ~600 entries and would need a
+ * search field; this covers the exchanges the app actually quotes, plus the browser's own zone
+ * so the current setting is always selectable even when it is somewhere else entirely.
+ */
+const TIME_ZONES: string[] = [...new Set([
+  Intl.DateTimeFormat().resolvedOptions().timeZone,
+  'Europe/Prague', 'Europe/London', 'Europe/Berlin', 'Europe/Vienna', 'Europe/Amsterdam',
+  'Europe/Paris', 'Europe/Zurich', 'America/New_York', 'America/Chicago', 'America/Los_Angeles',
+  'Asia/Tokyo', 'Asia/Hong_Kong', 'Asia/Singapore', 'Australia/Sydney', 'UTC',
+])].sort()
+
 export default function App() {
   const { portfolios, activeId, ready, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio } = usePortfolios()
   const { convert } = useFxRates()
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('CZK')
+  // Which midnight "today's change" resets at. Per-browser and deliberately not synced to the
+  // Android app, which has its own setting — a phone and a desktop can legitimately sit in
+  // different zones at the same time.
+  const [timeZone, setTimeZone] = useState<string>(
+    () => localStorage.getItem('stock_tracker_timezone')
+      || Intl.DateTimeFormat().resolvedOptions().timeZone,
+  )
   const [showAddModal, setShowAddModal] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [showDeviceModal, setShowDeviceModal] = useState(false)
@@ -182,7 +201,7 @@ export default function App() {
       <header className="header">
         <div className="header-inner">
           <h1>📈 Stock Tracker</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="header-actions">
             <div className="currency-tabs">
               {CURRENCIES.map((c) => (
                 <button
@@ -192,6 +211,19 @@ export default function App() {
                 >{c}</button>
               ))}
             </div>
+            <select
+              className="tz-select"
+              value={timeZone}
+              title="Time zone today's change resets at"
+              onChange={(e) => {
+                setTimeZone(e.target.value)
+                localStorage.setItem('stock_tracker_timezone', e.target.value)
+              }}
+            >
+              {TIME_ZONES.map((z) => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
             <button className="btn-secondary" title="Copy the Persist API key for the Android app" onClick={() => setShowApiKeyModal(true)}>
               🔑
             </button>
@@ -270,6 +302,7 @@ export default function App() {
             key={`${activeId}-${contentKey}`}
             portfolioId={activeId}
             displayCurrency={displayCurrency}
+            timeZone={timeZone}
             convert={convert}
             showAddModal={showAddModal}
             onCloseAddModal={() => setShowAddModal(false)}

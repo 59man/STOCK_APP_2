@@ -14,16 +14,20 @@ import { calcNetDividends, getDividendTaxRate } from '../utils/dividends'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 import { FX_CONVERTED_TICKERS } from '../data/fxConvertedTickers'
 import { FUND_PROVIDER_SET } from '../data/fundProviderTickers'
+import { useDailyAnchors } from '../hooks/useDailyAnchors'
+import { dailyChange as dailyChangeOf } from '../utils/dailyChange'
 
 interface Props {
   portfolioId: string
   displayCurrency: string
   convert: (amount: number, from: string, to: string) => number
+  /** IANA zone the today's-change figure resets at. */
+  timeZone: string
   showAddModal: boolean
   onCloseAddModal: () => void
 }
 
-export function PortfolioContent({ portfolioId, displayCurrency, convert, showAddModal, onCloseAddModal }: Props) {
+export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZone, showAddModal, onCloseAddModal }: Props) {
   const { positions, addPosition, removePositions, updatePosition } = usePortfolio(portfolioId)
   const { quotes, loading: loadingSet, errors, fetchTickers: fetchQuotes } = useQuotes()
   const { dividends, fetchTickers: fetchDividends } = useDividends()
@@ -51,6 +55,19 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
     if (feedTickers.length > 0) fetchQuotes(feedTickers)
     if (dividendTickers.length > 0) fetchDividends(dividendTickers)
   }, [feedTickers, dividendTickers, fetchQuotes, fetchDividends])
+
+  // Currencies needing a midnight FX anchor: whatever the quotes actually came back in, which
+  // is not always the lot currency (8306.T quotes JPY against EUR-recorded lots).
+  const quoteCurrencies = useMemo(() => {
+    const seen = new Set<string>()
+    feedTickers.forEach((t) => {
+      const c = quotes.get(t.toUpperCase())?.currency
+      if (c && c !== displayCurrency) seen.add(c)
+    })
+    return [...seen].sort()
+  }, [feedTickers, quotes, displayCurrency])
+
+  const { anchorFor, fxAnchorFor } = useDailyAnchors(feedTickers, timeZone, quoteCurrencies, displayCurrency)
 
   // Fund-provider tickers have no Yahoo history to fall back on after a page
   // reload wipes useQuotes' in-memory cache — persist each successful
@@ -156,6 +173,25 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
 
       const dailyChange = isClosed || !quote ? 0 : toRow(quote.change, quote.currency) * openQty
 
+      // Today's change, measured from midnight in the user's own zone rather than from the
+      // exchange's previous close — see docs/superpowers/specs/2026-09-19-timezone-anchored-
+      // daily-change-design.md. Worked in the quote's own currency: the anchor price and the
+      // FX anchor are both quoted there, and converting either one through the row currency
+      // first would mix a spot rate into a figure that is meant to be anchored.
+      const quoteCurrency = quote?.currency ?? rowCurrency
+      const anchor = isClosed || !quote ? undefined : anchorFor(ticker)
+      const anchorFx = isClosed || !quote ? undefined : fxAnchorFor(quoteCurrency)
+      const daily = dailyChangeOf({
+        quantity: isClosed || !quote ? 0 : openQty,
+        currentPrice: quote?.price ?? 0,
+        anchorPrice: anchor?.price ?? null,
+        currentFx: convert(1, quoteCurrency, displayCurrency),
+        anchorFx: anchorFx ?? null,
+        // Reconstructed from the figure the quote already carries, so the fallback keeps
+        // reporting exactly what the app showed before this feature existed.
+        prevClose: quote ? quote.price - quote.change : null,
+      })
+
       return {
         ids: lots.map((p) => p.id),
         ticker,
@@ -182,9 +218,14 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, showAd
         irr: irrValue,
         isClosed,
         dailyChange,
+        dailyChangeDisplay: daily.change,
+        dailyChangePercent: daily.changePercent,
+        dailyPriceOnlyDisplay: daily.priceOnlyChange,
+        dailyChangeMethod: daily.method,
+        lastTradedAt: anchor?.lastTradedAt ?? null,
       }
     })
-  }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides, convert])
+  }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides, convert, displayCurrency, anchorFor, fxAnchorFor])
 
   const portfolioIrr = useMemo(() => {
     if (positions.length === 0) return null

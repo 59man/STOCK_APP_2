@@ -1112,3 +1112,42 @@ input::placeholder { color: var(--faint); }
 @media (max-width: 640px) {
   .pie-charts-header { flex-wrap: wrap; gap: 10px; }
 }
+
+/* Today's-change cell extras: the broker-style price-only figure and the muted
+   explanation beside a zero on a closed market. */
+.daily-sub {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  opacity: 0.75;
+}
+.daily-hint {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.tz-select {
+  background: var(--bg-elevated, #1a1a2e);
+  color: var(--text, #e5e7eb);
+  border: 1px solid var(--border, #2a2a3e);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  max-width: 170px;
+}
+
+/* Header controls wrap instead of pushing the page wider than the viewport — the
+   time zone picker is wide enough to overflow a 360px screen on its own. */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .tz-select { max-width: 120px; }
+  .header-actions { gap: 8px; }
+}
