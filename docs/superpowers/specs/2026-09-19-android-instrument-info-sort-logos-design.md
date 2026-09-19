@@ -1,23 +1,27 @@
-# Android: Instrument Info Sections, Portfolio Sort, and Logo Chain Rework
+# Android: Instrument Info Sections, Portfolio Sort, Logo Chain Rework, and README Screenshots
 
 Date: 2026-09-19
 Status: Design approved, ready for implementation planning
 
 ## Summary
 
-Three related additions to the Android companion app:
+Four related pieces of work, covered by Parts 1–6 below:
 
-1. **Instrument info sections** on the position detail screen, modelled on XTB's
+1. **Instrument info sections** on the position detail screen (Parts 1–3), modelled on XTB's
    instrument page: About, Market hours (rendered in the user's time zone),
    Essentials, and Rates of return.
-2. **Portfolio sort** — a chip row above the position list offering Name, Type,
+2. **Portfolio sort** (Part 4) — a chip row above the position list offering Name, Type,
    Value, Today's change, and Total return, in either direction, persisted.
-3. **Logo chain rework** — the current second logo source, `logo.clearbit.com`,
+3. **Logo chain rework** (Part 5) — the current second logo source, `logo.clearbit.com`,
    no longer resolves at all, so every ticker the primary source misses falls
    straight through to an initials avatar. Replace the chain with one that
    actually covers non-US holdings.
+4. **README rewrite with screenshots** (Part 6) of both the web and Android apps, done
+   last so the screenshots show the finished features.
 
-The web app is not in scope. These are Android-only changes.
+Parts 1–5 are Android-only. Part 6 touches the README and adds a `DATA_FILE`
+environment override to `server/index.js` so screenshots can be captured
+against a demo dataset instead of the real portfolio.
 
 ## Background and findings
 
@@ -336,6 +340,81 @@ Coil's `ImageLoader` is configured explicitly with a disk cache so a resolved
 remote logo survives a restart and renders offline. It is currently constructed
 with defaults.
 
+## Part 6 — README rewrite with screenshots
+
+Sequenced **after** Parts 1–5 ship, so the screenshots show the instrument info
+sections, the sort chips, and working logos rather than needing to be retaken.
+
+### Privacy constraint
+
+`github.com/59man/STOCK_APP_2` is a public repository, and an image committed to
+it stays in Git history even after the file is deleted. Screenshots therefore
+use a **demo portfolio of invented positions in well-known tickers**, never the
+real one. The real `server/data.json` is not opened, copied, or served during
+the capture.
+
+### Enabling a safe capture
+
+`server/index.js` currently hardcodes `DATA_FILE` to `server/data.json`. Add an
+environment override:
+
+```js
+const DATA_FILE = process.env.DATA_FILE ?? join(__dirname, 'data.json')
+```
+
+with `DATA_BAK`, the backups directory, and the dated-backup path derived from
+it. This is a small change that is useful beyond screenshots — it makes a
+throwaway dataset possible for any manual testing without touching real data —
+and it means the capture never swaps files in and out of `server/`, which is
+where a mistake would cost real portfolio data.
+
+Capture procedure:
+
+1. Write a demo dataset to a scratch file outside the repository.
+2. Run the dev server against it: `DATA_FILE=<scratch>/demo.json npm run dev`.
+3. Capture the web screenshots in a **fresh browser profile**, because the app
+   also keeps state in `localStorage` and an existing profile would show real
+   positions.
+4. Point the `stocktracker_test` emulator's Settings at the same demo server
+   (`http://10.0.2.2:3001`), sync, and capture with `adb exec-out screencap -p`.
+5. Delete the scratch dataset.
+
+### Screens captured
+
+Web (desktop viewport, dark theme, the app's only theme):
+
+- Portfolio table with one row expanded, showing the lot mini-table and
+  dividend panel.
+- Total Return chart.
+- The three pie charts.
+
+Android (`stocktracker_test` emulator, dark theme):
+
+- Position list.
+- Position detail, scrolled to show the price chart and the new instrument info
+  sections.
+- Insights tab.
+
+### Storage and README structure
+
+Images go in `docs/screenshots/` as PNGs, referenced by relative path. Android
+shots are downscaled to roughly 360 px wide and laid out two or three per row in
+an HTML table so the phone screenshots do not dominate the page.
+
+The README keeps its current sections (Features, Quick start, Docker, Android,
+Architecture) and gains:
+
+- A hero image directly under the title — the web portfolio table.
+- Inline images in Features, next to the capability each one demonstrates.
+- A row of Android screenshots in the Android section, above the install
+  instructions.
+- Alt text on every image, since GitHub renders the README for screen readers
+  and in contexts where images fail to load.
+
+Prose changes stay minimal: the README was compacted deliberately in commit
+`46cfb21`, so this adds images and adjusts surrounding wording, rather than
+re-expanding the text.
+
 ## Testing
 
 - `core:calc` — `ratesOfReturn` against a known series, including a gap at the
@@ -367,7 +446,7 @@ with defaults.
 
 ## Out of scope
 
-- Any web-app equivalent of these sections.
+- Any web-app equivalent of the instrument info sections, sort, or logo chain.
 - News, financials, ESG, and Risk & Return tabs from XTB's instrument page.
 - Syncing logos or the profile cache between devices.
 - Holiday-aware market calendars.
