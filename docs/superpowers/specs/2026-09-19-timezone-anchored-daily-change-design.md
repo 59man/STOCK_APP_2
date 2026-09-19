@@ -45,6 +45,13 @@ todaysPercent = todaysChange / (openQty × anchorPrice × anchorFx) × 100
 If the instrument has not traded since `localMidnight`, the anchor is the
 current price and the change is exactly zero.
 
+**This is deliberate and is the point of the feature.** On a Saturday, a US
+holding reports `0.00`, not Friday's session move. Before the market opens on a
+weekday morning it likewise reports `0.00`. The number answers "what has this
+position done since midnight, my time", and when nothing has traded, the honest
+answer is nothing. Falling back to the last session's move in these cases was
+considered and rejected.
+
 Because the anchor is a property of the day, it changes only at local midnight —
 so it is fetched at most once per ticker per local day and cached, not
 recomputed on every quote refresh.
