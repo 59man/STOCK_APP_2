@@ -361,6 +361,36 @@ Four sources, first hit wins: a local PNG in `filesDir/logos/<TICKER>.png` → `
 
 `LogoStore` owns the local file: `seedFromAssets` copies `app/src/main/assets/logos/*.png` in on first run (never overwriting), and the detail screen's **Set logo** / **Reset logo** write and delete it via the photo picker, downscaling to 128×128. Bundled assets are only for tickers **no** remote source covers — currently `8306.T` and `8591.T`; see `assets/logos/README.md` before adding another.
 
+### Instrument info (`feature/portfolio/InstrumentInfoSection.kt`)
+
+Four cards below the price chart on the position detail screen, modelled on XTB: **About**, **Market hours**, **Essentials**, **Rates of return**. Fed by `InstrumentInfoViewModel` (its own ViewModel, so a profile fetch never re-runs `PortfolioListViewModel`'s row derivation). Each card is omitted entirely when it has no data.
+
+`InstrumentProfileClient` (`core/network`) composes two Yahoo calls into one `InstrumentProfile`:
+
+| Call | Gives | Reliability |
+|---|---|---|
+| `chart/<t>?interval=1d&range=1d` meta | exchange, instrument type, currency, `exchangeTimezoneName`, `currentTradingPeriod`, 52-week range, day range, volume, `firstTradeDate` | always works — same request the quote fetch makes |
+| `v10/finance/quoteSummary` | description, sector, industry, website, fund family, legal type, expense ratio, net assets, category | best-effort, behind a cookie/crumb handshake |
+
+> **Gotcha · quoteSummary needs a cookie *and* a crumb.** Called plainly it answers `401 {"description":"Invalid Crumb"}`. `CrumbProvider` GETs `fc.yahoo.com` for a cookie, then `v1/test/getcrumb` with it. **The cookie endpoint answers 404 while still setting the cookie**, so its status is deliberately ignored — treating 404 as failure breaks the whole chain. Crumb and cookie cache for an hour behind a `Mutex` (several positions opening at once would otherwise race into rate limiting), and a 401 retries **once** with a fresh crumb; a second 401 means the handshake shape changed and retrying cannot help. Every field this call feeds is nullable and its card row is hidden on null — a permanent failure costs the About card and three Essentials rows, nothing else.
+
+Profiles cache in Room (`instrument_profiles`, **database version 2**, `MIGRATION_1_2`) for 7 days; a fetch failure leaves the cached row in place. Device-local, never synced.
+
+Market-hours and return math live in `core:calc`: `MarketHours.kt` (`marketDay`/`phaseAt`/`nextMarketDays`) converts Yahoo's session epochs into the viewer's zone — half-open windows so a boundary minute has one phase — and `RatesOfReturn.kt` computes the 1D/1W/1M/3M/1Y chips.
+
+Things that bit during implementation, all now pinned by tests:
+- **Yahoo's `currentTradingPeriod` is the *most recent* session, not today's.** On a weekend it is Friday's, so the card says "Last session" unless the date really is the viewer's today, and the now-marker only draws on a real today.
+- `ratesOfReturn` measures back from the **latest bar's date**, not the wall clock, so `1D` means the last session's move on a Saturday rather than zero. (Deliberately the opposite choice from the row's today's-change figure.)
+- It uses a strict on-or-before anchor, **not `priceAt`** — that resolves to the *nearest* bar and will anchor on one after the requested date.
+- Percentages here are two decimals (`percent2dp`), unlike the app's one-decimal `signedPercent`: one decimal turns a 0.15 % TER into "0.2 %" and a -0.25 % day into "-0.3 %".
+- Volume is a share count, not money — `formatMoney` printed "16,090,017.00".
+- Distribution type is **derived**, not fetched: dividend events present → Distributing, a settled-but-empty dividend fetch → Accumulating, nothing loaded → row omitted. Yahoo exposes no such flag.
+- "Show next days" is extrapolated from today's hours and **labelled an estimate** — there is no exchange holiday calendar available.
+
+### Time zone setting
+
+`AppSettings.timeZoneId` (`core/data/SettingsRepository.kt`), empty meaning "follow the device" — that is the default, so it stays correct when travelling. `effectiveZoneId()` resolves it and falls back to the device zone if a stored id no longer parses (a tzdb update can retire one). Settings has a searchable picker over `ZoneId.getAvailableZoneIds()`; picking "Use device time zone" stores an **empty** id rather than the current zone's name, so it keeps following the device.
+
 ### Layout testing (`feature/portfolio/src/test`)
 
 `LayoutAssertions.kt` gives `assertNoClippedText()`, `assertTextNotTruncated(text)` and `assertMinTouchTarget(text)`. `LayoutMatrixTest` runs the dense screens at 320/360/411 dp × font scale 1.0/1.3/2.0; `GoldenScreenshotTest` records Roborazzi goldens at 360 dp / scale 1.0 / dark only, to bound repository churn.
