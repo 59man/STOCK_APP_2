@@ -1,5 +1,10 @@
 package com.stocktracker.feature.settings
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import java.time.ZoneId
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -133,6 +138,11 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 }
             }
 
+            TimeZoneSetting(
+                current = uiState.effectiveTimeZoneLabel,
+                onPick = { onAction(SettingsAction.TimeZoneChanged(it)) },
+            )
+
             // Sync now is the everyday action; Test connection is a setup/diagnostic step, so it
             // gets the quieter outlined style instead of competing as a second primary button.
             OutlinedButton(onClick = { onAction(SettingsAction.TestConnection) }, modifier = Modifier.fillMaxWidth()) {
@@ -215,4 +225,69 @@ internal fun formatLastSynced(iso: String, now: java.time.Instant = java.time.In
         else -> "${minutes / (60 * 24)} days ago"
     }
     return "$local · $ago"
+}
+
+/**
+ * Picks the zone market hours are rendered in. The list is every zone the platform knows, so
+ * it is searchable rather than a dropdown — there are ~600 of them.
+ *
+ * "Use device time zone" writes an empty id rather than the current zone's name, so the
+ * setting keeps following the device after the user travels instead of freezing wherever they
+ * happened to open this screen.
+ */
+@Composable
+private fun TimeZoneSetting(current: String, onPick: (String) -> Unit) {
+    var showPicker by remember { mutableStateOf(false) }
+    Column {
+        Text("Time zone", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(bottom = 4.dp))
+        OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(current)
+        }
+        Text(
+            "Market hours on the position screen are shown in this zone.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+
+    if (showPicker) {
+        var query by remember { mutableStateOf("") }
+        val zones = remember(query) {
+            ZoneId.getAvailableZoneIds().sorted().filter { it.contains(query, ignoreCase = true) }
+        }
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text("Cancel") } },
+            title = { Text("Time zone") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text("Search") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    TextButton(
+                        onClick = { onPick(""); showPicker = false },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Use device time zone (${java.util.TimeZone.getDefault().id})")
+                    }
+                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+                        items(zones) { zone ->
+                            TextButton(
+                                onClick = { onPick(zone); showPicker = false },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(zone, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+            },
+        )
+    }
 }

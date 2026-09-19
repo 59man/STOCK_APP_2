@@ -34,6 +34,7 @@ class SettingsViewModel @Inject constructor(
             lastSyncedAt = settings.lastSyncedAt,
             connectionTest = test,
             themeMode = settings.themeMode,
+            timeZoneId = settings.timeZoneId,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -43,6 +44,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsAction.ApiKeyChanged -> viewModelScope.launch { settingsRepository.setApiKey(action.value) }
             is SettingsAction.DisplayCurrencyChanged -> viewModelScope.launch { settingsRepository.setDisplayCurrency(action.value) }
             is SettingsAction.ThemeModeChanged -> viewModelScope.launch { settingsRepository.setThemeMode(action.value) }
+            is SettingsAction.TimeZoneChanged -> viewModelScope.launch { settingsRepository.setTimeZoneId(action.id) }
             SettingsAction.TestConnection -> testConnection()
             SettingsAction.SyncNow -> syncNow()
             SettingsAction.Disconnect -> disconnect()

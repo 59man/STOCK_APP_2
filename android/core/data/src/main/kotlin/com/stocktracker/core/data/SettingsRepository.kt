@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import com.stocktracker.core.model.SortField
 import com.stocktracker.core.model.SortOrder
 import kotlinx.coroutines.flow.map
+import java.time.ZoneId
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -26,7 +27,21 @@ data class AppSettings(
     val themeMode: String = "system",
     /** How the position list is ordered. Shared by every portfolio. */
     val sortOrder: SortOrder = SortOrder(),
+    /** IANA zone id, or empty to follow the device. See [effectiveZoneId]. */
+    val timeZoneId: String = "",
 )
+
+/**
+ * The zone market hours are rendered in.
+ *
+ * Empty means "follow the device", which is the default: correct when travelling, and no
+ * setup for someone who never leaves their own zone. The runCatching guards a stored id that
+ * a later tzdb update removed — ZoneId.of would otherwise throw on every read.
+ */
+fun AppSettings.effectiveZoneId(): ZoneId =
+    timeZoneId.takeIf { it.isNotBlank() }
+        ?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+        ?: ZoneId.systemDefault()
 
 /**
  * Server URL / API key / display currency — read on every network and sync
@@ -46,6 +61,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         val DEVICE_ID = stringPreferencesKey("device_id")
         val SORT_FIELD = stringPreferencesKey("sort_field")
         val SORT_ASCENDING = booleanPreferencesKey("sort_ascending")
+        val TIME_ZONE_ID = stringPreferencesKey("time_zone_id")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -63,6 +79,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
                     ?: SortField.VALUE,
                 ascending = prefs[Keys.SORT_ASCENDING] ?: false,
             ),
+            timeZoneId = prefs[Keys.TIME_ZONE_ID] ?: "",
         )
     }
 
@@ -71,6 +88,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
     suspend fun setDisplayCurrency(currency: String): Unit { dataStore.edit { it[Keys.DISPLAY_CURRENCY] = currency } }
     suspend fun setLastSyncedAt(isoTimestamp: String): Unit { dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp } }
     suspend fun setThemeMode(mode: String): Unit { dataStore.edit { it[Keys.THEME_MODE] = mode } }
+    suspend fun setTimeZoneId(id: String): Unit { dataStore.edit { it[Keys.TIME_ZONE_ID] = id } }
     suspend fun setSortOrder(order: SortOrder): Unit {
         dataStore.edit {
             it[Keys.SORT_FIELD] = order.field.name

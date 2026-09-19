@@ -15,13 +15,20 @@ data class SettingsUiState(
     val connectionTest: ConnectionTestState = ConnectionTestState.Idle,
     /** "system" | "light" | "dark" */
     val themeMode: String = "system",
-)
+    /** Stored override; empty means the device zone, which [effectiveTimeZoneLabel] spells out. */
+    val timeZoneId: String = "",
+) {
+    val effectiveTimeZoneLabel: String
+        get() = timeZoneId.ifBlank { "${java.util.TimeZone.getDefault().id} (device)" }
+}
 
 sealed interface SettingsAction {
     data class ServerUrlChanged(val value: String) : SettingsAction
     data class ApiKeyChanged(val value: String) : SettingsAction
     data class DisplayCurrencyChanged(val value: String) : SettingsAction
     data class ThemeModeChanged(val value: String) : SettingsAction
+    /** Empty id clears the override and returns to following the device. */
+    data class TimeZoneChanged(val id: String) : SettingsAction
     data object TestConnection : SettingsAction
     data object SyncNow : SettingsAction
     data object Disconnect : SettingsAction
