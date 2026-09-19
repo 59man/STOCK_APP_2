@@ -24,8 +24,13 @@ private const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L
 class InstrumentProfileRepository @Inject constructor(
     private val dao: InstrumentProfileDao,
     private val client: InstrumentProfileSource,
-    private val now: () -> Long = System::currentTimeMillis,
 ) {
+    /**
+     * Test seam for the staleness check. Not a constructor parameter: Hilt cannot provide a
+     * `() -> Long`, and adding a binding for one would be ceremony for a single test.
+     */
+    internal var now: () -> Long = System::currentTimeMillis
+
     fun observe(ticker: String): Flow<InstrumentProfile?> =
         dao.observe(ticker.uppercase()).map { it?.toModel() }
 

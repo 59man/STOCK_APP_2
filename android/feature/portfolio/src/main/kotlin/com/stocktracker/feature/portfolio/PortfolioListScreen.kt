@@ -54,6 +54,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -720,6 +721,7 @@ fun PositionDetailRoute(
     ticker: String,
     onBack: () -> Unit,
     viewModel: PortfolioListViewModel = hiltViewModel(),
+    infoViewModel: InstrumentInfoViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val row = uiState.rows.firstOrNull { it.ticker == ticker }
@@ -852,6 +854,20 @@ fun PositionDetailRoute(
                     tickerCurrency = row.currency,
                     displayCurrency = uiState.displayCurrency,
                     rates = uiState.rates,
+                )
+
+                val infoState by infoViewModel.uiState.collectAsStateWithLifecycle()
+                LaunchedEffect(row.ticker) { infoViewModel.load(row.ticker) }
+                InstrumentInfoSection(
+                    state = infoState,
+                    isin = row.positions.firstNotNullOfOrNull { it.isin },
+                    // Yahoo does not publish an accumulating/distributing flag, so it is read
+                    // off the dividend history the app already has: events means distributing,
+                    // a settled-but-empty fetch means accumulating, and nothing loaded yet
+                    // means the row is omitted rather than guessed.
+                    distributionType = uiState.dividendsByTicker[row.ticker.uppercase()]
+                        ?.let { if (it.isEmpty()) "Accumulating" else "Distributing" },
+                    modifier = Modifier.padding(top = Spacing.md),
                 )
             }
 

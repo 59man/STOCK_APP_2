@@ -99,3 +99,6 @@ fun SemanticsNodeInteractionsProvider.assertMinTouchTarget(text: String, minDp: 
         }
     }
 }
+
+/** Reads better than `assertDoesNotExist()` at a call site that is asserting an omission. */
+fun androidx.compose.ui.test.SemanticsNodeInteraction.assertDoesNotExistCompat() = assertDoesNotExist()

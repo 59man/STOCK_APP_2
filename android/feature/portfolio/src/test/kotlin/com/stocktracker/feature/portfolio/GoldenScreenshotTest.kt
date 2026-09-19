@@ -4,7 +4,14 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.stocktracker.core.designsystem.StockTrackerTheme
+import com.stocktracker.core.calc.ReturnPeriod
+import com.stocktracker.core.calc.marketDay
+import com.stocktracker.core.calc.nextMarketDays
+import com.stocktracker.core.model.InstrumentProfile
 import com.stocktracker.core.model.SortField
+import com.stocktracker.core.model.TradingPeriod
+import com.stocktracker.core.model.TradingPeriods
+import java.time.ZoneId
 import com.stocktracker.core.model.SortOrder
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +33,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(qualifiers = "w360dp-h800dp-night")
+@Config(qualifiers = "w360dp-h1600dp-night")
 class GoldenScreenshotTest {
     @get:Rule val composeTestRule = createComposeRule()
 
@@ -99,5 +106,50 @@ class GoldenScreenshotTest {
             }
         }
         composeTestRule.onRoot().captureRoboImage("src/test/screenshots/list_screen.png")
+    }
+
+    @Test
+    fun instrumentInfo() {
+        val zone = ZoneId.of("Europe/Prague")
+        val periods = TradingPeriods(
+            pre = TradingPeriod(1789707600, 1789714800),
+            regular = TradingPeriod(1789714800, 1789745400),
+            post = TradingPeriod(1789745400, 1789756200),
+        )
+        val today = marketDay(periods, zone)
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                InstrumentInfoSection(
+                    state = InstrumentInfoUiState(
+                        profile = InstrumentProfile(
+                            ticker = "EXUS.DE",
+                            exchange = "XETRA",
+                            instrumentType = "ETF",
+                            currency = "EUR",
+                            tradingPeriods = periods,
+                            fiftyTwoWeekHigh = 41.04,
+                            fiftyTwoWeekLow = 32.84,
+                            description = "The fund tracks developed-market equities excluding the United States.",
+                            fundFamily = "Xtrackers",
+                            expenseRatio = 0.0015,
+                        ),
+                        today = today,
+                        nextDays = today?.let { nextMarketDays(it, 4) }.orEmpty(),
+                        returns = mapOf(
+                            ReturnPeriod.D1 to -0.25,
+                            ReturnPeriod.W1 to -1.46,
+                            ReturnPeriod.M1 to -1.70,
+                            ReturnPeriod.M3 to 1.88,
+                            ReturnPeriod.Y1 to 12.5,
+                        ),
+                        zone = zone,
+                        loading = false,
+                    ),
+                    isin = "IE000YC7FPB6",
+                    distributionType = "Accumulating",
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage("src/test/screenshots/instrument_info.png")
     }
 }

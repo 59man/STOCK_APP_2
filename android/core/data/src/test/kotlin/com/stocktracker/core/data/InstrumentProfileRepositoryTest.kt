@@ -51,7 +51,7 @@ class InstrumentProfileRepositoryTest {
     @Test fun `a cold ticker fetches and stores`() = runTest {
         val dao = FakeDao()
         val client = FakeClient(profile)
-        val repo = InstrumentProfileRepository(dao, client) { 10 * DAY }
+        val repo = InstrumentProfileRepository(dao, client).apply { now = { 10 * DAY } }
         repo.refreshIfStale("exus.de")
         assertEquals(1, client.calls)
         val stored = repo.observe("EXUS.DE").first()!!
@@ -63,9 +63,9 @@ class InstrumentProfileRepositoryTest {
     @Test fun `a row cached yesterday is not refetched`() = runTest {
         val dao = FakeDao()
         val client = FakeClient(profile)
-        val repo = InstrumentProfileRepository(dao, client) { 10 * DAY }
+        val repo = InstrumentProfileRepository(dao, client).apply { now = { 10 * DAY } }
         repo.refreshIfStale("EXUS.DE")
-        val repoLater = InstrumentProfileRepository(dao, client) { 11 * DAY }
+        val repoLater = InstrumentProfileRepository(dao, client).apply { now = { 11 * DAY } }
         repoLater.refreshIfStale("EXUS.DE")
         assertEquals(1, client.calls)
     }
@@ -73,29 +73,29 @@ class InstrumentProfileRepositoryTest {
     @Test fun `a row cached eight days ago is refetched`() = runTest {
         val dao = FakeDao()
         val client = FakeClient(profile)
-        InstrumentProfileRepository(dao, client) { 10 * DAY }.refreshIfStale("EXUS.DE")
-        InstrumentProfileRepository(dao, client) { 18 * DAY }.refreshIfStale("EXUS.DE")
+        InstrumentProfileRepository(dao, client).apply { now = { 10 * DAY } }.refreshIfStale("EXUS.DE")
+        InstrumentProfileRepository(dao, client).apply { now = { 18 * DAY } }.refreshIfStale("EXUS.DE")
         assertEquals(2, client.calls)
     }
 
     @Test fun `a fetch failure leaves the cached row intact`() = runTest {
         val dao = FakeDao()
-        InstrumentProfileRepository(dao, FakeClient(profile)) { 0 }.refreshIfStale("EXUS.DE")
-        InstrumentProfileRepository(dao, FakeClient(null, fail = true)) { 100 * DAY }
+        InstrumentProfileRepository(dao, FakeClient(profile)).apply { now = { 0 } }.refreshIfStale("EXUS.DE")
+        InstrumentProfileRepository(dao, FakeClient(null, fail = true)).apply { now = { 100 * DAY } }
             .refreshIfStale("EXUS.DE")
         assertEquals("XETRA", dao.rows.value["EXUS.DE"]!!.exchange)
     }
 
     @Test fun `an unknown ticker observes as null`() = runTest {
-        val repo = InstrumentProfileRepository(FakeDao(), FakeClient(null)) { 0 }
+        val repo = InstrumentProfileRepository(FakeDao(), FakeClient(null))
         assertNull(repo.observe("NOPE").first())
     }
 
     @Test fun `a profile with no session data round-trips as null periods, not empty ones`() = runTest {
         val dao = FakeDao()
         val bare = profile.copy(tradingPeriods = null)
-        InstrumentProfileRepository(dao, FakeClient(bare)) { 0 }.refreshIfStale("EXUS.DE")
+        InstrumentProfileRepository(dao, FakeClient(bare)).apply { now = { 0 } }.refreshIfStale("EXUS.DE")
         assertNull(dao.rows.value["EXUS.DE"]!!.regularStart)
-        assertNull(InstrumentProfileRepository(dao, FakeClient(bare)) { 0 }.observe("EXUS.DE").first()!!.tradingPeriods)
+        assertNull(InstrumentProfileRepository(dao, FakeClient(bare)).apply { now = { 0 } }.observe("EXUS.DE").first()!!.tradingPeriods)
     }
 }

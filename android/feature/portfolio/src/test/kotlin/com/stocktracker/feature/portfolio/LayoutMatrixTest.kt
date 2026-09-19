@@ -2,7 +2,14 @@ package com.stocktracker.feature.portfolio
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.stocktracker.core.designsystem.StockTrackerTheme
+import com.stocktracker.core.calc.ReturnPeriod
+import com.stocktracker.core.calc.marketDay
+import com.stocktracker.core.calc.nextMarketDays
+import com.stocktracker.core.model.InstrumentProfile
 import com.stocktracker.core.model.SortOrder
+import com.stocktracker.core.model.TradingPeriod
+import com.stocktracker.core.model.TradingPeriods
+import java.time.ZoneId
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,8 +53,8 @@ class LayoutMatrixTest(
         dailyChange = -1_234.56,
     )
 
-    private fun applyConfig() {
-        org.robolectric.RuntimeEnvironment.setQualifiers("+$qualifiers")
+    private fun applyConfig(heightDp: Int = 800) {
+        org.robolectric.RuntimeEnvironment.setQualifiers("+${qualifiers.substringBefore("-h")}-h${heightDp}dp")
         org.robolectric.RuntimeEnvironment.setFontScale(fontScale)
     }
 
@@ -77,6 +84,53 @@ class LayoutMatrixTest(
         }
         composeTestRule.assertNoClippedText()
         composeTestRule.assertTextNotTruncated("Name")
+    }
+
+    /**
+     * The Essentials grid and the market-hours blocks are the densest new UI in the app.
+     *
+     * Rendered on a tall surface because the real screen scrolls: on an 800dp one the section
+     * simply runs off the bottom, which reads as vertical clipping without being a defect.
+     */
+    @Test
+    fun instrumentInfo_isNeverClipped() {
+        applyConfig(heightDp = 2400)
+        val zone = ZoneId.of("Europe/Prague")
+        val periods = TradingPeriods(
+            pre = TradingPeriod(1789707600, 1789714800),
+            regular = TradingPeriod(1789714800, 1789745400),
+            post = TradingPeriod(1789745400, 1789756200),
+        )
+        val today = marketDay(periods, zone)
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                InstrumentInfoSection(
+                    state = InstrumentInfoUiState(
+                        profile = InstrumentProfile(
+                            ticker = "EXUS.DE",
+                            exchange = "NASDAQ Global Select Market",
+                            instrumentType = "ETF",
+                            currency = "EUR",
+                            tradingPeriods = periods,
+                            fiftyTwoWeekHigh = 12_345_678.90,
+                            fiftyTwoWeekLow = 32.84,
+                            description = "Sleduje index rozvinutých trhů mimo Spojené státy.",
+                            fundFamily = "DWS Investment S.A. (ETF)",
+                            expenseRatio = 0.0015,
+                            totalNetAssets = 76_148_900.0,
+                        ),
+                        today = today,
+                        nextDays = today?.let { nextMarketDays(it, 4) }.orEmpty(),
+                        returns = mapOf(ReturnPeriod.D1 to -0.25, ReturnPeriod.Y1 to 123.45),
+                        zone = zone,
+                        loading = false,
+                    ),
+                    isin = "IE000YC7FPB6",
+                    distributionType = "Accumulating",
+                )
+            }
+        }
+        composeTestRule.assertNoClippedText()
     }
 
     @Test
