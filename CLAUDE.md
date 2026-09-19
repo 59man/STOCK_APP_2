@@ -331,6 +331,8 @@ A native Kotlin + Jetpack Compose app lives in `/android` — a separate Gradle 
 cd android
 ./gradlew :core:calc:test     # calc-module unit tests (xirr/fifo/dividends/chart math) — plain JVM, no emulator
 ./gradlew test                # full unit test suite across all modules
+./gradlew :feature:portfolio:recordRoborazziDebug   # regenerate golden screenshots
+./gradlew :feature:portfolio:verifyRoborazziDebug   # diff against committed goldens
 ./gradlew :app:assembleDebug  # → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -344,12 +346,28 @@ cd android
 - `core/import` — on-device PDF/XLSX/CSV statement parsing, all five broker formats
 - `core/data` — repositories, settings DataStore, sync workers (`SyncCoordinator`, `KeyedListSyncEngine`/`KeyedMapSyncEngine`, `ConflictCenter`, `PushWorker`)
 - `core/designsystem` — Material3 theme (`StockTrackerTheme`, `StockTrackerColors`) + a hand-rolled Compose Canvas charting layer under `chart/` (`AreaLineChart`, `MultiLineChart`, `DonutChart`, `sparseLabelIndices`, `formatChartValue`) — no external charting dependency, to match the app's minimal-dependency approach
-- `feature/portfolio` — list screen (XTB-style compact rows: circular logo/avatar via Coil3 `SubcomposeAsyncImage` — the app's one external image-loading dependency, falling back to a colored initial-letter avatar on load failure — ticker, type badge, native-currency badge, name, price, today's %, total return incl. dividends), a CZK/USD/EUR display-currency quick-switcher (`CurrencyTabs`, colored per currency, persists to the same `SettingsRepository` value the Settings screen's dropdown writes), position detail screen (P&L/Return/IRR, Set price/Sell/Delete, lot table, dividend table: Date/Gross/Tax %/Net), add/edit/sell dialogs, import screen, charts, ViewModels. The portfolio summary card lives on the Insights tab, not here (one value per row) — Portfolio tab is just the position list.
+- `feature/portfolio` — list screen (XTB-style compact rows: circular logo/avatar via Coil3 `SubcomposeAsyncImage` — the app's one external image-loading dependency, falling back to a colored initial-letter avatar when every logo source fails — ticker, type badge, native-currency badge, name, price, today's %, total return incl. dividends), a sort chip row (`SortChips` — Name/Type/Value/Today/Return; tapping the active chip flips direction; order persists in the settings DataStore and monetary fields convert to the display currency before comparison via `core:calc`'s `sortedForDisplay`), a CZK/USD/EUR display-currency quick-switcher (`CurrencyTabs`, colored per currency, persists to the same `SettingsRepository` value the Settings screen's dropdown writes), position detail screen (P&L/Return/IRR, Set price/Sell/Delete, lot table, dividend table: Date/Gross/Tax %/Net), add/edit/sell dialogs, import screen, charts, ViewModels. The portfolio summary card lives on the Insights tab, not here (one value per row) — Portfolio tab is just the position list.
 - `feature/settings` — server URL, API key, display currency
 
 ### Sync model
 
 Room is the offline-first source of truth; every mutation commits locally first, then enqueues a `WorkManager` push of the **entire array** for that key (matches the server's whole-array-per-key storage model — there's no per-record endpoint). A three-way merge (local diff + remote diff, both against a last-synced snapshot) reconciles concurrent edits made on the phone and the web app while one was offline. A genuine same-record conflict (e.g. a sell price edited on both devices) surfaces a one-tap resolution prompt (`ConflictCenter`/`ConflictScreen`) instead of silently picking a winner. `ManualPriceEntity` carries a real `updatedAt`, so a same-ticker manual-price conflict resolves by recency automatically; positions and portfolios have no modification timestamp, so they always prompt.
+
+### Ticker logos (`feature/portfolio/TickerLogo.kt`)
+
+Four sources, first hit wins: a local PNG in `filesDir/logos/<TICKER>.png` → `financialmodelingprep.com/image-stock/<BASE>.png` → `icons.duckduckgo.com/ip3/<domain>.ico` → `www.google.com/s2/favicons?domain=<domain>&sz=128` → colored initials avatar. Domains come from the curated `TICKER_LOGO_DOMAINS`, falling back to the host of a supplied `website`.
+
+> **Gotcha · do not restore Clearbit.** `logo.clearbit.com` was the second source and stopped resolving entirely after HubSpot retired the free API — not a 404, the connection fails. Every non-US holding rendered as a bare initial until this chain replaced it (2026-09-19). Both favicon services answer a miss with a real non-2xx, so Coil advances the chain instead of pinning a generic globe.
+
+`LogoStore` owns the local file: `seedFromAssets` copies `app/src/main/assets/logos/*.png` in on first run (never overwriting), and the detail screen's **Set logo** / **Reset logo** write and delete it via the photo picker, downscaling to 128×128. Bundled assets are only for tickers **no** remote source covers — currently `8306.T` and `8591.T`; see `assets/logos/README.md` before adding another.
+
+### Layout testing (`feature/portfolio/src/test`)
+
+`LayoutAssertions.kt` gives `assertNoClippedText()`, `assertTextNotTruncated(text)` and `assertMinTouchTarget(text)`. `LayoutMatrixTest` runs the dense screens at 320/360/411 dp × font scale 1.0/1.3/2.0; `GoldenScreenshotTest` records Roborazzi goldens at 360 dp / scale 1.0 / dark only, to bound repository churn.
+
+> **Gotcha · these tests need `@GraphicsMode(GraphicsMode.Mode.NATIVE)`.** In Robolectric's default LEGACY mode every font metric is stubbed — "Apple Inc." measures 11 px wide and reports zero visible characters — so the assertions would be vacuous and `hasVisualOverflow` is true even for text that fits. Truncation is therefore detected by comparing the last visible character index against the string length, and `guardFonts` fails loudly if a test forgets the annotation.
+>
+> A glyph inside a fixed-size box (the initials avatar in its 40 dp circle) must pin **both** `fontSize` and `lineHeight` in dp-derived sp; pinning only the font size still let the scaled line height clip the letter at font scale 2.0.
 
 ### Charts
 
