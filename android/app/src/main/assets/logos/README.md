@@ -22,5 +22,7 @@ adding a file here.
 Each is downscaled to 92x92 centred on a 128x128 white canvas, so the circular crop in
 `TickerLogo` does not cut the wordmark.
 
-These are trademarked images used to identify a holding in a personal, private portfolio
-app. They are not redistributed.
+These are trademarked company logos, used nominatively — to identify which holding a row is,
+which is what a logo is for. This repository is public, so they are redistributed with it.
+Keep the set to instruments actually held, prefer the company's own published asset, and drop
+any logo whose owner objects.

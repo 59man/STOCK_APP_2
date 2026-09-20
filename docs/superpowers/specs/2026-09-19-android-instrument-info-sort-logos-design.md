@@ -529,7 +529,7 @@ assertion-based.
 | Exchange holidays make "next days" wrong | The expander is labelled as an estimate. No holiday source is available. |
 | Favicon services drop a domain | They return proper 404s, so the chain advances to the initials avatar exactly as it does today. |
 | Room migration mistake loses positions | Migration only creates a new table; a migration test asserts existing rows survive; destructive fallback is not enabled. |
-| Bundled logos are trademarked images | Private personal repository, not redistributed. The in-app picker means no new logo requires a repo change. |
+| Bundled logos are trademarked images | Used nominatively to identify a holding, sourced from each company's own site, and limited to instruments actually held. The in-app picker means no new logo requires a repo change. |
 
 ## Out of scope
 
