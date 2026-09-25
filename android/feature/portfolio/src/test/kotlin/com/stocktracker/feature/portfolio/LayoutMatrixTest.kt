@@ -192,6 +192,23 @@ class LayoutMatrixTest(
     }
 
     @Test
+    fun dividendForecast_isNeverClipped() {
+        applyConfig(heightDp = 1200)
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                DividendForecastContent(
+                    entries = listOf(
+                        com.stocktracker.core.calc.ForecastEntry("EXUS.DE", "2027-05-26", 12_345_678.9, "EUR"),
+                        com.stocktracker.core.calc.ForecastEntry("8306.T", "2027-03-30", 583.49, "CZK"),
+                    ),
+                    displayCurrency = "CZK",
+                ) { amount, _ -> amount }
+            }
+        }
+        composeTestRule.assertNoClippedText()
+    }
+
+    @Test
     fun topBarActions_keepTheirLabels() {
         applyConfig()
         composeTestRule.setContent {
