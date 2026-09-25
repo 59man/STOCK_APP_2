@@ -9,6 +9,10 @@ import { FX_CONVERTED_TICKERS, FX_CONVERTED_SET } from '../data/fxConvertedTicke
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 import { proxyFetch } from '../utils/proxyFetch'
 import { yahooChartQuery, yahooFxHistoryQuery } from '../utils/yahooWindow'
+import {
+  TYPE_ORDER, effectiveTypeFilter, filterPositionsByType, parseStoredTypes, toggleType, typeFilterLabel, typeLabel,
+  type AssetType,
+} from '../utils/typeFilter'
 
 interface ChartPoint {
   label: string
@@ -210,6 +214,19 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     localStorage.setItem('chart_view_portfolio', v)
   }
 
+  const [types, setTypes] = useState<AssetType[]>(() => {
+    try { return parseStoredTypes(localStorage.getItem('chart_types_portfolio')) } catch { return [] }
+  })
+  const heldTypes = useMemo(() => TYPE_ORDER.filter((t) => positions.some((p) => p.type === t)), [positions])
+  const typeFilter = useMemo(() => effectiveTypeFilter(types, heldTypes), [types, heldTypes])
+  // Only the chart math is filtered — histories are still fetched for every holding, so
+  // switching chips never refetches.
+  const chartPositions = useMemo(() => filterPositionsByType(positions, typeFilter), [positions, typeFilter])
+  const handleTypesChange = (next: AssetType[]) => {
+    setTypes(next)
+    try { localStorage.setItem('chart_types_portfolio', JSON.stringify(next)) } catch { /* private mode */ }
+  }
+
   const [histories, setHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [fxHistories, setFxHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [loading, setLoading] = useState(false)
@@ -302,7 +319,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
 
       // Collect unique buy-date → buy-price knots from individual lots
       const knots = new Map<string, number>()
-      positions
+      chartPositions
         .filter((p) => p.ticker.toUpperCase() === t.toUpperCase())
         .forEach((p) => { if (!knots.has(p.buyDate)) knots.set(p.buyDate, p.buyPrice) })
 
@@ -318,12 +335,12 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       map.set(t, interpolateDaily(sortedKnots))
     })
     return map
-  }, [histories, manualPrices, quotes, positions, tickers])
+  }, [histories, manualPrices, quotes, chartPositions, tickers])
 
   const firstBuyDate = useMemo(() =>
-    positions.length === 0 ? '0000-00-00'
-      : positions.reduce((min, p) => p.buyDate < min ? p.buyDate : min, positions[0].buyDate)
-  , [positions])
+    chartPositions.length === 0 ? '0000-00-00'
+      : chartPositions.reduce((min, p) => p.buyDate < min ? p.buyDate : min, chartPositions[0].buyDate)
+  , [chartPositions])
 
   const chartData = useMemo<ChartPoint[]>(() => {
     if (effectiveHistories.size === 0) return []
@@ -354,7 +371,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       let pricePnl = 0
       let costBasis = 0
       let currentValue = 0
-      positions.forEach((pos) => {
+      chartPositions.forEach((pos) => {
         if (pos.buyDate > date) return
 
         // If this lot was sold on or before this date, use the frozen realized gain
@@ -401,7 +418,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
 
       // Dividend P&L — converted at the ex-date's rate (frozen thereafter)
       let divPnl = 0
-      positions.forEach((pos) => {
+      chartPositions.forEach((pos) => {
         const divs = dividends.get(pos.ticker.toUpperCase()) ?? []
         const defaultRate = getDividendTaxRate(pos.ticker)
         for (const div of divs) {
@@ -424,7 +441,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
         currentValue: Math.round(currentValue),
       }
     })
-  }, [effectiveHistories, fxHistories, positions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
+  }, [effectiveHistories, fxHistories, chartPositions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
 
   const values = chartData.map((d) => d.pnl)
   const minVal = values.length ? Math.min(...values) : 0
@@ -447,6 +464,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
             {view === 'return'
               ? 'price P&L + net dividends (after withholding tax)'
               : 'capital in open positions vs. mark-to-market value'}
+            {typeFilter.size > 0 && <> · <strong>{typeFilterLabel(typeFilter)}</strong></>}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -482,6 +500,28 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
           </div>
         </div>
       </div>
+
+      {heldTypes.length > 1 && (
+        <div className="chart-type-chips" role="group" aria-label="Filter by asset type">
+          <button
+            className={`chart-type-chip${typeFilter.size === 0 ? ' active' : ''}`}
+            aria-pressed={typeFilter.size === 0}
+            onClick={() => handleTypesChange([])}
+          >
+            All
+          </button>
+          {heldTypes.map((t) => (
+            <button
+              key={t}
+              className={`chart-type-chip${typeFilter.has(t) ? ' active' : ''}`}
+              aria-pressed={typeFilter.has(t)}
+              onClick={() => handleTypesChange(toggleType([...typeFilter], t))}
+            >
+              {typeLabel(t)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading && <div className="chart-placeholder">Loading portfolio history…</div>}
       {!loading && error && <div className="chart-placeholder error-text">History error: {error}</div>}

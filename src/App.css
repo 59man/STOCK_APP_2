@@ -1151,3 +1151,13 @@ input::placeholder { color: var(--faint); }
   .tz-select { max-width: 120px; }
   .header-actions { gap: 8px; }
 }
+
+/* Portfolio chart: asset-type filter chips */
+.chart-type-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.chart-type-chip {
+  background: none; border: 1px solid var(--border); color: var(--text-2);
+  border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; min-height: 28px;
+  transition: background 0.12s, color 0.12s;
+}
+.chart-type-chip:hover { background: var(--hover); color: var(--text); }
+.chart-type-chip.active { background: var(--invert-bg); border-color: var(--invert-bg); color: var(--invert-fg); font-weight: 600; }
