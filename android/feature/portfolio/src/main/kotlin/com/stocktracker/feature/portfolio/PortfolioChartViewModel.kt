@@ -6,7 +6,12 @@ import com.stocktracker.core.calc.ChartRange
 import com.stocktracker.core.calc.TickerChartHistory
 import com.stocktracker.core.calc.buildEffectiveHistories
 import com.stocktracker.core.calc.buildPortfolioChartData
+import com.stocktracker.core.calc.TYPE_ORDER
 import com.stocktracker.core.calc.convert
+import com.stocktracker.core.calc.effectiveTypeFilter
+import com.stocktracker.core.calc.filterPositionsByType
+import com.stocktracker.core.calc.toggleType
+import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.data.DivTaxOverrideRepository
 import com.stocktracker.core.data.DividendRepository
 import com.stocktracker.core.data.FxRateRepository
@@ -146,31 +151,36 @@ class PortfolioChartViewModel @Inject constructor(
         val rates: Map<String, Double>,
     )
 
-    private data class Prefs(val range: ChartRange, val displayCurrency: String)
+    private data class Prefs(val range: ChartRange, val displayCurrency: String, val chartTypes: Set<PositionType>)
 
     private val inputs1 = combine(positions, manualPrices, taxOverrides) { p, m, t -> Inputs1(p, m, t) }
     private val inputs2 = combine(quoteRepository.quotes, dividendRepository.dividends, fxRateRepository.rates) { q, d, r -> Inputs2(q, d, r) }
-    private val prefs = combine(range, settingsRepository.settings) { r, s -> Prefs(r, s.displayCurrency) }.distinctUntilChanged()
+    private val prefs = combine(range, settingsRepository.settings) { r, s -> Prefs(r, s.displayCurrency, s.chartTypes) }.distinctUntilChanged()
 
     // The series is computed without `view` — Total Return vs. Portfolio Value are two
     // projections of the same points, so toggling between them is combined in afterwards
     // and never re-runs buildPortfolioChartData.
     private val seriesState = combine(inputs1, inputs2, historyState, prefs) { in1, in2, hist, p ->
-        when {
+        // Histories are fetched for every holding; only the chart math sees the filtered set, so
+        // switching chips never refetches.
+        val heldTypes = TYPE_ORDER.filter { t -> in1.positions.any { it.type == t } }
+        val typeFilter = effectiveTypeFilter(p.chartTypes, heldTypes.toSet())
+        val chartPositions = filterPositionsByType(in1.positions, typeFilter)
+        val state = when {
             in1.positions.isEmpty() -> PortfolioChartUiState(range = p.range, displayCurrency = p.displayCurrency)
             hist.loading -> PortfolioChartUiState(range = p.range, loading = true, displayCurrency = p.displayCurrency)
             hist.error != null -> PortfolioChartUiState(range = p.range, error = hist.error, displayCurrency = p.displayCurrency)
             else -> {
-                val tickers = in1.positions.map { it.ticker }.distinct()
+                val tickers = chartPositions.map { it.ticker }.distinct()
                 val effectiveHistories = buildEffectiveHistories(
                     histories = hist.histories,
                     manualPrices = in1.manualPrices,
                     quotes = in2.quotes,
-                    positions = in1.positions,
+                    positions = chartPositions,
                     tickers = tickers,
                 )
                 val points = buildPortfolioChartData(
-                    positions = in1.positions,
+                    positions = chartPositions,
                     dividendsByTicker = in2.dividends,
                     effectiveHistories = effectiveHistories,
                     fxHistories = hist.fxHistories,
@@ -182,6 +192,7 @@ class PortfolioChartViewModel @Inject constructor(
                 PortfolioChartUiState(range = p.range, loading = false, points = points, displayCurrency = p.displayCurrency)
             }
         }
+        state.copy(heldTypes = heldTypes, typeFilter = typeFilter)
     }
         // Chart series math runs over every date × lot; never on the main thread.
         .flowOn(Dispatchers.Default)
@@ -193,6 +204,11 @@ class PortfolioChartViewModel @Inject constructor(
         when (action) {
             is PortfolioChartAction.SetRange -> range.value = action.range
             is PortfolioChartAction.SetView -> view.value = action.view
+            is PortfolioChartAction.ToggleType -> viewModelScope.launch {
+                val current = uiState.value.typeFilter
+                settingsRepository.setChartTypes(toggleType(current, action.type))
+            }
+            PortfolioChartAction.ClearTypes -> viewModelScope.launch { settingsRepository.setChartTypes(emptySet()) }
         }
     }
 }

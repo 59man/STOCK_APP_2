@@ -153,6 +153,25 @@ class LayoutMatrixTest(
         composeTestRule.assertNoClippedText()
     }
 
+    /** Every type held at once is the widest the chip row gets; it scrolls, labels must stay whole. */
+    @Test
+    fun chartTypeChips_keepTheirLabels() {
+        applyConfig()
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                TypeFilterChips(
+                    heldTypes = com.stocktracker.core.calc.TYPE_ORDER,
+                    filter = setOf(com.stocktracker.core.model.PositionType.ETF),
+                    onAll = {},
+                    onToggle = {},
+                )
+            }
+        }
+        composeTestRule.assertTextNotTruncated("All")
+        composeTestRule.assertTextNotTruncated("Stock")
+        composeTestRule.assertTextNotTruncated("ETF")
+    }
+
     @Test
     fun topBarActions_keepTheirLabels() {
         applyConfig()

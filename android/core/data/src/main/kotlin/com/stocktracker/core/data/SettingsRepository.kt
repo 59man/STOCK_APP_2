@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.model.SortField
 import com.stocktracker.core.model.SortOrder
 import kotlinx.coroutines.flow.map
@@ -29,6 +30,8 @@ data class AppSettings(
     val sortOrder: SortOrder = SortOrder(),
     /** IANA zone id, or empty to follow the device. See [effectiveZoneId]. */
     val timeZoneId: String = "",
+    /** Asset types the portfolio chart is filtered to; empty means All. */
+    val chartTypes: Set<PositionType> = emptySet(),
 )
 
 /**
@@ -62,6 +65,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         val SORT_FIELD = stringPreferencesKey("sort_field")
         val SORT_ASCENDING = booleanPreferencesKey("sort_ascending")
         val TIME_ZONE_ID = stringPreferencesKey("time_zone_id")
+        val CHART_TYPES = stringPreferencesKey("chart_types")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -80,6 +84,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
                 ascending = prefs[Keys.SORT_ASCENDING] ?: false,
             ),
             timeZoneId = prefs[Keys.TIME_ZONE_ID] ?: "",
+            // Comma-joined enum names; an unknown name (a type removed later) is dropped.
+            chartTypes = prefs[Keys.CHART_TYPES].orEmpty().split(',')
+                .mapNotNull { raw -> runCatching { PositionType.valueOf(raw) }.getOrNull() }
+                .toSet(),
         )
     }
 
@@ -89,6 +97,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
     suspend fun setLastSyncedAt(isoTimestamp: String): Unit { dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp } }
     suspend fun setThemeMode(mode: String): Unit { dataStore.edit { it[Keys.THEME_MODE] = mode } }
     suspend fun setTimeZoneId(id: String): Unit { dataStore.edit { it[Keys.TIME_ZONE_ID] = id } }
+    suspend fun setChartTypes(types: Set<PositionType>): Unit {
+        dataStore.edit { it[Keys.CHART_TYPES] = types.joinToString(",") { t -> t.name } }
+    }
     suspend fun setSortOrder(order: SortOrder): Unit {
         dataStore.edit {
             it[Keys.SORT_FIELD] = order.field.name

@@ -1,6 +1,8 @@
 package com.stocktracker.feature.portfolio
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,7 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stocktracker.core.calc.typeFilterLabel
+import com.stocktracker.core.calc.typeLabel
 import com.stocktracker.core.designsystem.StockTrackerColors
+import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.designsystem.chart.AreaLineChart
 import com.stocktracker.core.designsystem.chart.ChartSeries
 import com.stocktracker.core.designsystem.components.ToggleChip
@@ -47,8 +52,9 @@ fun PortfolioPnlChartCard(
             fontWeight = FontWeight.Bold,
         )
         Text(
-            if (uiState.view == PnlView.RETURN) "price P&L + net dividends (after withholding tax)"
-            else "capital in open positions vs. mark-to-market value",
+            (if (uiState.view == PnlView.RETURN) "price P&L + net dividends (after withholding tax)"
+            else "capital in open positions vs. mark-to-market value") +
+                (if (uiState.typeFilter.isNotEmpty()) " · " + typeFilterLabel(uiState.typeFilter) else ""),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -60,6 +66,14 @@ fun PortfolioPnlChartCard(
             ToggleChip("Portfolio Value", uiState.view == PnlView.VALUE) {
                 viewModel.onAction(PortfolioChartAction.SetView(PnlView.VALUE))
             }
+        }
+        if (uiState.heldTypes.size > 1) {
+            TypeFilterChips(
+                heldTypes = uiState.heldTypes,
+                filter = uiState.typeFilter,
+                onAll = { viewModel.onAction(PortfolioChartAction.ClearTypes) },
+                onToggle = { viewModel.onAction(PortfolioChartAction.ToggleType(it)) },
+            )
         }
         Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp)) {
             RangeTabs(selected = uiState.range) { viewModel.onAction(PortfolioChartAction.SetRange(it)) }
@@ -101,3 +115,20 @@ fun PortfolioPnlChartCard(
 
 
 private fun fmtCurrencyChart(v: Double, currency: String): String = String.format(Locale.US, "%,.0f %s", v, currency)
+
+/** All + one chip per held type; scrolls sideways rather than wrapping on a narrow phone. */
+@Composable
+internal fun TypeFilterChips(
+    heldTypes: List<PositionType>,
+    filter: Set<PositionType>,
+    onAll: () -> Unit,
+    onToggle: (PositionType) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ToggleChip("All", filter.isEmpty(), onClick = onAll)
+        heldTypes.forEach { t -> ToggleChip(typeLabel(t), t in filter) { onToggle(t) } }
+    }
+}
