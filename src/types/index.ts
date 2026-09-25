@@ -33,6 +33,8 @@ export interface PortfolioRow {
   lots: number           // number of separate purchase lots
   positions: Position[]  // individual lots, sorted by buyDate
   totalQuantity: number
+  /** Shares still held (open lots). totalQuantity also counts sold lots. */
+  openQuantity: number
   avgBuyPrice: number    // weighted average
   firstBuyDate: string
   currentPrice: number

@@ -925,7 +925,8 @@ fun PositionDetailRoute(
                 ManualPriceDialog(
                     portfolioId = uiState.activePortfolioId!!,
                     ticker = row.ticker,
-                    quantity = row.totalQuantity,
+                    // Shares still held: value = price × open quantity, sold lots excluded.
+                    quantity = row.openQuantity,
                     currentManual = if (row.priceIsManual) {
                         com.stocktracker.core.model.ManualPriceEntry(row.currentPrice, row.manualPriceDate ?: "")
                     } else {

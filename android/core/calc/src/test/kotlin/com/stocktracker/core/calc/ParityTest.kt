@@ -92,6 +92,7 @@ class ParityTest {
                 rows.sortedBy { it.ticker }.forEach { r ->
                     add(buildJsonObject {
                         put("ticker", r.ticker)
+                        put("openQuantity", r.openQuantity)
                         put("avgBuyPrice", r.avgBuyPrice)
                         put("currentPrice", r.currentPrice)
                         put("currentValue", r.currentValue)

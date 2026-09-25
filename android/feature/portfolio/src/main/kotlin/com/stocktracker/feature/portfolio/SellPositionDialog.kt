@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.stocktracker.core.designsystem.components.AppDialog
+import com.stocktracker.core.calc.isOpenLot
 import com.stocktracker.core.model.PortfolioRow
 import java.time.LocalDate
 import java.util.Locale
@@ -24,14 +25,19 @@ fun SellPositionDialog(row: PortfolioRow, onDismiss: () -> Unit, onConfirm: (sel
     var sellDate by remember { mutableStateOf(LocalDate.now().toString()) }
 
     val price = sellPrice.toDoubleOrNull() ?: 0.0
-    val estimatedPnl = if (price > 0) (price - row.avgBuyPrice) * row.totalQuantity else null
+    // Only the open lots are sold, so the preview uses their quantity and average buy price —
+    // the row-level figures also count lots sold earlier. Mirrors SellPositionModal.
+    val openLots = row.positions.filter(::isOpenLot)
+    val openQty = openLots.sumOf { it.quantity }
+    val openAvgBuy = if (openQty > 0) openLots.sumOf { it.buyPrice * it.quantity } / openQty else 0.0
+    val estimatedPnl = if (price > 0 && openQty > 0) (price - openAvgBuy) * openQty else null
 
     AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Sell ${row.ticker}") },
         text = {
             Column {
-                Text("${row.lots} lot(s), ${row.totalQuantity} shares", style = MaterialTheme.typography.bodySmall)
+                Text("${openLots.size} lot(s), ${formatQty(openQty)} shares", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(sellPrice, { sellPrice = it }, label = { Text("Sell price") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(sellDate, { sellDate = it }, label = { Text("Sell date (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 estimatedPnl?.let { pnl ->

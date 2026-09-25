@@ -138,6 +138,7 @@ export function deriveRow(i: DeriveRowInput): PortfolioRow {
     lots: lots.length,
     positions: [...lots].sort((a, b) => a.buyDate.localeCompare(b.buyDate)),
     totalQuantity: totalQty,
+    openQuantity: openQty,
     avgBuyPrice,
     firstBuyDate,
     currentPrice,
