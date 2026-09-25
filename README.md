@@ -15,9 +15,16 @@ A self-hosted portfolio tracker for Czech and international stocks, ETFs, funds,
 - **Returns.** Shows realized and unrealized P&L, net dividends after per-country withholding tax (editable per payout), and IRR per position and per portfolio.
 - **Full position lifecycle.** Buy, sell partially or fully, record past closed positions, and edit individual lots.
 - **Today's change that means today.** The figure resets at midnight in *your* time zone, not at the exchange's previous close, and includes the currency's own move. On a closed market it reads `0.00` and says why, rather than quietly showing Friday's number.
-- **Charts.** Portfolio total return and value over time (converted at each day's historical FX rate), distribution pies, and a price chart per position.
+- **Charts.** Portfolio total return and value over time (converted at each day's historical FX rate), distribution pies, and a price chart per position. Chips narrow the chart to stocks, ETFs, funds, commodities or crypto.
+- **Benchmark.** A dashed MSCI World or S&P 500 line shows what the same buys and sells, on the same dates, would have earned in the index.
 
-![Portfolio total return chart over the full holding period, with cost-basis, current-value and total-return distribution pies below it](docs/screenshots/web-charts.png)
+![Portfolio total return chart with a dashed MSCI World benchmark line and type-filter chips, with cost-basis, current-value and total-return distribution pies below it](docs/screenshots/web-charts.png)
+
+- **Czech 3-year time test.** Realized gains per year split into taxable and exempt (in CZK, at buy- and sell-date rates), a flag for years where taxable sales stayed within 100,000 CZK, and the date each open lot becomes tax-free. An estimate, not tax advice.
+- **Dividend forecast.** Expected net dividends for the next 12 months, with a calendar of expected payments, based on the last 12 months repeated on the shares you hold now.
+
+![Czech tax panel: 2025 realized gains split into taxable and exempt, a ≤ 100k proceeds badge, and the date each open lot passes the 3-year test](docs/screenshots/web-tax.png)
+
 - **Import.** Reads XTB, Fio banka, Revolut, Trading 212, and Degiro statements, plus any CSV or XLSX through a column-mapping wizard. Sells are matched FIFO, and tickers and types are resolved from ISINs automatically.
 - **Export.** One JSON backup covers positions, manual prices, and tax overrides.
 - **Durable storage.** Writes are atomic, and the server keeps daily backups for the last 7 days. The Docker image includes a healthcheck.
@@ -29,8 +36,13 @@ The Android app is native Kotlin + Jetpack Compose.
 <table>
 <tr>
 <td width="33%"><img alt="Android position list: one card per holding with its logo, type and currency badges, value, today's change and total return" src="docs/screenshots/android-portfolio.png"></td>
+<td width="33%"><img alt="Android insights tab: portfolio value, today's change, total return, price P&amp;L, net dividends, cost basis and IRR" src="docs/screenshots/android-insights.png"></td>
+<td width="33%"><img alt="Android total-return chart with type-filter chips and a dashed MSCI World benchmark line" src="docs/screenshots/android-chart.png"></td>
+</tr>
+<tr>
+<td width="33%"><img alt="Android dividend forecast for the next 12 months and the Czech 3-year tax card" src="docs/screenshots/android-tax.png"></td>
 <td width="33%"><img alt="Android instrument detail: market hours shown in the user's own time zone, an essentials grid, and 1D/1W/1M/3M return chips" src="docs/screenshots/android-instrument.png"></td>
-<td width="33%"><img alt="Android insights tab: portfolio value, today's change, total return, price P&amp;L, net dividends, cost basis and IRR, above the total-return chart" src="docs/screenshots/android-insights.png"></td>
+<td width="33%"></td>
 </tr>
 </table>
 
@@ -39,6 +51,9 @@ The Android app is native Kotlin + Jetpack Compose.
 - **Statement import on the phone.** Handles all five broker formats.
 - **Conflict-safe sync.** Edits made offline on both devices are merged. If the same record changed in both places, the app asks you which version to keep.
 - **Instrument detail.** Market hours drawn in your own time zone, an essentials grid (exchange, ISIN, 52-week range, distribution type, fees), period returns, and the fund or company description.
+- **Same insights as the web.** Type filter, benchmark line, Czech tax card and dividend forecast. A shared test fixture runs one portfolio through both apps' calculations and fails if any figure differs by more than 0.01.
+- **Price alerts.** A notification when a price crosses a level you set, checked every 15 minutes, once per crossing.
+- **Home-screen widget.** Portfolio value and today's change, as the app last computed them.
 
 ## Quick start
 

@@ -343,11 +343,14 @@ export function PortfolioTable({
 
   const startEdit = (ticker: string, prefill: string) => { setEditingTicker(ticker); setEditValue(prefill); setEditError(null) }
   const cancelEdit = () => { setEditingTicker(null); setEditValue(''); setEditError(null) }
-  const commitEdit = (ticker: string, totalQty: number) => {
+  // Value ÷ shares still held: current value is price × open quantity, so dividing by every
+  // share ever bought would understate the price of a partly sold position.
+  const commitEdit = (ticker: string, openQty: number) => {
     const raw = editValue.replace(/\s/g, '').replace(',', '.')
     const totalValue = parseFloat(raw)
     if (!raw || !isFinite(totalValue) || totalValue <= 0) { setEditError('Enter a valid positive number'); return }
-    onSetManualPrice(ticker, totalValue / totalQty)
+    if (openQty <= 0) { setEditError('No open shares to price'); return }
+    onSetManualPrice(ticker, totalValue / openQty)
     cancelEdit()
   }
 
@@ -462,7 +465,7 @@ export function PortfolioTable({
     switch (key) {
       case 'ticker': return r.ticker
       case 'type': return r.type
-      case 'qty': return r.totalQuantity
+      case 'qty': return r.openQuantity
       case 'avgBuy': return cv(r.avgBuyPrice, r.currency)
       case 'firstBuy': return r.firstBuyDate
       case 'lots': return r.lots
@@ -680,11 +683,11 @@ export function PortfolioTable({
                     title="Enter current total position value from your bank report"
                     onChange={(e) => { setEditValue(e.target.value); setEditError(null) }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitEdit(r.ticker, r.totalQuantity)
+                      if (e.key === 'Enter') commitEdit(r.ticker, r.openQuantity)
                       if (e.key === 'Escape') cancelEdit()
                     }}
                   />
-                  <button className="price-edit-ok" onClick={() => commitEdit(r.ticker, r.totalQuantity)}>✓</button>
+                  <button className="price-edit-ok" onClick={() => commitEdit(r.ticker, r.openQuantity)}>✓</button>
                   <button className="price-edit-cancel" onClick={cancelEdit}>✕</button>
                   {editError && <span className="price-edit-err-msg">{editError}</span>}
                 </span>
@@ -797,7 +800,7 @@ export function PortfolioTable({
                           )
 
                         case 'qty':
-                          return <td key={col.key} className={cls}>{fmtQty(r.totalQuantity)}</td>
+                          return <td key={col.key} className={cls}>{fmtQty(r.openQuantity)}</td>
 
                         case 'avgBuy':
                           return <td key={col.key} className={cls}>{fmtPrice(cv(r.avgBuyPrice, r.currency), displayCurrency)}</td>

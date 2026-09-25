@@ -62,6 +62,7 @@ function compute(displayCurrency: string) {
   return {
     rows: [...rows].sort((a, b) => a.ticker.localeCompare(b.ticker)).map((r) => ({
       ticker: r.ticker,
+      openQuantity: r.openQuantity,
       avgBuyPrice: r.avgBuyPrice,
       currentPrice: r.currentPrice,
       currentValue: r.currentValue,

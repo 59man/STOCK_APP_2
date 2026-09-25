@@ -138,6 +138,7 @@ fun deriveRow(
         lots = lots.size,
         positions = lots.sortedBy { it.buyDate },
         totalQuantity = totalQty,
+        openQuantity = openQty,
         avgBuyPrice = avgBuyPrice,
         firstBuyDate = firstBuyDate,
         currentPrice = currentPrice,

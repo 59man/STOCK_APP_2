@@ -434,8 +434,12 @@ body {
 }
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 1px;
+}
+/* Eight cards: one row of 8 on wide screens, two rows of 4 below. */
+@media (max-width: 1200px) {
+  .summary-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .summary-card {
   background: var(--surface);
@@ -966,7 +970,7 @@ input::placeholder { color: var(--faint); }
   .header h1 { font-size: 14px; }
   .header-inner, .main { padding-left: 12px; padding-right: 12px; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
-  .summary-card:last-child { grid-column: 1 / -1; }
+  .summary-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .summary-card { padding: 10px 12px; align-items: flex-start; }
   .summary-value { font-size: 13px; }
   .summary-label { font-size: 9px; }
@@ -1174,8 +1178,13 @@ input::placeholder { color: var(--faint); }
 .tax-panel summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .tax-table-wrap { overflow-x: auto; margin-top: 12px; }
 .tax-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.tax-table th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.tax-table th { color: var(--muted); font-weight: 500; padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .tax-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; font-family: var(--mono); }
+/* Header and cells share one alignment per column: text left, amounts right. The global
+   th/td rules would otherwise pull headers and values to opposite sides. */
+.tax-table :is(th, td) { text-align: right; }
+.tax-table :is(th, td):first-child { text-align: left; }
+.div-calendar .tax-table :is(th, td):nth-child(2) { text-align: left; }
 .tax-subtitle { margin-top: 14px; font-size: 12px; color: var(--text-2); }
 .tax-upcoming { list-style: none; padding: 0; margin: 6px 0 0; font-size: 13px; }
 .tax-upcoming li { padding: 3px 0; }

@@ -17,6 +17,8 @@ data class PortfolioRow(
     val lots: Int,
     val positions: List<Position>,
     val totalQuantity: Double,
+    /** Shares still held (open lots). [totalQuantity] also counts sold lots. */
+    val openQuantity: Double = totalQuantity,
     val avgBuyPrice: Double,
     val firstBuyDate: String,
     val currentPrice: Double,

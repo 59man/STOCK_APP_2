@@ -92,7 +92,9 @@ async function fetchDividendChart(ticker: string, interval: '1wk' | '1d'): Promi
   // this resolves to for the rest of the session, so swallowing a 429/500 would
   // silently pin the ticker at "no dividends" with no retry. Only errors are
   // uncached; a genuinely empty but successful response (an accumulating ETF)
-  // still caches, as it should.
+  // still caches, as it should. A 404 is the exception: the symbol does not exist
+  // on Yahoo (XAU), so a retry cannot succeed and "no Yahoo dividends" is the answer.
+  if (res.status === 404) return { currency: undefined, bars: 0, events: [] }
   if (!res.ok) throw new Error(`Yahoo dividends ${res.status}`)
   const result = (await res.json())?.chart?.result?.[0]
   const raw = result?.events?.dividends

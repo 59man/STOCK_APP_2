@@ -86,16 +86,22 @@ object DividendClient : DividendSource {
             "?${yahooDividendQuery(interval)}"
         val request = Request.Builder().url(url).header("User-Agent", BROWSER_USER_AGENT).build()
         client.newCall(request).execute().use { response ->
-            // Throw rather than fall through with an empty list: DividendRepository caches
-            // whatever this returns for the rest of the process, so swallowing a 429/500
-            // would silently pin the ticker at "no dividends" with no retry. Only errors
-            // are uncached; a genuinely empty but successful response (an accumulating
-            // ETF) still caches, as it should.
-            if (!response.isSuccessful) throw Exception("Yahoo dividends ${response.code}")
-            val body = response.body?.string() ?: throw Exception("Yahoo dividends: empty body")
-            return parseDividendChart(body)
+            return dividendChartFromResponse(response.code, response.body?.string())
         }
     }
+}
+
+/**
+ * Throw rather than fall through with an empty list: DividendRepository caches whatever
+ * this returns for the rest of the process, so swallowing a 429/500 would silently pin the
+ * ticker at "no dividends" with no retry. Only errors are uncached; a genuinely empty but
+ * successful response (an accumulating ETF) still caches, as it should. A 404 is the
+ * exception: the symbol does not exist on Yahoo (XAU), so a retry cannot succeed.
+ */
+internal fun dividendChartFromResponse(code: Int, body: String?): DividendChart {
+    if (code == 404) return DividendChart(bars = 0, events = emptyList())
+    if (code !in 200..299) throw Exception("Yahoo dividends $code")
+    return parseDividendChart(body ?: throw Exception("Yahoo dividends: empty body"))
 }
 
 /** [bars] is the returned bar count — one dividend per bar means the interval is saturating. */

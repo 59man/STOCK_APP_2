@@ -48,6 +48,47 @@ for (const vp of VIEWPORTS) {
       )
       expect(clipped, 'elements with clipped text').toEqual([])
     })
+
+    test('the summary cards fill every row they start', async ({ page }) => {
+      // A card added without updating the grid's column count wraps alone onto a row of
+      // empty cells — the Est. Dividends card did exactly that at 1440 px.
+      await settle(page)
+      const rows = await page.evaluate(() => {
+        const grid = document.querySelector('.summary-grid')
+        if (!grid) return []
+        const gridRight = Math.round(grid.getBoundingClientRect().right)
+        const byTop = new Map<number, number>()
+        for (const card of grid.querySelectorAll('.summary-card')) {
+          const r = card.getBoundingClientRect()
+          byTop.set(Math.round(r.top), Math.max(byTop.get(Math.round(r.top)) ?? 0, Math.round(r.right)))
+        }
+        return [...byTop.values()].map((right) => gridRight - right)
+      })
+      for (const gap of rows) expect(gap, 'a summary row ends short of the grid edge').toBeLessThanOrEqual(2)
+    })
+
+    test('panel table headers sit on the same side as their values', async ({ page }) => {
+      // The tax and dividend-calendar tables inherited the global th/td alignment, which put
+      // a left-aligned header over a right-aligned column of amounts.
+      await settle(page)
+      const mismatched = await page.evaluate(() => {
+        document.querySelectorAll('details').forEach((d) => (d.open = true))
+        const out: string[] = []
+        for (const table of document.querySelectorAll('.tax-table')) {
+          const heads = [...table.querySelectorAll('thead th')]
+          const cells = [...(table.querySelector('tbody tr')?.children ?? [])]
+          heads.forEach((th, i) => {
+            const td = cells[i]
+            if (!td || !th.textContent?.trim()) return
+            const a = getComputedStyle(th).textAlign
+            const b = getComputedStyle(td).textAlign
+            if (a !== b) out.push(`${th.textContent}: header ${a}, cells ${b}`)
+          })
+        }
+        return out
+      })
+      expect(mismatched).toEqual([])
+    })
   })
 }
 
