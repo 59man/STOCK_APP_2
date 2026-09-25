@@ -209,6 +209,25 @@ class LayoutMatrixTest(
     }
 
     @Test
+    fun priceAlerts_areNeverClipped() {
+        applyConfig(heightDp = 1200)
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                PriceAlertsContent(
+                    alerts = listOf(
+                        com.stocktracker.core.model.PriceAlert("a", "EXUS.DE", true, 12_345_678.9, "CZK", armed = false),
+                        com.stocktracker.core.model.PriceAlert("b", "EXUS.DE", false, 31.5, "EUR", armed = true),
+                    ),
+                    onAdd = {},
+                    onDelete = {},
+                )
+            }
+        }
+        composeTestRule.assertNoClippedText()
+        composeTestRule.assertTextNotTruncated("Remove")
+    }
+
+    @Test
     fun topBarActions_keepTheirLabels() {
         applyConfig()
         composeTestRule.setContent {

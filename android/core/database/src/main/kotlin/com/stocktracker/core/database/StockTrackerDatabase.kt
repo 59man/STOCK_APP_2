@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncStateEntity::class,
         InstrumentProfileEntity::class,
         DailyAnchorEntity::class,
+        PriceAlertEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class StockTrackerDatabase : RoomDatabase() {
@@ -26,6 +27,7 @@ abstract class StockTrackerDatabase : RoomDatabase() {
     abstract fun syncStateDao(): SyncStateDao
     abstract fun instrumentProfileDao(): InstrumentProfileDao
     abstract fun dailyAnchorDao(): DailyAnchorDao
+    abstract fun priceAlertDao(): PriceAlertDao
 }
 
 /**
@@ -72,6 +74,27 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
                 `price` REAL,
                 `lastTradedAt` INTEGER,
                 PRIMARY KEY(`ticker`, `localDate`)
+            )
+            """.trimIndent(),
+        )
+    }
+}
+
+/** Adds device-local price alerts. One new table, nothing else touched. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `price_alerts` (
+                `id` TEXT NOT NULL,
+                `ticker` TEXT NOT NULL,
+                `above` INTEGER NOT NULL,
+                `threshold` REAL NOT NULL,
+                `currency` TEXT NOT NULL,
+                `enabled` INTEGER NOT NULL,
+                `armed` INTEGER NOT NULL,
+                `lastTriggeredAt` INTEGER,
+                PRIMARY KEY(`id`)
             )
             """.trimIndent(),
         )

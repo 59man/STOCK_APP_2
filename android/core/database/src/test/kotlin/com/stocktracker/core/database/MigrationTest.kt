@@ -46,6 +46,40 @@ class MigrationTest {
     }
 
     @Test
+    fun migrate3To4_keepsExistingRowsAndAddsTheAlertTable() {
+        helper.createDatabase(TEST_DB + "-v3", 3).use { db ->
+            db.execSQL("INSERT INTO portfolios (id, name) VALUES ('p4', 'Fourth')")
+            db.execSQL("INSERT INTO daily_anchors (ticker, localDate, price) VALUES ('AAPL', '2026-09-25', 2.5)")
+        }
+        val db = helper.runMigrationsAndValidate(TEST_DB + "-v3", 4, true, MIGRATION_3_4)
+        db.query("SELECT name FROM portfolios WHERE id = 'p4'").use { cursor ->
+            assertTrue("the portfolio row did not survive the migration", cursor.moveToFirst())
+            assertEquals("Fourth", cursor.getString(0))
+        }
+        db.query("SELECT price FROM daily_anchors WHERE ticker = 'AAPL'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(2.5, cursor.getDouble(0), 1e-9)
+        }
+        db.execSQL("INSERT INTO price_alerts (id, ticker, above, threshold, currency, enabled, armed) VALUES ('a', 'AAPL', 1, 300.0, 'USD', 1, 1)")
+        db.query("SELECT threshold FROM price_alerts").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(300.0, cursor.getDouble(0), 1e-9)
+        }
+    }
+
+    @Test
+    fun migrate1To4_runsEveryMigrationInSequence() {
+        helper.createDatabase(TEST_DB + "-chain4", 1).use { db ->
+            db.execSQL("INSERT INTO portfolios (id, name) VALUES ('p5', 'Chained4')")
+        }
+        val db = helper.runMigrationsAndValidate(TEST_DB + "-chain4", 4, true, MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        db.query("SELECT name FROM portfolios WHERE id = 'p5'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Chained4", cursor.getString(0))
+        }
+    }
+
+    @Test
     fun migrate1To3_runsBothMigrationsInSequence() {
         helper.createDatabase(TEST_DB + "-chain", 1).use { db ->
             db.execSQL("INSERT INTO portfolios (id, name) VALUES ('p3', 'Chained')")

@@ -13,6 +13,8 @@ import com.stocktracker.core.network.InstrumentProfileSource
 import com.stocktracker.core.database.DailyAnchorDao
 import com.stocktracker.core.database.MIGRATION_1_2
 import com.stocktracker.core.database.MIGRATION_2_3
+import com.stocktracker.core.database.MIGRATION_3_4
+import com.stocktracker.core.database.PriceAlertDao
 import com.stocktracker.core.database.StockTrackerDatabase
 import com.stocktracker.core.database.SyncStateDao
 import com.stocktracker.core.network.DeviceApi
@@ -40,7 +42,7 @@ object DataModule {
         Room.databaseBuilder(context, StockTrackerDatabase::class.java, "stock-tracker.db")
             // Real migrations, never fallbackToDestructiveMigration: this database is the
             // offline-first source of truth and holds unresolved sync conflicts.
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides fun providePortfolioDao(db: StockTrackerDatabase): PortfolioDao = db.portfolioDao()
@@ -48,6 +50,7 @@ object DataModule {
     @Provides fun provideManualPriceDao(db: StockTrackerDatabase): ManualPriceDao = db.manualPriceDao()
     @Provides fun provideInstrumentProfileDao(db: StockTrackerDatabase): InstrumentProfileDao = db.instrumentProfileDao()
     @Provides fun provideDailyAnchorDao(db: StockTrackerDatabase): DailyAnchorDao = db.dailyAnchorDao()
+    @Provides fun providePriceAlertDao(db: StockTrackerDatabase): PriceAlertDao = db.priceAlertDao()
 
     /**
      * The other market-data clients are Kotlin objects called directly; this one is a class so

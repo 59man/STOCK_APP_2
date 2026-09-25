@@ -12,8 +12,8 @@ import androidx.room.Query
  * Cached in Room rather than memory because an anchor is fixed for the whole day: a cold start
  * in the morning would otherwise refetch every holding's anchor for no new information.
  *
- * `price` null means "could not be resolved" and is cached deliberately, so a ticker Yahoo does
- * not carry is not retried on every refresh.
+ * `price` null means Yahoo definitively does not carry the ticker (HTTP 404) and is cached
+ * deliberately so it is not retried on every refresh. Transient failures are never written here.
  */
 @Entity(tableName = "daily_anchors", primaryKeys = ["ticker", "localDate"])
 data class DailyAnchorEntity(

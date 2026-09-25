@@ -863,6 +863,9 @@ fun PositionDetailRoute(
                     )
                     AppButton(text = "✎ Edit ticker/name/ISIN", onClick = { editTickerTarget = true })
                 }
+                if (!row.isClosed) {
+                    Column(Modifier.fillMaxWidth().padding(top = Spacing.md)) { PriceAlertsSection(row) }
+                }
                 if (row.positions.isNotEmpty()) {
                     Column(Modifier.fillMaxWidth().padding(top = Spacing.md)) {
                         LotListSection(positions = row.positions, onEdit = { lot -> editTarget = lot })
