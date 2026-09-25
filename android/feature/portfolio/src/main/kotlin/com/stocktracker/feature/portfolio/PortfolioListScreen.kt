@@ -700,7 +700,7 @@ internal fun dailyChangeNote(row: PortfolioRow): String? = when (row.dailyChange
     else -> null
 }
 
-private fun typeBadgeLabel(type: PositionType): String = when (type) {
+internal fun typeBadgeLabel(type: PositionType): String = when (type) {
     PositionType.STOCK -> "Stock"
     PositionType.ETF -> "ETF"
     PositionType.FUND -> "Fund"
@@ -822,6 +822,12 @@ fun PositionDetailRoute(
                         ),
                     )
                 }
+                PositionFactsSection(
+                    row = row,
+                    displayCurrency = uiState.displayCurrency,
+                    rates = uiState.rates,
+                    modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
+                )
                 if (!row.isClosed) {
                     Row(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm), horizontalArrangement = Arrangement.End) {
                         AppButton(

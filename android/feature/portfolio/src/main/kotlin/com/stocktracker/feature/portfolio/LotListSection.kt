@@ -65,5 +65,5 @@ private fun LotField(label: String, value: String) {
     }
 }
 
-private fun formatQty(value: Double): String =
+internal fun formatQty(value: Double): String =
     if (value == value.toLong().toDouble()) value.toLong().toString() else String.format(Locale.US, "%.4f", value)

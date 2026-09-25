@@ -133,6 +133,26 @@ class LayoutMatrixTest(
         composeTestRule.assertNoClippedText()
     }
 
+    /** Fractional crypto-sized quantities, a big average price, two brokers, a sold lot. */
+    @Test
+    fun positionFacts_areNeverClipped() {
+        applyConfig(heightDp = 1600)
+        val lots = listOf(
+            fakePosition(id = "a", quantity = 1234.5678, buyPrice = 98_765.43, buyDate = "2021-03-04", broker = "Interactive Brokers", isin = "IE00BK5BQT80"),
+            fakePosition(id = "b", quantity = 0.1234, buyPrice = 12.0, buyDate = "2022-01-01", broker = "Trading 212", sellPrice = 20.0, sellDate = "2024-01-01"),
+        )
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                PositionFactsSection(
+                    row = fakeRow(positions = lots, costBasis = 1_234_567.0, totalReturn = -98_765.43),
+                    displayCurrency = "CZK",
+                    rates = mapOf("CZK" to 1.0, "USD" to 23.0),
+                )
+            }
+        }
+        composeTestRule.assertNoClippedText()
+    }
+
     @Test
     fun topBarActions_keepTheirLabels() {
         applyConfig()
