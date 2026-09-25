@@ -1180,3 +1180,9 @@ input::placeholder { color: var(--faint); }
 .tax-upcoming { list-style: none; padding: 0; margin: 6px 0 0; font-size: 13px; }
 .tax-upcoming li { padding: 3px 0; }
 .tax-footnote { margin: 12px 0 0; font-size: 11px; color: var(--muted); }
+
+/* Portfolio chart: benchmark picker */
+.bench-select {
+  background: var(--surface2); color: var(--text-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; min-height: 28px;
+}

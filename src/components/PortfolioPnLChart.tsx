@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import {
-  AreaChart, Area, LineChart, Line, Legend, XAxis, YAxis,
+  Area, ComposedChart, LineChart, Line, Legend, XAxis, YAxis,
   CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer,
 } from 'recharts'
 import { Position, Quote } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { FX_CONVERTED_SET } from '../data/fxConvertedTickers'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
+import { BENCHMARKS, benchmarkSeries, type BenchmarkKey } from '../utils/benchmark'
 import {
   fetchFxHistory, fetchYahooHistory, fxHistCache, histCurrency, interpolateDaily, makeConvertAt, priceAt,
   yahooHistCurrency, type TickerHistory,
@@ -17,6 +18,7 @@ import {
 } from '../utils/typeFilter'
 
 interface ChartPoint {
+  date: string
   label: string
   pnl: number
   costBasis: number
@@ -101,6 +103,28 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     setTypes(next)
     try { localStorage.setItem('chart_types_portfolio', JSON.stringify(next)) } catch { /* private mode */ }
   }
+
+  const [benchmark, setBenchmark] = useState<BenchmarkKey>(() => {
+    try {
+      const v = localStorage.getItem('chart_benchmark_portfolio')
+      return v === 'msci' || v === 'sp500' ? v : 'none'
+    } catch { return 'none' }
+  })
+  const handleBenchmarkChange = (b: BenchmarkKey) => {
+    setBenchmark(b)
+    try { localStorage.setItem('chart_benchmark_portfolio', b) } catch { /* private mode */ }
+  }
+  const [benchHistory, setBenchHistory] = useState<{ key: BenchmarkKey; hist: TickerHistory } | null>(null)
+  useEffect(() => {
+    if (benchmark === 'none') return
+    let cancelled = false
+    // Always the full window: the line is cumulative from the first buy even when a shorter
+    // range is on screen, so it needs prices at every past buy date.
+    fetchYahooHistory(BENCHMARKS[benchmark].ticker, 'max')
+      .then((hist) => { if (!cancelled) setBenchHistory({ key: benchmark, hist }) })
+      .catch((e) => console.warn('[benchmark] history failed:', e instanceof Error ? e.message : e))
+    return () => { cancelled = true }
+  }, [benchmark])
 
   const [histories, setHistories] = useState<Map<string, TickerHistory>>(new Map())
   const [fxHistories, setFxHistories] = useState<Map<string, TickerHistory>>(new Map())
@@ -300,6 +324,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       })
 
       return {
+        date,
         label: new Date(date).toLocaleDateString('en-US', {
           month: 'short', day: 'numeric',
           year: (range === 'All' || range === '5Y' || range === '3Y') ? '2-digit' : undefined,
@@ -311,9 +336,25 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
     })
   }, [effectiveHistories, fxHistories, chartPositions, dividends, range, firstBuyDate, taxOverrides, displayCurrency, convert])
 
+  const benchValues = useMemo(() => {
+    if (benchmark === 'none' || benchHistory?.key !== benchmark || chartData.length === 0) return null
+    const ticker = BENCHMARKS[benchmark].ticker
+    const series = benchmarkSeries(
+      chartPositions, chartData.map((d) => d.date), benchHistory.hist,
+      yahooHistCurrency.get(ticker.toUpperCase()) ?? 'USD', displayCurrency, makeConvertAt(fxHistories, convert),
+    )
+    return series.length === chartData.length ? series.map(Math.round) : null
+  }, [benchmark, benchHistory, chartData, chartPositions, fxHistories, displayCurrency, convert])
+  const returnData = useMemo(
+    () => (benchValues ? chartData.map((d, i) => ({ ...d, bench: benchValues[i] })) : chartData),
+    [chartData, benchValues],
+  )
+  const benchLabel = benchmark === 'none' ? '' : BENCHMARKS[benchmark].label
+
   const values = chartData.map((d) => d.pnl)
-  const minVal = values.length ? Math.min(...values) : 0
-  const maxVal = values.length ? Math.max(...values) : 0
+  const domainValues = benchValues ? [...values, ...benchValues] : values
+  const minVal = domainValues.length ? Math.min(...domainValues) : 0
+  const maxVal = domainValues.length ? Math.max(...domainValues) : 0
   const finalPnl = values[values.length - 1] ?? 0
   const color = finalPnl >= 0 ? '#22c55e' : '#ef4444'
   const pad = Math.max(Math.abs(maxVal), Math.abs(minVal)) * 0.08 || 1000
@@ -340,6 +381,18 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
             <span className={finalPnl >= 0 ? 'gain' : 'loss'} style={{ fontSize: 13, fontWeight: 600 }}>
               {fmtCurrency(finalPnl, displayCurrency)}
             </span>
+          )}
+          {view === 'return' && (
+            <select
+              className="bench-select"
+              aria-label="Benchmark"
+              value={benchmark}
+              onChange={(e) => handleBenchmarkChange(e.target.value as BenchmarkKey)}
+            >
+              <option value="none">No benchmark</option>
+              <option value="msci">vs MSCI World</option>
+              <option value="sp500">vs S&amp;P 500</option>
+            </select>
           )}
           <div className="pie-group-toggle">
             <button
@@ -396,7 +449,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
       {!loading && !error && chartData.length === 0 && <div className="chart-placeholder">No data for this range.</div>}
       {!loading && !error && chartData.length > 0 && view === 'return' && (
         <ResponsiveContainer width="100%" height={260}>
-          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+          <ComposedChart data={returnData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
@@ -427,17 +480,30 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
             <Tooltip
               contentStyle={{ background: '#1e1e2e', border: '1px solid #333', borderRadius: 6 }}
               labelStyle={{ color: '#aaa' }}
-              formatter={(v: number) => [fmtCurrency(v, displayCurrency), 'Total Return']}
+              formatter={(v: number, name: string) => [fmtCurrency(v, displayCurrency), name]}
             />
             <Area
               type="monotone"
               dataKey="pnl"
+              name="Total Return"
               stroke={color}
               strokeWidth={2}
               fill="url(#pnlGrad)"
               dot={false}
             />
-          </AreaChart>
+            {benchValues && (
+              <Line
+                type="monotone"
+                dataKey="bench"
+                name={`${benchLabel} (same cash flows, excl. dividends)`}
+                stroke="#94a3b8"
+                strokeWidth={1.5}
+                strokeDasharray="5 4"
+                dot={false}
+              />
+            )}
+            {benchValues && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          </ComposedChart>
         </ResponsiveContainer>
       )}
       {!loading && !error && chartData.length > 0 && view === 'value' && (
