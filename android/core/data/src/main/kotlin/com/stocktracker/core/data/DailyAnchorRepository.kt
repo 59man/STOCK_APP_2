@@ -5,6 +5,7 @@ import com.stocktracker.core.calc.localMidnightEpoch
 import com.stocktracker.core.database.DailyAnchorDao
 import com.stocktracker.core.database.DailyAnchorEntity
 import com.stocktracker.core.network.AnchorClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -56,9 +57,8 @@ class DailyAnchorRepository @Inject constructor(
                     } else {
                         // A transient failure is neither persisted nor kept in memory, so the
                         // next refresh retries it; the row shows the fallback meanwhile.
-                        val resolved = runCatching { AnchorClient.resolve(ticker, midnight) }
-                            .onFailure { Log.w(TAG, "anchor $key not resolved, will retry: ${it.message}") }
-                            .getOrNull() ?: return@async
+                        val resolved = resolveOrNull("anchor $key") { AnchorClient.resolve(ticker, midnight) }
+                            ?: return@async
                         val value = Anchor(resolved.price, resolved.lastTradedAt)
                         dao.upsert(DailyAnchorEntity(key, today, value.price, value.lastTradedAt))
                         value
@@ -75,11 +75,12 @@ class DailyAnchorRepository @Inject constructor(
                     val rate = if (cached != null) {
                         cached.price
                     } else {
-                        val result = runCatching {
-                            AnchorClient.resolveFx(currency, displayCurrency, midnight)
-                        }.onFailure { Log.w(TAG, "fx anchor $key not resolved, will retry: ${it.message}") }
-                        if (result.isFailure) return@async
-                        val resolved = result.getOrNull()
+                        // Boxed so a legitimately null rate (a pair Yahoo lacks, cacheable) is told
+                        // apart from a failed fetch (not cached, retried next refresh).
+                        val outcome = resolveOrNull("fx anchor $key") {
+                            listOf(AnchorClient.resolveFx(currency, displayCurrency, midnight))
+                        } ?: return@async
+                        val resolved = outcome.single()
                         dao.upsert(DailyAnchorEntity(key, today, resolved, null))
                         resolved
                     }
@@ -88,4 +89,19 @@ class DailyAnchorRepository @Inject constructor(
             }.awaitAll()
         }
     }
+}
+
+/**
+ * Runs [block], returning null on failure so the caller skips caching and the next refresh
+ * retries. Cancellation is rethrown, never treated as a failed fetch: collectLatest cancels an
+ * in-flight refresh whenever quotes update, and caching that as a miss once pinned rows to the
+ * fallback for the rest of the day.
+ */
+private suspend fun <T> resolveOrNull(what: String, block: suspend () -> T): T? = try {
+    block()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Exception) {
+    Log.w(TAG, "$what not resolved, will retry: ${e.message}")
+    null
 }
