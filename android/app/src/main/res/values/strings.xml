@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Stock Tracker</string>
+    <string name="widget_description">Portfolio value and today\'s change</string>
 </resources>

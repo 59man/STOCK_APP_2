@@ -43,6 +43,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.glance.appwidget)
     implementation(project(":core:model"))
     implementation(project(":core:calc"))
     implementation(project(":core:database"))

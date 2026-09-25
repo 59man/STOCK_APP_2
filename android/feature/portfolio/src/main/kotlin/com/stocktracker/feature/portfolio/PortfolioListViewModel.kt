@@ -3,6 +3,14 @@ package com.stocktracker.feature.portfolio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stocktracker.core.calc.isOpenLot
+import com.stocktracker.core.calc.portfolioDailyChange
+import com.stocktracker.core.data.widget.WidgetSnapshot
+import com.stocktracker.core.data.widget.WidgetSnapshotRepository
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.stocktracker.core.calc.computePortfolioIrr
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.calc.deriveRow
@@ -66,7 +74,7 @@ private fun openTickersOf(positions: List<Position>): List<String> =
         .keys
         .toList()
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class PortfolioListViewModel @Inject constructor(
     private val portfolioRepository: PortfolioRepository,
@@ -81,6 +89,7 @@ class PortfolioListViewModel @Inject constructor(
     private val importRepository: ImportRepository,
     private val conflictCenter: ConflictCenter,
     private val syncCoordinator: SyncCoordinator,
+    private val widgetSnapshotRepository: WidgetSnapshotRepository,
 ) : ViewModel() {
 
     private val activePortfolioId = MutableStateFlow<String?>(null)
@@ -281,6 +290,30 @@ class PortfolioListViewModel @Inject constructor(
         // Row derivation + portfolio XIRR re-run on every quote arrival; keep them off the main thread.
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PortfolioListUiState())
+
+    init {
+        // Home-screen widget: the active portfolio's headline figures, as this screen shows
+        // them. Debounced so a burst of quote arrivals writes once.
+        viewModelScope.launch {
+            uiState
+                .filter { !it.isLoading && !it.isSwitchingPortfolio && it.rows.isNotEmpty() }
+                .map { state ->
+                    val value = state.rows.sumOf { convert(it.currentValue, it.currency, state.displayCurrency, state.rates) }
+                    val daily = portfolioDailyChange(state.rows, value)
+                    WidgetSnapshot(
+                        portfolioName = state.portfolios.firstOrNull { it.id == state.activePortfolioId }?.name ?: "Portfolio",
+                        totalValue = value,
+                        dailyChange = daily.change,
+                        dailyChangePercent = daily.percent,
+                        currency = state.displayCurrency,
+                        updatedAtMillis = 0L,
+                    )
+                }
+                .distinctUntilChanged()
+                .debounce(3_000)
+                .collect { widgetSnapshotRepository.write(it.copy(updatedAtMillis = System.currentTimeMillis())) }
+        }
+    }
 
     private data class StartupFlags(
         val settings: AppSettings,
