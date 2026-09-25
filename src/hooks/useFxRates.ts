@@ -34,7 +34,11 @@ export function useFxRates() {
   const [rates, setRates] = useState<Rates>(DEFAULTS)
 
   useEffect(() => {
-    Promise.all(FX_PAIRS.map(([, ticker]) => fetchFxRate(ticker).catch(() => null)))
+    Promise.all(FX_PAIRS.map(([key, ticker]) => fetchFxRate(ticker).catch((e) => {
+      // A defaulted pair silently skews every converted amount — at least say which.
+      console.warn(`[useFxRates] ${key}/CZK failed, using default ${DEFAULTS[key]}:`, e instanceof Error ? e.message : e)
+      return null
+    })))
       .then((values) => {
         const next = { ...DEFAULTS }
         FX_PAIRS.forEach(([key], i) => { if (values[i] !== null) next[key] = values[i]! })

@@ -29,8 +29,9 @@ export function useDividends() {
           const events = await fetchDividendEvents(ticker)
           cache.set(ticker.toUpperCase(), events)
           setDividends((prev) => new Map(prev).set(ticker.toUpperCase(), events))
-        } catch {
+        } catch (e) {
           // Don't cache errors — allow retry on next fetch cycle
+          console.warn(`[dividends] ${ticker} failed, will retry next cycle:`, e instanceof Error ? e.message : e)
         } finally {
           inFlight.current.delete(ticker)
         }

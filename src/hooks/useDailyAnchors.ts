@@ -26,6 +26,9 @@ export interface Anchor {
   lastTradedAt: number | null
 }
 
+/** Wait before retrying anchors that failed transiently — long enough to clear a Yahoo 429 cooldown. */
+const RETRY_MS = 60_000
+
 const anchorCache = new Map<string, Anchor>()
 const fxAnchorCache = new Map<string, number | null>()
 
@@ -52,7 +55,11 @@ async function fetchChart(ticker: string, query: string): Promise<ChartResult | 
   // which 404s. Round-tripping makes the call idempotent for both conventions.
   const symbol = encodeURIComponent(decodeURIComponent(ticker))
   const res = await proxyFetch(`/api/yahoo/v8/finance/chart/${symbol}?${query}`)
-  if (!res.ok) return null
+  // Only a 404 is a definitive miss worth remembering for the day. A rate limit or server
+  // error throws so the caller retries instead of pinning the row to the fallback until
+  // midnight. Mirrors anchorResponseKind in core/network/AnchorClient.kt.
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`anchor fetch for ${ticker}: HTTP ${res.status}`)
   const json = await res.json()
   return json?.chart?.result?.[0] ?? null
 }
@@ -75,7 +82,7 @@ function barsOf(result: ChartResult | null): Bar[] {
  * nothing has traded since local midnight and the anchor is simply the current price — so the
  * common case performs a single small request and never touches intraday data at all.
  */
-async function resolveAnchor(ticker: string, midnight: number, expandFx = true): Promise<Anchor> {
+export async function resolveAnchor(ticker: string, midnight: number, expandFx = true): Promise<Anchor> {
   const key = ticker.toUpperCase()
 
   // Fund-provider tickers are priced through their provider's own endpoint and do not exist on
@@ -139,6 +146,7 @@ async function resolveFxAnchor(from: string, to: string, midnight: number): Prom
 
 export function useDailyAnchors(tickers: string[], zone: string, currencies: string[], displayCurrency: string) {
   const [, forceRender] = useState(0)
+  const [retryTick, setRetryTick] = useState(0)
   const inFlight = useRef(new Set<string>())
 
   const midnight = localMidnightEpoch(new Date(), zone)
@@ -157,16 +165,18 @@ export function useDailyAnchors(tickers: string[], zone: string, currencies: str
       })
       if (wanted.length === 0 && wantedFx.length === 0) return
 
+      let failed = false
       await Promise.all([
         ...wanted.map(async (ticker) => {
           const key = keyFor(ticker, midnight)
           inFlight.current.add(key)
           try {
             anchorCache.set(key, await resolveAnchor(ticker, midnight))
-          } catch {
-            // A failed anchor is not an error state: dailyChange falls back to the
-            // exchange-session figure and the row is marked accordingly.
-            anchorCache.set(key, { price: null, lastTradedAt: null })
+          } catch (e) {
+            // Transient (rate limit, network): not cached, so the retry below fetches it
+            // again. The row shows the exchange-session fallback meanwhile, marked as such.
+            failed = true
+            console.warn(`[anchors] ${ticker} not resolved, will retry:`, e instanceof Error ? e.message : e)
           } finally {
             inFlight.current.delete(key)
           }
@@ -176,21 +186,26 @@ export function useDailyAnchors(tickers: string[], zone: string, currencies: str
           inFlight.current.add(key)
           try {
             fxAnchorCache.set(key, await resolveFxAnchor(currency, displayCurrency, midnight))
-          } catch {
-            fxAnchorCache.set(key, null)
+          } catch (e) {
+            failed = true
+            console.warn(`[anchors] ${currency}->${displayCurrency} not resolved, will retry:`, e instanceof Error ? e.message : e)
           } finally {
             inFlight.current.delete(key)
           }
         }),
       ])
-      if (!cancelled) forceRender((n) => n + 1)
+      if (cancelled) return
+      forceRender((n) => n + 1)
+      if (failed) retryTimer = setTimeout(() => setRetryTick((n) => n + 1), RETRY_MS)
     }
 
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
     void run()
     return () => {
       cancelled = true
+      clearTimeout(retryTimer)
     }
-  }, [tickers.join(','), currencies.join(','), displayCurrency, midnight])
+  }, [tickers.join(','), currencies.join(','), displayCurrency, midnight, retryTick])
 
   const anchorFor = useCallback(
     (ticker: string): Anchor | undefined => anchorCache.get(keyFor(ticker, midnight)),

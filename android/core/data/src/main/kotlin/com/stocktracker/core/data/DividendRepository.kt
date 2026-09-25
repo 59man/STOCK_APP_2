@@ -1,5 +1,6 @@
 package com.stocktracker.core.data
 
+import android.util.Log
 import com.stocktracker.core.model.DividendEvent
 import com.stocktracker.core.model.NO_FEED_TICKERS
 import com.stocktracker.core.network.DividendClient
@@ -66,8 +67,9 @@ class DividendRepository @Inject constructor(
                     _settled.update { it + ticker }
                 } catch (e: CancellationException) {
                     throw e // cancellation is not a fetch failure — let it propagate
-                } catch (_: Exception) {
+                } catch (e: Exception) {
                     // Don't cache errors — allow retry on the next fetch cycle.
+                    Log.w("Dividends", "$ticker failed, will retry next cycle: ${e.message}")
                     _settled.update { it + ticker }
                 } finally {
                     // NonCancellable: withLock is itself suspending, so under cancellation

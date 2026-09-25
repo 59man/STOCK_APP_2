@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
@@ -125,18 +126,37 @@ object AnchorClient {
         }
     }
 
+    /**
+     * Null only for a definitive miss (Yahoo does not carry the symbol), which the caller may
+     * cache for the day. A rate limit, server error or dead network throws instead: caching
+     * those would pin the row to the previous-close fallback until midnight, even across
+     * restarts, because the daily_anchors table outlives the process.
+     */
     private suspend fun fetch(ticker: String, query: String): AnchorResult? = withContext(Dispatchers.IO) {
         // Encoded exactly once — see the FX_CONVERTED_TICKERS gotcha in CLAUDE.md.
         val url = "https://query1.finance.yahoo.com/v8/finance/chart/" +
             "${URLEncoder.encode(ticker, "UTF-8")}?$query"
         val request = Request.Builder().url(url).header("User-Agent", BROWSER_USER_AGENT).build()
-        runCatching {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                val body = response.body?.string() ?: return@use null
-                PersistJson.decodeFromString(AnchorChartResponse.serializer(), body)
-                    .chart?.result?.firstOrNull()
+        client.newCall(request).execute().use { response ->
+            when (anchorResponseKind(response.code)) {
+                AnchorResponseKind.OK -> {
+                    val body = response.body?.string() ?: return@use null
+                    runCatching {
+                        PersistJson.decodeFromString(AnchorChartResponse.serializer(), body).chart?.result?.firstOrNull()
+                    }.getOrNull()
+                }
+                AnchorResponseKind.DEFINITIVE_MISS -> null
+                AnchorResponseKind.TRANSIENT -> throw IOException("anchor fetch for $ticker: HTTP ${response.code}")
             }
-        }.getOrNull()
+        }
     }
+}
+
+internal enum class AnchorResponseKind { OK, DEFINITIVE_MISS, TRANSIENT }
+
+/** 404 means Yahoo has no such symbol — safe to remember. Anything else non-2xx may pass. */
+internal fun anchorResponseKind(code: Int): AnchorResponseKind = when {
+    code in 200..299 -> AnchorResponseKind.OK
+    code == 404 -> AnchorResponseKind.DEFINITIVE_MISS
+    else -> AnchorResponseKind.TRANSIENT
 }

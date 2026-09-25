@@ -1,5 +1,6 @@
 package com.stocktracker.core.data
 
+import android.util.Log
 import com.stocktracker.core.calc.localMidnightEpoch
 import com.stocktracker.core.database.DailyAnchorDao
 import com.stocktracker.core.database.DailyAnchorEntity
@@ -16,6 +17,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "DailyAnchors"
 
 data class Anchor(val price: Double?, val lastTradedAt: Long?)
 
@@ -51,8 +54,12 @@ class DailyAnchorRepository @Inject constructor(
                     val anchor = if (cached != null) {
                         Anchor(cached.price, cached.lastTradedAt)
                     } else {
-                        val resolved = runCatching { AnchorClient.resolve(ticker, midnight) }.getOrNull()
-                        val value = Anchor(resolved?.price, resolved?.lastTradedAt)
+                        // A transient failure is neither persisted nor kept in memory, so the
+                        // next refresh retries it; the row shows the fallback meanwhile.
+                        val resolved = runCatching { AnchorClient.resolve(ticker, midnight) }
+                            .onFailure { Log.w(TAG, "anchor $key not resolved, will retry: ${it.message}") }
+                            .getOrNull() ?: return@async
+                        val value = Anchor(resolved.price, resolved.lastTradedAt)
                         dao.upsert(DailyAnchorEntity(key, today, value.price, value.lastTradedAt))
                         value
                     }
@@ -68,9 +75,11 @@ class DailyAnchorRepository @Inject constructor(
                     val rate = if (cached != null) {
                         cached.price
                     } else {
-                        val resolved = runCatching {
+                        val result = runCatching {
                             AnchorClient.resolveFx(currency, displayCurrency, midnight)
-                        }.getOrNull()
+                        }.onFailure { Log.w(TAG, "fx anchor $key not resolved, will retry: ${it.message}") }
+                        if (result.isFailure) return@async
+                        val resolved = result.getOrNull()
                         dao.upsert(DailyAnchorEntity(key, today, resolved, null))
                         resolved
                     }

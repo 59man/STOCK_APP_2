@@ -16,7 +16,8 @@ object XlsxFileReader {
         ReadableWorkbook(stream).use { wb ->
             val sheet = wb.findSheet(sheetName).orElse(null) ?: return null
             return sheet.openStream().use { rows ->
-                rows.map { row ->
+                // Stream.toList() is API 34+; minSdk is 26, so collect through the iterator.
+                rows.iterator().asSequence().map { row ->
                     (0 until row.cellCount).map { i -> row.getCellText(i) }
                 }.toList()
             }
@@ -28,7 +29,8 @@ object XlsxFileReader {
         ReadableWorkbook(stream).use { wb ->
             val sheet = wb.firstSheet
             return sheet.openStream().use { rows ->
-                rows.map { row ->
+                // Stream.toList() is API 34+; minSdk is 26, so collect through the iterator.
+                rows.iterator().asSequence().map { row ->
                     (0 until row.cellCount).map { i -> row.getCellText(i) }
                 }.toList()
             }

@@ -109,7 +109,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedUriState.value = extractSharedUri(intent)
         setContent {
-            val themeMode by settingsRepository.settings.map { it.themeMode }.collectAsState(initial = "system")
+            val themeFlow = remember { settingsRepository.settings.map { it.themeMode } }
+            val themeMode by themeFlow.collectAsState(initial = "system")
             val systemDark = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 "dark" -> true

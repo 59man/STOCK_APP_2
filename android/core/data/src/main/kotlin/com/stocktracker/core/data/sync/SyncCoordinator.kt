@@ -56,13 +56,13 @@ class SyncCoordinator @Inject constructor(
      * from app-foreground and "Sync now", and must never crash the caller.
      */
     suspend fun pullPortfolio(portfolioId: String) {
-        runCatching { positionRepository.pull(portfolioId) }
-        runCatching { manualPriceRepository.pull(portfolioId) }
-        runCatching { divTaxOverrideRepository.pull(portfolioId) }
+        runCatching { positionRepository.pull(portfolioId) }.onFailure { logPullFailure("positionRepository", it) }
+        runCatching { manualPriceRepository.pull(portfolioId) }.onFailure { logPullFailure("manualPriceRepository", it) }
+        runCatching { divTaxOverrideRepository.pull(portfolioId) }.onFailure { logPullFailure("divTaxOverrideRepository", it) }
     }
 
     suspend fun pullPortfolioList() {
-        runCatching { portfolioRepository.pull() }
+        runCatching { portfolioRepository.pull() }.onFailure { logPullFailure("portfolioRepository", it) }
         deviceRegistry.heartbeat() // best-effort, piggybacks on this same cadence — see DeviceRegistry
     }
 
@@ -102,4 +102,9 @@ class SyncCoordinator @Inject constructor(
         }
         conflictCenter.clear(conflict.storageKey, conflict.recordKey)
     }
+}
+
+/** Pulls are best-effort, but a failure should still be diagnosable from logcat. */
+private fun logPullFailure(what: String, e: Throwable) {
+    android.util.Log.w("Sync", "pull $what failed: ${e.message}")
 }

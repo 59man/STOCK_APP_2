@@ -7,6 +7,8 @@ plugins {
 }
 
 android {
+    // android.util.Log is a stub on the JVM; let logging calls no-op in unit tests.
+    testOptions { unitTests.isReturnDefaultValues = true }
     namespace = "com.stocktracker.core.data"
     compileSdk = 34
 
