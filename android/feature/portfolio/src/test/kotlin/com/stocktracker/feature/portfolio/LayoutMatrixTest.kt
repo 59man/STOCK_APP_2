@@ -173,6 +173,25 @@ class LayoutMatrixTest(
     }
 
     @Test
+    fun taxCard_isNeverClipped() {
+        applyConfig(heightDp = 1600)
+        val lot = fakePosition(ticker = "EXUS.DE", quantity = 1234.5678, buyDate = "2025-01-01")
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                TaxCardContent(
+                    years = listOf(
+                        com.stocktracker.core.calc.YearSummary(2025, 98_765.0, -12_345_678.9, 1_234_567.8, true),
+                        com.stocktracker.core.calc.YearSummary(2024, 1_234_567.0, 12_345.0, 0.0, false),
+                    ),
+                    upcoming = listOf(lot to com.stocktracker.core.calc.lotTaxStatus(lot, "2026-09-25")),
+                )
+            }
+        }
+        composeTestRule.assertNoClippedText()
+        composeTestRule.assertTextNotTruncated("≤ 100k proceeds")
+    }
+
+    @Test
     fun topBarActions_keepTheirLabels() {
         applyConfig()
         composeTestRule.setContent {

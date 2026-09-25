@@ -67,6 +67,9 @@ internal fun InsightsScreen(uiState: PortfolioListUiState, onAction: (PortfolioL
                     item(key = "pie-charts") {
                         PortfolioPieChartsCard(uiState.rows, uiState.displayCurrency, uiState.rates)
                     }
+                    item(key = "tax") {
+                        TaxCard(positions = uiState.rows.flatMap { it.positions }, rates = uiState.rates)
+                    }
                 }
             }
         }

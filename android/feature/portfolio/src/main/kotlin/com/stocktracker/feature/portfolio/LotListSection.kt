@@ -31,7 +31,7 @@ internal fun LotListSection(positions: List<Position>, onEdit: (Position) -> Uni
 
 @Composable
 internal fun LotCard(lot: Position, onEdit: () -> Unit) {
-    val isSold = lot.sellDate != null && lot.sellPrice != null
+    val isSold = com.stocktracker.core.calc.isClosedLot(lot)
     AppCard(modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatDisplayDate(lot.buyDate), style = NumericTypography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -48,6 +48,7 @@ internal fun LotCard(lot: Position, onEdit: () -> Unit) {
             LotField("Sell date", formatDisplayDate(lot.sellDate!!))
             LotField("Sell price", "${formatMoney(lot.sellPrice!!)} ${lot.currency}")
         }
+        LotField("Czech tax", taxStatusText(com.stocktracker.core.calc.lotTaxStatus(lot, java.time.LocalDate.now().toString())))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onEdit) { Text("Edit") }
         }
