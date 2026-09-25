@@ -8,6 +8,7 @@ import { PortfolioTable } from './PortfolioTable'
 import { PortfolioPnLChart } from './PortfolioPnLChart'
 import { PortfolioPieCharts } from './PortfolioPieCharts'
 import { TaxPanel } from './TaxPanel'
+import { DividendCalendar } from './DividendCalendar'
 import { AddPositionModal } from './AddPositionModal'
 import { PortfolioRow } from '../types'
 import { NO_FEED_TICKERS } from '../data/noFeedTickers'
@@ -158,6 +159,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZo
             displayCurrency={displayCurrency}
             convert={convert}
           />
+          <DividendCalendar positions={positions} dividends={dividends} displayCurrency={displayCurrency} convert={convert} />
           <TaxPanel positions={positions} convert={convert} />
         </div>
       )}

@@ -1186,3 +1186,4 @@ input::placeholder { color: var(--faint); }
   background: var(--surface2); color: var(--text-2); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; min-height: 28px;
 }
+.div-calendar summary .muted { font-weight: 400; font-size: 12px; }

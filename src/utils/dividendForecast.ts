@@ -20,18 +20,19 @@ function nextYear(date: string): string {
  */
 export function dividendForecast(positions: Position[], dividends: Map<string, DividendEvent[]>, today: string): ForecastEntry[] {
   const yearAgo = `${+today.slice(0, 4) - 1}${today.slice(4)}`
-  const held = new Map<string, number>()
-  positions.filter(isOpenLot).forEach((p) => held.set(p.ticker, (held.get(p.ticker) ?? 0) + p.quantity))
+  const held = new Map<string, { qty: number; currency: string }>()
+  positions.filter(isOpenLot).forEach((p) =>
+    held.set(p.ticker, { qty: (held.get(p.ticker)?.qty ?? 0) + p.quantity, currency: p.currency }))
 
   const out: ForecastEntry[] = []
-  held.forEach((qty, ticker) => {
+  held.forEach(({ qty, currency: lotCurrency }, ticker) => {
     if (qty <= 0) return
     const rate = getDividendTaxRate(ticker)
     ;(dividends.get(ticker.toUpperCase()) ?? [])
       .filter((e) => e.date > yearAgo && e.date <= today)
       .forEach((e) => {
         const date = nextYear(e.date)
-        if (date > today) out.push({ ticker, date, net: qty * e.amount * (1 - rate), currency: e.currency })
+        if (date > today) out.push({ ticker, date, net: qty * e.amount * (1 - rate), currency: e.currency ?? lotCurrency })
       })
   })
   return out.sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker))

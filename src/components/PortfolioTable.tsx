@@ -2,6 +2,7 @@ import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
 import { isOpenLot } from '../utils/rowDerivation'
 import { portfolioDailyChange } from '../utils/rowSorting'
 import { TaxBadge } from './TaxBadge'
+import { dividendForecast } from '../utils/dividendForecast'
 import { PortfolioRow, Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
@@ -502,6 +503,11 @@ export function PortfolioTable({
   const totalReturn = totalPricePnl + totalDivs
   const totalReturnPct = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
   const { change: totalDailyChange, percent: dailyChangePct } = portfolioDailyChange(rows, totalValue)
+  const forecastTotal = useMemo(
+    () => dividendForecast(rows.flatMap((r) => r.positions), dividendsByTicker, todayIso)
+      .reduce((sum, e) => sum + convert(e.net, e.currency, displayCurrency), 0),
+    [rows, dividendsByTicker, todayIso, convert, displayCurrency],
+  )
 
   const detailColSpan = activeColumns.length + 3
 
@@ -559,6 +565,12 @@ export function PortfolioTable({
             <span className={`summary-value ${totalReturn >= 0 ? 'gain' : 'loss'}`}>
               {totalReturn >= 0 ? '+' : ''}{fmt(totalReturn, displayCurrency)}
               <span className="summary-sub">{pct(totalReturnPct)}</span>
+            </span>
+          </div>
+          <div className="summary-card" title="Last 12 months of dividends repeated on the shares held now, after withholding tax — an estimate">
+            <span className="summary-label">Est. Dividends 12m</span>
+            <span className={`summary-value ${forecastTotal > 0 ? 'gain' : 'muted'}`}>
+              {forecastTotal > 0 ? '+' + fmt(forecastTotal, displayCurrency) : '—'}
             </span>
           </div>
           <div className="summary-card">
