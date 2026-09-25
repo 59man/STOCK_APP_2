@@ -27,7 +27,8 @@ fun List<PortfolioRow>.sortedForDisplay(
         SortField.NAME -> compareBy { it.name.lowercase() }
         SortField.TYPE -> compareBy { it.type.ordinal }
         SortField.VALUE -> compareBy { money(it.currentValue, it.currency) }
-        SortField.TODAY -> compareBy { money(it.dailyChange, it.currency) }
+        // Already in the display currency, and it is the figure the row shows.
+        SortField.TODAY -> compareBy { it.dailyChangeDisplay }
         SortField.TOTAL_RETURN -> compareBy { money(it.totalReturn, it.currency) }
     }
     val directed = if (order.ascending) comparator else comparator.reversed()

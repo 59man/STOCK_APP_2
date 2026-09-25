@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -9,4 +10,6 @@ kotlin {
 dependencies {
     implementation(project(":core:model"))
     testImplementation(libs.junit)
+    // Reads the shared web/android parity fixture in test-fixtures/.
+    testImplementation(libs.kotlinx.serialization.json)
 }

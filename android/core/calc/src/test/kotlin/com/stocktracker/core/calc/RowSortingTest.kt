@@ -36,11 +36,11 @@ class RowSortingTest {
     }
 
     @Test
-    fun today_alsoConvertsBeforeComparing() {
-        val czk = row(ticker = "KOMB.PR", currency = "CZK", dailyChange = 50.0)
-        val usd = row(ticker = "AAPL", currency = "USD", dailyChange = 5.0)
-        val sorted = listOf(czk, usd).sortedForDisplay(SortOrder(SortField.TODAY, ascending = false), "CZK", rates)
-        assertEquals(listOf("AAPL", "KOMB.PR"), sorted.map { it.ticker })
+    fun today_sortsOnAnchoredDisplayFigure_notLegacyPrevClose() {
+        val a = row(ticker = "AAA", dailyChange = 999.0).copy(dailyChangeDisplay = -5.0)
+        val b = row(ticker = "BBB", dailyChange = -999.0).copy(dailyChangeDisplay = 5.0)
+        val sorted = listOf(a, b).sortedForDisplay(SortOrder(SortField.TODAY, ascending = false), "CZK", rates)
+        assertEquals(listOf("BBB", "AAA"), sorted.map { it.ticker })
     }
 
     @Test

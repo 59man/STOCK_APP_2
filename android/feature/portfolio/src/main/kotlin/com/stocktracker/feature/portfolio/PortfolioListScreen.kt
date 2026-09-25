@@ -529,9 +529,7 @@ internal fun SummaryHeader(rows: List<PortfolioRow>, displayCurrency: String, ra
     val totalDividends = rows.sumOf { dc(it.dividendIncome, it.currency) }
     val totalReturn = rows.sumOf { dc(it.totalReturn, it.currency) }
     val returnPercent = if (totalCostBasis > 0) (totalReturn / totalCostBasis) * 100 else 0.0
-    val totalDailyChange = rows.sumOf { dc(it.dailyChange, it.currency) }
-    val prevTotalValue = totalValue - totalDailyChange
-    val dailyChangePercent = if (prevTotalValue > 0) (totalDailyChange / prevTotalValue) * 100 else 0.0
+    val (totalDailyChange, dailyChangePercent) = com.stocktracker.core.calc.portfolioDailyChange(rows, totalValue)
 
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
         AppCard(modifier = Modifier.fillMaxWidth(), contentPadding = Spacing.xl) {

@@ -11,14 +11,13 @@ import com.stocktracker.core.model.Quote
 /** CZK-base FX conversion, injected so this module stays pure and testable. */
 typealias Convert = (Double, String, String) -> Double
 
-private fun isOpenLot(lot: Position): Boolean {
-    val sellPrice = lot.sellPrice
-    val sellDate = lot.sellDate
-    return sellPrice == null || sellPrice == 0.0 || sellDate == null || sellDate.isEmpty()
-}
+/**
+ * A lot is sold once it has both a sell date and a sell price — a price of 0 (a worthless
+ * delisting) still counts as sold. Mirrors `isClosedLot` in src/utils/rowDerivation.ts.
+ */
+fun isClosedLot(lot: Position): Boolean = lot.sellPrice != null && !lot.sellDate.isNullOrEmpty()
 
-private fun isClosedLot(lot: Position): Boolean =
-    lot.sellPrice != null && !lot.sellDate.isNullOrEmpty()
+fun isOpenLot(lot: Position): Boolean = !isClosedLot(lot)
 
 /**
  * One aggregated ticker row. Mirrors the `rows` useMemo in
@@ -61,7 +60,7 @@ fun deriveRow(
     val openQty = openLots.sumOf { it.quantity }
     val totalCost = lots.sumOf { toRow(it.buyPrice * it.quantity, it.currency) }
     val openCost = openLots.sumOf { toRow(it.buyPrice * it.quantity, it.currency) }
-    val avgBuyPrice = totalCost / totalQty
+    val avgBuyPrice = if (totalQty > 0) totalCost / totalQty else 0.0
     val firstBuyDate = lots.minOf { it.buyDate }
 
     // Source nulls these out once isClosed, then uses that nulled value everywhere below.
@@ -184,7 +183,9 @@ fun computePortfolioIrr(
     if (positions.isEmpty()) return null
 
     val anyLoading = rows.any { it.loading }
-    val anyMissingPrice = rows.any { it.error == null && it.irr == null && !it.loading }
+    // Waits for open rows still missing a price. A closed row can legitimately have no IRR
+    // (a total loss has no root), and must not blank the whole portfolio's figure.
+    val anyMissingPrice = rows.any { !it.isClosed && it.error == null && it.irr == null && !it.loading }
     if (anyLoading || anyMissingPrice) return null
 
     fun toDc(amount: Double, currency: String) = convert(amount, currency, displayCurrency)

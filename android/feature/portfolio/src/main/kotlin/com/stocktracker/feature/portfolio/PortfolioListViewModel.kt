@@ -2,6 +2,7 @@ package com.stocktracker.feature.portfolio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.stocktracker.core.calc.isOpenLot
 import com.stocktracker.core.calc.computePortfolioIrr
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.calc.deriveRow
@@ -61,7 +62,7 @@ private const val RESUME_REFRESH_MIN_INTERVAL_MS = 30_000L
 private fun openTickersOf(positions: List<Position>): List<String> =
     positions
         .groupBy { it.ticker }
-        .filterValues { lots -> lots.any { it.sellPrice == null || it.sellPrice == 0.0 || it.sellDate.isNullOrEmpty() } }
+        .filterValues { lots -> lots.any(::isOpenLot) }
         .keys
         .toList()
 
