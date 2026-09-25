@@ -47,7 +47,7 @@ internal fun TaxCard(positions: List<Position>, rates: Map<String, Double>) {
         }
     }
     val today = LocalDate.now().toString()
-    val upcoming = positions.filter(::isOpenLot)
+    val upcoming = positions.filter { isOpenLot(it) && it.quantity > 0 }
         .map { it to lotTaxStatus(it, today) }
         .filter { (_, s) -> s.kind == TaxKind.PENDING }
         .sortedBy { (_, s) -> s.freeFrom }

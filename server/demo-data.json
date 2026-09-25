@@ -86,6 +86,83 @@
       "platform": "web",
       "firstSeen": "2026-09-19T15:53:14.400Z",
       "lastSeen": "2026-09-19T15:53:14.402Z"
+    },
+    {
+      "id": "e763b20b-50c9-4ee1-9573-a357b967678b",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:56:59.553Z",
+      "lastSeen": "2026-09-25T11:56:59.553Z"
+    },
+    {
+      "id": "bc18f30d-55cb-49b1-b7be-9e12cd65cd7b",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:03.277Z",
+      "lastSeen": "2026-09-25T11:57:03.278Z"
+    },
+    {
+      "id": "01260118-7067-4d4f-883b-7a968aba7b3e",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:07.496Z",
+      "lastSeen": "2026-09-25T11:57:07.497Z"
+    },
+    {
+      "id": "9662c5ba-6d4a-471b-9e98-d5078512b53a",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:11.675Z",
+      "lastSeen": "2026-09-25T11:57:11.675Z"
+    },
+    {
+      "id": "781bef53-ee05-4833-83b6-3186219d3e92",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:15.870Z",
+      "lastSeen": "2026-09-25T11:57:15.872Z"
+    },
+    {
+      "id": "3e68fbd7-8d72-4adb-9374-d4f832dd0645",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:20.067Z",
+      "lastSeen": "2026-09-25T11:57:20.069Z"
+    },
+    {
+      "id": "a41a50ec-8487-47cc-a1ad-9d3b98e3753d",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:24.267Z",
+      "lastSeen": "2026-09-25T11:57:24.268Z"
+    },
+    {
+      "id": "b3355611-3ff4-48bc-9c3f-2c7ba8e416a3",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:28.443Z",
+      "lastSeen": "2026-09-25T11:57:28.444Z"
+    },
+    {
+      "id": "62611eac-12a7-4b05-87b0-9695f7f8b3b8",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:32.634Z",
+      "lastSeen": "2026-09-25T11:57:32.635Z"
+    },
+    {
+      "id": "28494ad1-221e-4198-9ea3-5d40657d8f87",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:36.768Z",
+      "lastSeen": "2026-09-25T11:57:36.769Z"
+    },
+    {
+      "id": "a00cb12a-207a-424f-946e-5dfeebb492f1",
+      "label": "Chrome on Linux",
+      "platform": "web",
+      "firstSeen": "2026-09-25T11:57:40.961Z",
+      "lastSeen": "2026-09-25T11:57:40.962Z"
     }
   ],
   "stock_tracker_manual_prices_demo": "{}",

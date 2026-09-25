@@ -38,7 +38,7 @@ export function TaxPanel({ positions, convert }: Props) {
 
   const upcoming = useMemo(
     () => positions
-      .filter(isOpenLot)
+      .filter((p) => isOpenLot(p) && p.quantity > 0)
       .map((p) => ({ p, s: lotTaxStatus(p, today) }))
       .filter(({ s }) => s.kind === 'pending')
       .sort((a, b) => a.s.freeFrom.localeCompare(b.s.freeFrom))
