@@ -56,6 +56,13 @@ describe('fetchDividendEvents', () => {
     await expect(fetchDividendEvents('JNJ')).rejects.toThrow('429')
   })
 
+  it('resolves empty on a 404: the symbol does not exist on Yahoo, so retrying cannot help', async () => {
+    // XAU is priced through an FX-converted feed and has no Yahoo symbol of its own;
+    // throwing here made useDividends refetch the same 404 on every cycle.
+    mockYahoo({}, 404)
+    await expect(fetchDividendEvents('XAU')).resolves.toEqual([])
+  })
+
   it('resolves empty for a successful response carrying no dividend events', async () => {
     mockYahoo(chart('EUR', null))
     await expect(fetchDividendEvents('EXUS.DE')).resolves.toEqual([])

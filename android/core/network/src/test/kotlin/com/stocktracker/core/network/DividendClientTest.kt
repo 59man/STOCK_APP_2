@@ -25,6 +25,16 @@ class DividendClientTest {
         assertEquals(2.5, event.amount, 1e-9)
     }
 
+    @Test fun `a 404 means the symbol is not on Yahoo, so it resolves empty instead of throwing`() {
+        // XAU has no Yahoo symbol of its own; throwing made every refresh repeat the same 404.
+        assertEquals(emptyList<DividendEvent>(), dividendChartFromResponse(404, "{}").events)
+    }
+
+    @Test(expected = Exception::class)
+    fun `any other failure still throws so the ticker retries`() {
+        dividendChartFromResponse(429, "{}")
+    }
+
     @Test fun `a successful response carrying no dividend events parses to empty`() {
         assertEquals(emptyList<DividendEvent>(), parseDividendChart(body("EUR", null)).events)
     }
