@@ -1,0 +1,27 @@
+{
+  "today": "2026-09-25",
+  "positions": [
+    { "id": "q1", "ticker": "QTR", "name": "Quarterly", "type": "stock", "quantity": 6, "buyPrice": 1, "buyDate": "2020-01-01", "currency": "USD" },
+    { "id": "q2", "ticker": "QTR", "name": "Quarterly", "type": "stock", "quantity": 4, "buyPrice": 1, "buyDate": "2021-01-01", "currency": "USD" },
+    { "id": "q3", "ticker": "QTR", "name": "Quarterly", "type": "stock", "quantity": 5, "buyPrice": 1, "buyDate": "2021-01-01", "currency": "USD", "sellPrice": 2, "sellDate": "2022-01-01" },
+    { "id": "o1", "ticker": "OLD", "name": "Stopped paying", "type": "stock", "quantity": 10, "buyPrice": 1, "buyDate": "2020-01-01", "currency": "CZK" },
+    { "id": "c1", "ticker": "SOLD", "name": "Closed", "type": "stock", "quantity": 10, "buyPrice": 1, "buyDate": "2020-01-01", "currency": "CZK", "sellPrice": 2, "sellDate": "2024-01-01" }
+  ],
+  "dividends": {
+    "QTR": [
+      { "date": "2025-09-25", "amount": 9, "currency": "USD" },
+      { "date": "2025-11-10", "amount": 1, "currency": "USD" },
+      { "date": "2026-02-09", "amount": 1, "currency": "USD" },
+      { "date": "2026-05-11", "amount": 1, "currency": "USD" },
+      { "date": "2026-08-10", "amount": 1.2, "currency": "USD" }
+    ],
+    "OLD": [ { "date": "2025-07-01", "amount": 5, "currency": "CZK" } ],
+    "SOLD": [ { "date": "2026-03-01", "amount": 5, "currency": "CZK" } ]
+  },
+  "expected": [
+    { "ticker": "QTR", "date": "2026-11-10", "net": 8.5, "currency": "USD" },
+    { "ticker": "QTR", "date": "2027-02-09", "net": 8.5, "currency": "USD" },
+    { "ticker": "QTR", "date": "2027-05-11", "net": 8.5, "currency": "USD" },
+    { "ticker": "QTR", "date": "2027-08-10", "net": 10.2, "currency": "USD" }
+  ]
+}
