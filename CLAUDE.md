@@ -411,7 +411,7 @@ Room is the offline-first source of truth; every mutation commits locally first,
 
 ### Ticker logos (`feature/portfolio/TickerLogo.kt`)
 
-Four sources, first hit wins: a local PNG in `filesDir/logos/<TICKER>.png` → `financialmodelingprep.com/image-stock/<BASE>.png` → `icons.duckduckgo.com/ip3/<domain>.ico` → `www.google.com/s2/favicons?domain=<domain>&sz=128` → colored initials avatar. Domains come from the curated `TICKER_LOGO_DOMAINS`, falling back to the host of a supplied `website`.
+Four sources, first hit wins: a local PNG in `filesDir/logos/<TICKER>.png` → `financialmodelingprep.com/image-stock/<TICKER>.png` (full symbol incl. suffix — the bare base names an unrelated US company: `EXUS`→Nomura, `DTE`→DTE Energy) → `icons.duckduckgo.com/ip3/<domain>.ico` → `www.google.com/s2/favicons?domain=<domain>&sz=128` → colored initials avatar. Domains come from the curated `TICKER_LOGO_DOMAINS`, falling back to the host of a supplied `website`.
 
 > **Gotcha · do not restore Clearbit.** `logo.clearbit.com` was the second source and stopped resolving entirely after HubSpot retired the free API — not a 404, the connection fails. Every non-US holding rendered as a bare initial until this chain replaced it (2026-09-19). Both favicon services answer a miss with a real non-2xx, so Coil advances the chain instead of pinning a generic globe.
 

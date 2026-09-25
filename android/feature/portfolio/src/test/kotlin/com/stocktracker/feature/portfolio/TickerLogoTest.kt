@@ -9,7 +9,7 @@ class TickerLogoTest {
     fun knownDomain_yieldsFmpThenBothFavicons() {
         assertEquals(
             listOf(
-                "https://financialmodelingprep.com/image-stock/COLT.png",
+                "https://financialmodelingprep.com/image-stock/COLT.PR.png",
                 "https://icons.duckduckgo.com/ip3/coltcz.com.ico",
                 "https://www.google.com/s2/favicons?domain=coltcz.com&sz=128",
             ),
@@ -18,9 +18,20 @@ class TickerLogoTest {
     }
 
     @Test
+    fun suffixedTicker_isLookedUpWithItsExchangeSuffix() {
+        // The bare base symbol names a different, US-listed company: EXUS is Nomura, DTE is
+        // DTE Energy, VIG is a Vanguard ETF. Only the full symbol finds the right logo.
+        assertEquals(
+            "https://financialmodelingprep.com/image-stock/EXUS.DE.png",
+            logoCandidates("EXUS.DE").first(),
+        )
+        assertTrue(logoCandidates("DTE.DE").none { it.endsWith("/DTE.png") })
+    }
+
+    @Test
     fun unknownTicker_yieldsFmpOnly() {
         assertEquals(
-            listOf("https://financialmodelingprep.com/image-stock/ZZZZ.png"),
+            listOf("https://financialmodelingprep.com/image-stock/ZZZZ.XX.png"),
             logoCandidates("ZZZZ.XX"),
         )
     }
@@ -57,7 +68,7 @@ class TickerLogoTest {
     @Test
     fun malformedWebsite_isIgnoredRatherThanCrashing() {
         assertEquals(
-            listOf("https://financialmodelingprep.com/image-stock/ZZZZ.png"),
+            listOf("https://financialmodelingprep.com/image-stock/ZZZZ.XX.png"),
             logoCandidates("ZZZZ.XX", website = "not a url at all"),
         )
     }

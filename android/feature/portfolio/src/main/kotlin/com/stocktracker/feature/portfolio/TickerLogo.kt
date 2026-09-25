@@ -24,8 +24,8 @@ import java.io.File
 import java.net.URI
 
 /**
- * Domains for tickers the stock-image API does not carry — it is keyed on US-style base
- * symbols, so anything European or Japanese misses. Same one-line-per-ticker curated-map
+ * Domains for tickers the stock-image API does not carry (VIG.PR, CSG.PR, many Prague
+ * listings). Same one-line-per-ticker curated-map
  * pattern as TICKER_COUNTRY (core/calc/Dividends.kt).
  *
  * XAU and 4GLD.DE are deliberately absent: a metal ETC has no company logo to fetch, so it
@@ -74,10 +74,12 @@ internal val TICKER_LOGO_DOMAINS: Map<String, String> = mapOf(
  * logo art — and below any local override, which [TickerLogo] puts ahead of this list.
  */
 internal fun logoCandidates(ticker: String, website: String? = null): List<String> {
-    val base = ticker.substringBefore(".").uppercase()
-    val domain = TICKER_LOGO_DOMAINS[ticker.uppercase()] ?: website?.let(::hostOf)
+    // The full symbol, suffix included: FMP keys non-US listings as EXUS.DE / KOMB.PR / 8306.T,
+    // and the bare base names an unrelated US company (EXUS is Nomura, DTE is DTE Energy).
+    val symbol = ticker.uppercase()
+    val domain = TICKER_LOGO_DOMAINS[symbol] ?: website?.let(::hostOf)
     return buildList {
-        add("https://financialmodelingprep.com/image-stock/$base.png")
+        add("https://financialmodelingprep.com/image-stock/$symbol.png")
         if (domain != null) {
             add("https://icons.duckduckgo.com/ip3/$domain.ico")
             add("https://www.google.com/s2/favicons?domain=$domain&sz=128")
