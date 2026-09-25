@@ -15,7 +15,7 @@ describe('Czech time test (shared cases)', () => {
   })
 
   it('sums realized gains per year in CZK at trade-date rates', () => {
-    const fx = cases.years.fx as Record<string, [string, number][]>
+    const fx = cases.years.fx as unknown as Record<string, [string, number][]>
     const czkAt = (amount: number, cur: string, date: string) => {
       if (cur === 'CZK') return amount
       const rate = [...fx[cur]].reverse().find(([d]) => d <= date)![1]

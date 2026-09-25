@@ -1,6 +1,7 @@
 import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
 import { isOpenLot } from '../utils/rowDerivation'
 import { portfolioDailyChange } from '../utils/rowSorting'
+import { TaxBadge } from './TaxBadge'
 import { PortfolioRow, Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
@@ -454,6 +455,7 @@ export function PortfolioTable({
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
   const cv = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
+  const todayIso = new Date().toISOString().slice(0, 10)
 
   const sortValue = (r: PortfolioRow, key: ColKey | 'ticker'): string | number => {
     switch (key) {
@@ -1062,7 +1064,7 @@ export function PortfolioTable({
                                       return (
                                         <tr key={pos.id} className={isSold ? 'lot-closed' : ''}>
                                           <td className="muted">{i + 1}</td>
-                                          <td>{pos.buyDate}</td>
+                                          <td>{pos.buyDate} <TaxBadge lot={pos} today={todayIso} /></td>
                                           <td>{fmtQty(pos.quantity)}</td>
                                           <td>{fmtPrice(cv(pos.buyPrice, pos.currency), displayCurrency)}</td>
                                           <td>{fmt(posCost, displayCurrency)}</td>
