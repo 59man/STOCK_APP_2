@@ -1,0 +1,18 @@
+{
+  "effective": [
+    { "selected": [], "held": ["stock", "etf"], "expected": [] },
+    { "selected": ["etf"], "held": ["stock", "etf"], "expected": ["etf"] },
+    { "selected": ["crypto"], "held": ["stock"], "expected": [] },
+    { "selected": ["crypto", "stock"], "held": ["stock", "etf"], "expected": ["stock"] }
+  ],
+  "toggle": [
+    { "selected": [], "type": "etf", "expected": ["etf"] },
+    { "selected": ["etf"], "type": "stock", "expected": ["stock", "etf"] },
+    { "selected": ["etf"], "type": "etf", "expected": [] }
+  ],
+  "label": [
+    { "filter": [], "expected": "" },
+    { "filter": ["etf", "stock"], "expected": "Stock + ETF" },
+    { "filter": ["crypto", "fund", "commodity"], "expected": "Fund + Commodity + Crypto" }
+  ]
+}
