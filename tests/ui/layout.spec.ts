@@ -66,6 +66,29 @@ for (const vp of VIEWPORTS) {
       })
       for (const gap of rows) expect(gap, 'a summary row ends short of the grid edge').toBeLessThanOrEqual(2)
     })
+
+    test('panel table headers sit on the same side as their values', async ({ page }) => {
+      // The tax and dividend-calendar tables inherited the global th/td alignment, which put
+      // a left-aligned header over a right-aligned column of amounts.
+      await settle(page)
+      const mismatched = await page.evaluate(() => {
+        document.querySelectorAll('details').forEach((d) => (d.open = true))
+        const out: string[] = []
+        for (const table of document.querySelectorAll('.tax-table')) {
+          const heads = [...table.querySelectorAll('thead th')]
+          const cells = [...(table.querySelector('tbody tr')?.children ?? [])]
+          heads.forEach((th, i) => {
+            const td = cells[i]
+            if (!td || !th.textContent?.trim()) return
+            const a = getComputedStyle(th).textAlign
+            const b = getComputedStyle(td).textAlign
+            if (a !== b) out.push(`${th.textContent}: header ${a}, cells ${b}`)
+          })
+        }
+        return out
+      })
+      expect(mismatched).toEqual([])
+    })
   })
 }
 
