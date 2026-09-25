@@ -130,6 +130,32 @@ minimum). Tap opens the app. Portfolio + display currency chosen in widget confi
   across the threshold) so it does not spam every 15 minutes.
 - Requests `POST_NOTIFICATIONS` at the moment the first alert is created (Android 13+).
 
+## Phase 0 — General bug hunt (runs first, findings re-run after Phase 7)
+
+The Phase 1 bug was a web/Android divergence nobody noticed until two screenshots were compared.
+This phase hunts for more of that class systematically, plus ordinary errors.
+
+1. **Web ↔ Android numeric parity harness.** A script (`scripts/parity-check`) feeds the same
+   positions, quotes, FX rates, dividends and anchors (a frozen fixture captured from the demo
+   dataset) through the web calc (`vitest`) and Android `core:calc` (JVM test), then diffs every
+   per-row and portfolio figure: value, cost basis, P&L, dividends, total return, IRR, today's
+   change, sort orders. Any mismatch > 0.01 is a bug to fix or a documented intentional
+   difference. Kept as a permanent test so future ports can't drift.
+2. **Static checks.** `npm run build` (tsc), `./gradlew lint` for Android; fix errors and real
+   warnings (not style nits).
+3. **Runtime logs.** Web: load every portfolio in the MCP browser, collect console errors/warnings
+   and failed network requests. Android: emulator run through every screen, `adb logcat` filtered
+   to the app for exceptions, ANRs, StrictMode hits.
+4. **Silent-failure review.** Review catch blocks and fallbacks in fetch/sync code (`useQuotes`,
+   `useDividends`, `storage.ts`, `SyncCoordinator`, `QuoteClient`, `DividendClient`) for errors
+   swallowed without a user-visible or logged signal.
+5. **Edge-case data.** Demo dataset extended with: fully closed ticker, partial sell, GBp quote,
+   JPY quote with EUR lots, manual-priced fund, crypto, zero-quantity lot; both apps must render
+   without crash or NaN.
+
+Every finding: reproduce → failing test → fix (systematic-debugging). A findings list with
+status goes in the final report.
+
 ## Testing summary
 
 - Web: vitest for every new pure util (`taxTest`, `dividendForecast`, benchmark math, chart type
