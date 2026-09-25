@@ -48,6 +48,9 @@ fun fakeRow(
     costBasis = costBasis, pnl = pnl, pnlPercent = pnlPercent, dividendIncome = dividendIncome,
     totalReturn = totalReturn, loading = false, priceIsManual = priceIsManual, irr = irr,
     isClosed = isClosed, dailyChange = dailyChange,
+    // Rows display the anchored figure; mirror the legacy one so goldens show a real move.
+    dailyChangeDisplay = dailyChange,
+    dailyChangePercent = if (currentValue - dailyChange > 0) dailyChange / (currentValue - dailyChange) * 100 else 0.0,
 )
 
 fun fakeDividendEvent(
