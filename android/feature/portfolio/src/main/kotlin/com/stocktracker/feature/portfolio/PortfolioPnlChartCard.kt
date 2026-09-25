@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stocktracker.core.calc.Benchmark
 import com.stocktracker.core.calc.typeFilterLabel
 import com.stocktracker.core.calc.typeLabel
 import com.stocktracker.core.designsystem.StockTrackerColors
@@ -75,6 +76,21 @@ fun PortfolioPnlChartCard(
                 onToggle = { viewModel.onAction(PortfolioChartAction.ToggleType(it)) },
             )
         }
+        if (uiState.view == PnlView.RETURN) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                ToggleChip("No benchmark", uiState.benchmark == null) {
+                    viewModel.onAction(PortfolioChartAction.SetBenchmark(null))
+                }
+                Benchmark.entries.forEach { b ->
+                    ToggleChip("vs ${b.label}", uiState.benchmark == b) {
+                        viewModel.onAction(PortfolioChartAction.SetBenchmark(b))
+                    }
+                }
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp)) {
             RangeTabs(selected = uiState.range) { viewModel.onAction(PortfolioChartAction.SetRange(it)) }
         }
@@ -98,7 +114,19 @@ fun PortfolioPnlChartCard(
                     labels = uiState.points.map { formatAxisDate(it.date, uiState.range) },
                     color = color,
                     showZeroLine = true,
+                    overlay = uiState.benchmarkValues,
                 )
+                val benchmark = uiState.benchmark
+                val benchValues = uiState.benchmarkValues
+                if (benchmark != null && benchValues != null) {
+                    Text(
+                        "- - ${benchmark.label}: same cash flows, excl. dividends · " +
+                            (if (benchValues.last() > 0) "+" else "") + fmtCurrencyChart(benchValues.last(), uiState.displayCurrency),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
             else -> {
                 MultiLineChart(

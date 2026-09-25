@@ -40,8 +40,12 @@ fun AreaLineChart(
     color: Color,
     modifier: Modifier = Modifier,
     showZeroLine: Boolean = false,
+    /** Optional second series drawn as a dashed line on the same axes (e.g. a benchmark). */
+    overlay: List<Double>? = null,
+    overlayColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     if (values.isEmpty()) return
+    val overlayPoints = overlay?.takeIf { it.size == values.size }
     val textMeasurer = rememberTextMeasurer()
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
     val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -57,8 +61,8 @@ fun AreaLineChart(
     }
     val drawProgress = progress.value
 
-    val minV = values.min()
-    val maxV = values.max()
+    val minV = minOf(values.min(), overlayPoints?.min() ?: values.min())
+    val maxV = maxOf(values.max(), overlayPoints?.max() ?: values.max())
     val pad = max(abs(minV), abs(maxV)) * 0.08
     val domainMin = minV - (if (pad == 0.0) 1000.0 else pad)
     val domainMax = maxV + (if (pad == 0.0) 1000.0 else pad)
@@ -102,6 +106,14 @@ fun AreaLineChart(
         clipRect(right = leftMargin + plotWidth * drawProgress) {
             drawPath(fillPath, brush = Brush.verticalGradient(listOf(color.copy(alpha = 0.3f), color.copy(alpha = 0f))))
             drawPath(linePath, color = color, style = Stroke(width = 2.dp.toPx()))
+            overlayPoints?.let { pts ->
+                val overlayPath = Path()
+                pts.forEachIndexed { i, v -> if (i == 0) overlayPath.moveTo(xFor(i), yFor(v)) else overlayPath.lineTo(xFor(i), yFor(v)) }
+                drawPath(
+                    overlayPath, color = overlayColor,
+                    style = Stroke(width = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
+                )
+            }
         }
 
         listOf(domainMax, (domainMax + domainMin) / 2, domainMin).forEach { v ->

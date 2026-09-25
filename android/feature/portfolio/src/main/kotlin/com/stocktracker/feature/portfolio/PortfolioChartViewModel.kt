@@ -6,7 +6,10 @@ import com.stocktracker.core.calc.ChartRange
 import com.stocktracker.core.calc.TickerChartHistory
 import com.stocktracker.core.calc.buildEffectiveHistories
 import com.stocktracker.core.calc.buildPortfolioChartData
+import com.stocktracker.core.calc.Benchmark
 import com.stocktracker.core.calc.TYPE_ORDER
+import com.stocktracker.core.calc.benchmarkSeries
+import com.stocktracker.core.calc.makeConvertAt
 import com.stocktracker.core.calc.convert
 import com.stocktracker.core.calc.effectiveTypeFilter
 import com.stocktracker.core.calc.filterPositionsByType
@@ -38,6 +41,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -139,6 +145,22 @@ class PortfolioChartViewModel @Inject constructor(
         }
     }
 
+    /** Benchmark price history, always the full window: the line is cumulative from the first buy. */
+    private data class BenchHistory(val benchmark: Benchmark, val points: PriceHistory, val currency: String)
+
+    private val benchHistory = settingsRepository.settings
+        .map { it.chartBenchmark }
+        .distinctUntilChanged()
+        .mapLatest { b ->
+            b?.let {
+                runCatching { HistoryClient.fetchHistory(it.ticker, ChartRange.ALL.yahooParam) }
+                    .onFailure { e -> android.util.Log.w("Benchmark", "${it.ticker} history failed: ${e.message}") }
+                    .getOrNull()
+                    ?.let { r -> BenchHistory(it, r.points, r.currency ?: "USD") }
+            }
+        }
+        .onStart { emit(null) }
+
     private data class Inputs1(
         val positions: List<Position>,
         val manualPrices: Map<String, com.stocktracker.core.model.ManualPriceEntry>,
@@ -151,16 +173,21 @@ class PortfolioChartViewModel @Inject constructor(
         val rates: Map<String, Double>,
     )
 
-    private data class Prefs(val range: ChartRange, val displayCurrency: String, val chartTypes: Set<PositionType>)
+    private data class Prefs(
+        val range: ChartRange,
+        val displayCurrency: String,
+        val chartTypes: Set<PositionType>,
+        val benchmark: Benchmark?,
+    )
 
     private val inputs1 = combine(positions, manualPrices, taxOverrides) { p, m, t -> Inputs1(p, m, t) }
     private val inputs2 = combine(quoteRepository.quotes, dividendRepository.dividends, fxRateRepository.rates) { q, d, r -> Inputs2(q, d, r) }
-    private val prefs = combine(range, settingsRepository.settings) { r, s -> Prefs(r, s.displayCurrency, s.chartTypes) }.distinctUntilChanged()
+    private val prefs = combine(range, settingsRepository.settings) { r, s -> Prefs(r, s.displayCurrency, s.chartTypes, s.chartBenchmark) }.distinctUntilChanged()
 
     // The series is computed without `view` — Total Return vs. Portfolio Value are two
     // projections of the same points, so toggling between them is combined in afterwards
     // and never re-runs buildPortfolioChartData.
-    private val seriesState = combine(inputs1, inputs2, historyState, prefs) { in1, in2, hist, p ->
+    private val seriesState = combine(inputs1, inputs2, historyState, prefs, benchHistory) { in1, in2, hist, p, bench ->
         // Histories are fetched for every holding; only the chart math sees the filtered set, so
         // switching chips never refetches.
         val heldTypes = TYPE_ORDER.filter { t -> in1.positions.any { it.type == t } }
@@ -189,10 +216,23 @@ class PortfolioChartViewModel @Inject constructor(
                     taxOverrides = in1.taxOverrides,
                     spotConvert = { amount, from, to -> convert(amount, from, to, in2.rates) },
                 )
-                PortfolioChartUiState(range = p.range, loading = false, points = points, displayCurrency = p.displayCurrency)
+                val benchmarkValues = if (bench != null && bench.benchmark == p.benchmark && points.isNotEmpty()) {
+                    benchmarkSeries(
+                        positions = chartPositions,
+                        dates = points.map { it.date },
+                        bench = bench.points,
+                        benchCurrency = bench.currency,
+                        displayCurrency = p.displayCurrency,
+                        convertAt = makeConvertAt(hist.fxHistories) { amount, from, to -> convert(amount, from, to, in2.rates) },
+                    ).takeIf { it.size == points.size }?.map { Math.round(it).toDouble() }
+                } else null
+                PortfolioChartUiState(
+                    range = p.range, loading = false, points = points, displayCurrency = p.displayCurrency,
+                    benchmarkValues = benchmarkValues,
+                )
             }
         }
-        state.copy(heldTypes = heldTypes, typeFilter = typeFilter)
+        state.copy(heldTypes = heldTypes, typeFilter = typeFilter, benchmark = p.benchmark)
     }
         // Chart series math runs over every date × lot; never on the main thread.
         .flowOn(Dispatchers.Default)
@@ -209,6 +249,7 @@ class PortfolioChartViewModel @Inject constructor(
                 settingsRepository.setChartTypes(toggleType(current, action.type))
             }
             PortfolioChartAction.ClearTypes -> viewModelScope.launch { settingsRepository.setChartTypes(emptySet()) }
+            is PortfolioChartAction.SetBenchmark -> viewModelScope.launch { settingsRepository.setChartBenchmark(action.benchmark) }
         }
     }
 }

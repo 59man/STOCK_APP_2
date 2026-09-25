@@ -1,5 +1,6 @@
 package com.stocktracker.feature.portfolio
 
+import com.stocktracker.core.calc.Benchmark
 import com.stocktracker.core.calc.ChartRange
 import com.stocktracker.core.calc.PortfolioChartPoint
 import com.stocktracker.core.model.PositionType
@@ -18,6 +19,9 @@ data class PortfolioChartUiState(
     val heldTypes: List<PositionType> = emptyList(),
     /** Filter in force (stale stored types already dropped); empty means All. */
     val typeFilter: Set<PositionType> = emptySet(),
+    val benchmark: Benchmark? = null,
+    /** Benchmark return per point, same length as [points]; null while loading or when off. */
+    val benchmarkValues: List<Double>? = null,
 )
 
 sealed interface PortfolioChartAction {
@@ -25,4 +29,5 @@ sealed interface PortfolioChartAction {
     data class SetView(val view: PnlView) : PortfolioChartAction
     data class ToggleType(val type: PositionType) : PortfolioChartAction
     data object ClearTypes : PortfolioChartAction
+    data class SetBenchmark(val benchmark: Benchmark?) : PortfolioChartAction
 }

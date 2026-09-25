@@ -153,6 +153,25 @@ fun buildEffectiveHistories(
     return map
 }
 
+/**
+ * Converts at a date's own FX rate from CZK-based [fxHistories], falling back to [spot] when a
+ * rate is missing — the rule [buildPortfolioChartData] applies internally, for other consumers.
+ */
+fun makeConvertAt(
+    fxHistories: Map<String, PriceHistory>,
+    spot: (Double, String, String) -> Double,
+): (Double, String, String, String) -> Double {
+    fun fxAt(currency: String, date: String): Double? =
+        if (currency == "CZK") 1.0 else priceAt(fxHistories[currency] ?: emptyList(), date)
+    return { amount, from, to, date ->
+        if (from == to) amount else {
+            val f = fxAt(from, date)
+            val t = fxAt(to, date)
+            if (f != null && t != null) amount * f / t else spot(amount, from, to)
+        }
+    }
+}
+
 /** One portfolio chart data point — mirrors ChartPoint in PortfolioPnLChart.tsx. */
 data class PortfolioChartPoint(val date: String, val pnl: Double, val costBasis: Double, val currentValue: Double)
 

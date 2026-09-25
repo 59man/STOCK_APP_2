@@ -8,6 +8,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import com.stocktracker.core.calc.Benchmark
 import com.stocktracker.core.model.PositionType
 import com.stocktracker.core.model.SortField
 import com.stocktracker.core.model.SortOrder
@@ -32,6 +33,8 @@ data class AppSettings(
     val timeZoneId: String = "",
     /** Asset types the portfolio chart is filtered to; empty means All. */
     val chartTypes: Set<PositionType> = emptySet(),
+    /** Benchmark drawn over the Total Return chart, or null for none. */
+    val chartBenchmark: Benchmark? = null,
 )
 
 /**
@@ -66,6 +69,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
         val SORT_ASCENDING = booleanPreferencesKey("sort_ascending")
         val TIME_ZONE_ID = stringPreferencesKey("time_zone_id")
         val CHART_TYPES = stringPreferencesKey("chart_types")
+        val CHART_BENCHMARK = stringPreferencesKey("chart_benchmark")
     }
 
     val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
@@ -88,6 +92,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
             chartTypes = prefs[Keys.CHART_TYPES].orEmpty().split(',')
                 .mapNotNull { raw -> runCatching { PositionType.valueOf(raw) }.getOrNull() }
                 .toSet(),
+            chartBenchmark = prefs[Keys.CHART_BENCHMARK]?.let { raw -> runCatching { Benchmark.valueOf(raw) }.getOrNull() },
         )
     }
 
@@ -97,6 +102,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext context: Contex
     suspend fun setLastSyncedAt(isoTimestamp: String): Unit { dataStore.edit { it[Keys.LAST_SYNCED_AT] = isoTimestamp } }
     suspend fun setThemeMode(mode: String): Unit { dataStore.edit { it[Keys.THEME_MODE] = mode } }
     suspend fun setTimeZoneId(id: String): Unit { dataStore.edit { it[Keys.TIME_ZONE_ID] = id } }
+    suspend fun setChartBenchmark(benchmark: Benchmark?): Unit {
+        dataStore.edit { if (benchmark == null) it.remove(Keys.CHART_BENCHMARK) else it[Keys.CHART_BENCHMARK] = benchmark.name }
+    }
     suspend fun setChartTypes(types: Set<PositionType>): Unit {
         dataStore.edit { it[Keys.CHART_TYPES] = types.joinToString(",") { t -> t.name } }
     }
