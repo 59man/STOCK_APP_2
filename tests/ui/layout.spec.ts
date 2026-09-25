@@ -48,6 +48,24 @@ for (const vp of VIEWPORTS) {
       )
       expect(clipped, 'elements with clipped text').toEqual([])
     })
+
+    test('the summary cards fill every row they start', async ({ page }) => {
+      // A card added without updating the grid's column count wraps alone onto a row of
+      // empty cells — the Est. Dividends card did exactly that at 1440 px.
+      await settle(page)
+      const rows = await page.evaluate(() => {
+        const grid = document.querySelector('.summary-grid')
+        if (!grid) return []
+        const gridRight = Math.round(grid.getBoundingClientRect().right)
+        const byTop = new Map<number, number>()
+        for (const card of grid.querySelectorAll('.summary-card')) {
+          const r = card.getBoundingClientRect()
+          byTop.set(Math.round(r.top), Math.max(byTop.get(Math.round(r.top)) ?? 0, Math.round(r.right)))
+        }
+        return [...byTop.values()].map((right) => gridRight - right)
+      })
+      for (const gap of rows) expect(gap, 'a summary row ends short of the grid edge').toBeLessThanOrEqual(2)
+    })
   })
 }
 
