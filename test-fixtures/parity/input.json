@@ -1,0 +1,54 @@
+{
+  "today": "2026-09-25",
+  "displayCurrencies": ["CZK", "USD", "EUR"],
+  "rates": { "CZK": 1, "USD": 23.1, "EUR": 24.3, "GBP": 28.9, "JPY": 0.155, "CHF": 26.1, "CAD": 16.9, "AUD": 15.2 },
+  "positions": [
+    { "id": "a1", "ticker": "AAPL", "name": "Apple Inc.", "type": "stock", "quantity": 5, "buyPrice": 150, "buyDate": "2023-03-01", "currency": "USD", "broker": "Revolut" },
+    { "id": "a2", "ticker": "AAPL", "name": "Apple Inc.", "type": "stock", "quantity": 3, "buyPrice": 190, "buyDate": "2024-06-10", "currency": "USD", "broker": "IBKR" },
+    { "id": "v1", "ticker": "VIG.PR", "name": "Vienna Insurance Group", "type": "stock", "quantity": 20, "buyPrice": 620, "buyDate": "2022-05-02", "currency": "CZK", "broker": "Fio banka", "isin": "AT0000908504", "sellPrice": 780, "sellDate": "2025-06-01" },
+    { "id": "v2", "ticker": "VIG.PR", "name": "Vienna Insurance Group", "type": "stock", "quantity": 30, "buyPrice": 640, "buyDate": "2022-09-15", "currency": "CZK", "broker": "Fio banka", "isin": "AT0000908504" },
+    { "id": "m1", "ticker": "8306.T", "name": "Mitsubishi UFJ", "type": "stock", "quantity": 100, "buyPrice": 9.5, "buyDate": "2024-01-20", "currency": "EUR", "broker": "XTB" },
+    { "id": "b1", "ticker": "BP.L", "name": "BP plc", "type": "stock", "quantity": 200, "buyPrice": 4.6, "buyDate": "2024-11-04", "currency": "GBP", "broker": "Trading 212" },
+    { "id": "f1", "ticker": "LU2606422355", "name": "onemarkets fund", "type": "fund", "quantity": 40, "buyPrice": 100, "buyDate": "2023-07-01", "currency": "CZK", "broker": "UniCredit" },
+    { "id": "c1", "ticker": "BTC-USD", "name": "Bitcoin", "type": "crypto", "quantity": 0.05, "buyPrice": 42000, "buyDate": "2024-02-01", "currency": "USD", "broker": "Revolut" },
+    { "id": "e1", "ticker": "VWCE.DE", "name": "Vanguard FTSE All-World", "type": "etf", "quantity": 12, "buyPrice": 105, "buyDate": "2023-10-02", "currency": "EUR", "broker": "XTB" },
+    { "id": "x1", "ticker": "CLOSED.X", "name": "Fully sold co", "type": "stock", "quantity": 10, "buyPrice": 50, "buyDate": "2021-01-05", "currency": "USD", "sellPrice": 65, "sellDate": "2024-02-01" },
+    { "id": "z1", "ticker": "ZERO.X", "name": "Zero qty lot", "type": "stock", "quantity": 0, "buyPrice": 10, "buyDate": "2025-01-01", "currency": "CZK" },
+    { "id": "s1", "ticker": "SELL0.X", "name": "Zero sell price", "type": "stock", "quantity": 4, "buyPrice": 20, "buyDate": "2025-02-01", "currency": "CZK", "sellPrice": 0, "sellDate": "2025-08-01" }
+  ],
+  "quotes": {
+    "AAPL": { "ticker": "AAPL", "price": 255.4, "change": -2.1, "changePercent": -0.815, "currency": "USD", "name": "Apple Inc.", "lastUpdated": "2026-09-24T20:00:00Z" },
+    "VIG.PR": { "ticker": "VIG.PR", "price": 905, "change": 5, "changePercent": 0.556, "currency": "CZK", "name": "VIG", "lastUpdated": "2026-09-24T15:30:00Z" },
+    "8306.T": { "ticker": "8306.T", "price": 2150, "change": 30, "changePercent": 1.415, "currency": "JPY", "name": "MUFG", "lastUpdated": "2026-09-25T06:00:00Z" },
+    "BP.L": { "ticker": "BP.L", "price": 4.21, "change": -0.03, "changePercent": -0.708, "currency": "GBP", "name": "BP", "lastUpdated": "2026-09-24T15:30:00Z" },
+    "BTC-USD": { "ticker": "BTC-USD", "price": 108000, "change": 1200, "changePercent": 1.124, "currency": "USD", "name": "Bitcoin", "lastUpdated": "2026-09-25T11:00:00Z" },
+    "VWCE.DE": { "ticker": "VWCE.DE", "price": 138.2, "change": 0.4, "changePercent": 0.29, "currency": "EUR", "name": "VWCE", "lastUpdated": "2026-09-24T15:30:00Z" },
+    "ZERO.X": { "ticker": "ZERO.X", "price": 12, "change": 1, "changePercent": 9.09, "currency": "CZK", "name": "Zero", "lastUpdated": "2026-09-24T15:30:00Z" }
+  },
+  "anchors": {
+    "AAPL": { "price": 255.4, "lastTradedAt": 1790280000 },
+    "VIG.PR": { "price": 905, "lastTradedAt": 1790263800 },
+    "8306.T": { "price": 2120, "lastTradedAt": 1790316000 },
+    "BTC-USD": { "price": 106500, "lastTradedAt": 1790334000 }
+  },
+  "fxAnchors": { "USD": 23.05, "JPY": 0.1548, "EUR": 24.28, "GBP": 28.95 },
+  "manualPrices": { "LU2606422355": { "price": 112.4, "updatedAt": "2026-09-20" } },
+  "dividends": {
+    "AAPL": [
+      { "date": "2025-11-10", "amount": 0.26, "currency": "USD" },
+      { "date": "2026-02-09", "amount": 0.26, "currency": "USD" },
+      { "date": "2026-05-11", "amount": 0.27, "currency": "USD" },
+      { "date": "2026-08-10", "amount": 0.27, "currency": "USD" }
+    ],
+    "VIG.PR": [
+      { "date": "2023-05-26", "amount": 35, "currency": "CZK" },
+      { "date": "2024-05-24", "amount": 40, "currency": "CZK" },
+      { "date": "2025-05-23", "amount": 45, "currency": "CZK" },
+      { "date": "2026-05-22", "amount": 50, "currency": "CZK" }
+    ],
+    "8306.T": [ { "date": "2026-03-30", "amount": 32, "currency": "JPY" } ],
+    "BP.L": [ { "date": "2026-08-14", "amount": 0.063, "currency": "GBP" } ]
+  },
+  "taxOverrides": { "VIG.PR::2026-05-22": 0 },
+  "sortFields": ["VALUE", "TODAY", "TOTAL_RETURN"]
+}

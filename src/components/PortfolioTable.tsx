@@ -1,4 +1,6 @@
 import { useState, useMemo, Fragment, useRef, useEffect } from 'react'
+import { isOpenLot } from '../utils/rowDerivation'
+import { portfolioDailyChange } from '../utils/rowSorting'
 import { PortfolioRow, Position } from '../types'
 import { DividendEvent, getDividendTaxRate } from '../utils/dividends'
 import { ManualPriceEntry } from '../hooks/useManualPrices'
@@ -497,9 +499,7 @@ export function PortfolioTable({
   const totalPricePnl = rows.reduce((s, r) => s + cv(r.pnl, r.currency), 0)
   const totalReturn = totalPricePnl + totalDivs
   const totalReturnPct = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0
-  const totalDailyChange = rows.reduce((s, r) => s + r.dailyChangeDisplay, 0)
-  const prevTotalValue = totalValue - totalDailyChange
-  const dailyChangePct = prevTotalValue > 0 ? (totalDailyChange / prevTotalValue) * 100 : 0
+  const { change: totalDailyChange, percent: dailyChangePct } = portfolioDailyChange(rows, totalValue)
 
   const detailColSpan = activeColumns.length + 3
 
@@ -927,7 +927,7 @@ export function PortfolioTable({
                           <button
                             className="sell-btn" title="Sell / close position"
                             onClick={() => {
-                              const openLots = r.positions.filter((p) => !p.sellPrice || !p.sellDate)
+                              const openLots = r.positions.filter(isOpenLot)
                               setPendingSell({ ticker: r.ticker, lots: openLots.map((p) => ({ id: p.id, quantity: p.quantity, buyDate: p.buyDate, buyPrice: p.buyPrice, currency: p.currency })) })
                             }}
                           >Sell</button>

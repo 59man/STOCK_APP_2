@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isOpenLot } from '../utils/rowDerivation'
 import { Position } from '../types'
 
 interface Props {
@@ -19,7 +20,7 @@ export function ImportModal({ fileName, positions, currentPortfolioName, hasTaxO
   const [currency, setCurrency] = useState('CZK')
 
   const tickers = [...new Set(positions.map((p) => p.ticker))].slice(0, 8)
-  const openCount = positions.filter((p) => !p.sellPrice || !p.sellDate).length
+  const openCount = positions.filter(isOpenLot).length
   const closedCount = positions.length - openCount
 
   const handleConfirm = () => {
