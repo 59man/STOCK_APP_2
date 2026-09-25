@@ -1,0 +1,12 @@
+{
+  "note": "Bench in CZK, display CZK. A: 10 x 50 on 2024-01-01 -> 5 units. B: 1 x 240 on 2024-06-01 -> 2 units, sold at 300 on 2025-01-01 -> -2 units.",
+  "bench": [["2024-01-01", 100], ["2024-06-01", 120], ["2025-01-01", 150]],
+  "benchCurrency": "CZK",
+  "displayCurrency": "CZK",
+  "dates": ["2024-01-01", "2024-06-01", "2025-01-01"],
+  "positions": [
+    { "id": "a", "ticker": "A", "name": "A", "type": "stock", "quantity": 10, "buyPrice": 50, "buyDate": "2024-01-01", "currency": "CZK" },
+    { "id": "b", "ticker": "B", "name": "B", "type": "stock", "quantity": 1, "buyPrice": 240, "buyDate": "2024-06-01", "currency": "CZK", "sellPrice": 300, "sellDate": "2025-01-01" }
+  ],
+  "expected": [0, 100, 310]
+}
