@@ -117,8 +117,8 @@ a portfolio built up over time):
 Jetpack Glance widget: portfolio name, total value, today's change (anchored, same
 `portfolioDailyChange` as Phase 1), last-updated time. Reads Room only (no network in the widget);
 refreshed by the existing sync/refresh cadence plus a periodic WorkManager job (≥ 15 min, OS
-minimum). Tap opens the app. Portfolio + display currency chosen in widget configuration activity
-(default: active portfolio, settings currency).
+minimum). Tap opens the app. Shows the active portfolio in the settings display currency (no separate
+configuration screen — YAGNI; add one only if asked).
 
 ### Price alerts
 - New Room table `price_alerts` (id, ticker, direction above/below, threshold, currency,
