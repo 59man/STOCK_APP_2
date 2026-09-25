@@ -67,4 +67,5 @@ private fun LotField(label: String, value: String) {
 }
 
 internal fun formatQty(value: Double): String =
-    if (value == value.toLong().toDouble()) value.toLong().toString() else String.format(Locale.US, "%.4f", value)
+    if (value == value.toLong().toDouble()) value.toLong().toString()
+    else String.format(Locale.US, "%.4f", value).trimEnd('0').trimEnd('.')
