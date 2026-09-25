@@ -1,0 +1,26 @@
+{
+  "freeFrom": [
+    { "buyDate": "2023-01-15", "expected": "2026-01-16" },
+    { "buyDate": "2024-02-29", "expected": "2027-03-01" },
+    { "buyDate": "2022-12-31", "expected": "2026-01-01" }
+  ],
+  "status": [
+    { "lot": { "buyDate": "2023-01-15", "sellDate": "2026-01-16", "sellPrice": 1 }, "today": "2026-09-25", "kind": "exempt" },
+    { "lot": { "buyDate": "2023-01-15", "sellDate": "2026-01-15", "sellPrice": 1 }, "today": "2026-09-25", "kind": "taxable" },
+    { "lot": { "buyDate": "2023-01-15" }, "today": "2026-01-16", "kind": "exempt", "daysLeft": 0 },
+    { "lot": { "buyDate": "2025-09-25" }, "today": "2026-09-25", "kind": "pending", "daysLeft": 732 }
+  ],
+  "years": {
+    "fx": { "USD": [["2020-01-01", 20], ["2024-01-01", 25]] },
+    "positions": [
+      { "id": "a", "ticker": "A", "name": "A", "type": "stock", "quantity": 10, "buyPrice": 100, "buyDate": "2020-06-01", "currency": "CZK", "sellPrice": 150, "sellDate": "2025-03-01" },
+      { "id": "b", "ticker": "B", "name": "B", "type": "stock", "quantity": 10, "buyPrice": 100, "buyDate": "2024-06-01", "currency": "CZK", "sellPrice": 130, "sellDate": "2025-03-01" },
+      { "id": "c", "ticker": "C", "name": "C", "type": "stock", "quantity": 2, "buyPrice": 10, "buyDate": "2023-06-01", "currency": "USD", "sellPrice": 10, "sellDate": "2024-06-01" },
+      { "id": "d", "ticker": "D", "name": "D", "type": "stock", "quantity": 1, "buyPrice": 999, "buyDate": "2024-01-01", "currency": "CZK" }
+    ],
+    "expected": [
+      { "year": 2025, "proceedsTaxable": 1300, "gainTaxable": 300, "gainExempt": 500, "underSmallProceedsLimit": true },
+      { "year": 2024, "proceedsTaxable": 500, "gainTaxable": 100, "gainExempt": 0, "underSmallProceedsLimit": true }
+    ]
+  }
+}
