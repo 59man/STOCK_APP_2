@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 import com.stocktracker.core.model.PositionType
 import java.io.File
 import java.net.URI
@@ -123,6 +124,10 @@ internal fun TickerLogo(
         contentDescription = null,
         modifier = modifier.size(40.dp).clip(CircleShape),
         loading = { InitialAvatar(ticker, type, modifier) },
+        // White behind a loaded image only: many logos are transparent dark wordmarks
+        // (KOMB.PR's "KB") that vanish on the dark card, and opaque logos cover it anyway.
+        // Applied to the whole circle it would fringe the initials avatar while loading.
+        success = { SubcomposeAsyncImageContent(modifier = Modifier.background(Color.White)) },
         error = { InitialAvatar(ticker, type, modifier) },
         onError = { index += 1 },
     )
