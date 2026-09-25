@@ -11,4 +11,10 @@ class AnchorClientTest {
         assertEquals(AnchorResponseKind.TRANSIENT, anchorResponseKind(503))
         assertEquals(AnchorResponseKind.TRANSIENT, anchorResponseKind(401))
     }
+
+    @Test fun `pence anchors scale to pounds, everything else is untouched`() {
+        assertEquals(0.01, anchorPriceScale("GBp"), 0.0)
+        assertEquals(1.0, anchorPriceScale("GBP"), 0.0)
+        assertEquals(1.0, anchorPriceScale(null), 0.0)
+    }
 }

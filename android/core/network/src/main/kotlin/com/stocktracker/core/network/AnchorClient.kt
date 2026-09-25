@@ -28,6 +28,7 @@ private data class AnchorResult(
 )
 @Serializable
 private data class AnchorMeta(
+    val currency: String? = null,
     val regularMarketTime: Long? = null,
     val regularMarketPrice: Double? = null,
     val currentTradingPeriod: AnchorPeriods? = null,
@@ -86,10 +87,13 @@ object AnchorClient {
         val daily = fetch(ticker, "interval=1d&range=5d") ?: return ResolvedAnchor(null, null)
         val meta = daily.meta
         val lastTradedAt = meta?.regularMarketTime
+        // London lines are quoted in pence while QuoteClient normalises the live price to GBP;
+        // an un-normalised anchor made BP.L's today's change -99 %.
+        val scale = anchorPriceScale(meta?.currency)
 
         if (lastTradedAt != null && lastTradedAt <= midnight) {
             // Nothing has traded today, so the anchor is where we already are.
-            return ResolvedAnchor(meta.regularMarketPrice, lastTradedAt)
+            return ResolvedAnchor(meta.regularMarketPrice?.times(scale), lastTradedAt)
         }
 
         val regular = meta?.currentTradingPeriod?.regular
@@ -100,11 +104,11 @@ object AnchorClient {
                 0L
             }
             resolveAnchorFromDaily(barsOf(daily), midnight, sessionLength)
-                ?.let { return ResolvedAnchor(it, lastTradedAt) }
+                ?.let { return ResolvedAnchor(it * scale, lastTradedAt) }
         }
 
         val intraday = fetch(ticker, "interval=5m&range=2d")
-        return ResolvedAnchor(resolveAnchorFromIntraday(barsOf(intraday), midnight), lastTradedAt)
+        return ResolvedAnchor(resolveAnchorFromIntraday(barsOf(intraday), midnight)?.times(scale), lastTradedAt)
     }
 
     /** Null when the currency pair could not be resolved; the caller then holds FX flat. */
@@ -151,6 +155,9 @@ object AnchorClient {
         }
     }
 }
+
+/** Pence-quoted (GBp) series are scaled to GBP, the unit QuoteClient reports. */
+internal fun anchorPriceScale(currency: String?): Double = if (currency == "GBp") 0.01 else 1.0
 
 internal enum class AnchorResponseKind { OK, DEFINITIVE_MISS, TRANSIENT }
 

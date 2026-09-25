@@ -38,6 +38,7 @@ function keyFor(ticker: string, midnight: number): string {
 }
 
 interface ChartMeta {
+  currency?: string
   regularMarketTime?: number
   regularMarketPrice?: number
   currentTradingPeriod?: { regular?: { start: number; end: number } }
@@ -112,9 +113,14 @@ export async function resolveAnchor(ticker: string, midnight: number, expandFx =
 
   if (daily === null) return { price: null, lastTradedAt: null }
 
+  // London lines are quoted in pence (GBp) while useQuotes normalises the live price to GBP;
+  // an un-normalised anchor made BP.L's today's change -99 %.
+  const scale = meta?.currency === 'GBp' ? 0.01 : 1
+  const scaled = (p: number | null | undefined): number | null => (p == null ? null : p * scale)
+
   if (lastTradedAt !== null && lastTradedAt <= midnight) {
     // Step 1 — nothing has traded today, so the anchor is where we already are.
-    return { price: meta?.regularMarketPrice ?? null, lastTradedAt }
+    return { price: scaled(meta?.regularMarketPrice), lastTradedAt }
   }
 
   const regular = meta?.currentTradingPeriod?.regular
@@ -123,13 +129,13 @@ export async function resolveAnchor(ticker: string, midnight: number, expandFx =
     // length is what turns that into a session end.
     const sessionLength = regular ? regular.end - regular.start : 0
     const price = resolveAnchorFromDaily(barsOf(daily), midnight, sessionLength)
-    if (price !== null) return { price, lastTradedAt }
+    if (price !== null) return { price: scaled(price), lastTradedAt }
   }
 
   // Step 3 — a session was in progress at local midnight (always so for crypto), which daily
   // bars cannot answer.
   const intraday = await fetchChart(ticker, 'interval=5m&range=2d')
-  return { price: resolveAnchorFromIntraday(barsOf(intraday), midnight), lastTradedAt }
+  return { price: scaled(resolveAnchorFromIntraday(barsOf(intraday), midnight)), lastTradedAt }
 }
 
 async function resolveFxAnchor(from: string, to: string, midnight: number): Promise<number | null> {

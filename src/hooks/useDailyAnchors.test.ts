@@ -26,3 +26,12 @@ describe('resolveAnchor', () => {
     await expect(resolveAnchor('AAPL', 200)).resolves.toEqual({ price: 42, lastTradedAt: 100 })
   })
 })
+
+describe('resolveAnchor pence', () => {
+  beforeEach(() => proxyFetch.mockReset())
+
+  it('normalises a GBp (pence) anchor to GBP, matching the quote', async () => {
+    proxyFetch.mockResolvedValue(response(200, { chart: { result: [{ meta: { currency: 'GBp', regularMarketTime: 100, regularMarketPrice: 421 } }] } }))
+    await expect(resolveAnchor('BP.L', 200)).resolves.toEqual({ price: 4.21, lastTradedAt: 100 })
+  })
+})
