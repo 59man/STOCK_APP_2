@@ -77,4 +77,20 @@ class PositionCardTest {
         }
         composeTestRule.onNodeWithText("1,000,000.00", useUnmergedTree = true).assertIsDisplayed()
     }
+
+    @Test
+    fun todaysPill_showsTheWholePositionsMoveInMoney_notAPercent() {
+        composeTestRule.setContent {
+            StockTrackerTheme {
+                PositionCard(
+                    row = fakeRow(currentValue = 88_800.0, dailyChange = -5_700.0),
+                    displayCurrency = "USD",
+                    rates = emptyMap(),
+                    onOpenDetail = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("-5,700.00", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("-6.0%", useUnmergedTree = true).assertDoesNotExist()
+    }
 }

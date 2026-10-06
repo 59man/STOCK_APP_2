@@ -115,6 +115,9 @@ fun PortfolioPnlChartCard(
                     color = color,
                     showZeroLine = true,
                     overlay = uiState.benchmarkValues,
+                    pointLabels = uiState.points.map { formatDisplayDate(it.date) },
+                    valueFormatter = { v -> (if (v > 0) "+" else "") + fmtCurrencyChart2dp(v, uiState.displayCurrency) },
+                    overlayLabel = uiState.benchmark?.label,
                 )
                 val benchmark = uiState.benchmark
                 val benchValues = uiState.benchmarkValues
@@ -143,6 +146,8 @@ fun PortfolioPnlChartCard(
 
 
 private fun fmtCurrencyChart(v: Double, currency: String): String = String.format(Locale.US, "%,.0f %s", v, currency)
+
+private fun fmtCurrencyChart2dp(v: Double, currency: String): String = String.format(Locale.US, "%,.2f %s", v, currency)
 
 /** All + one chip per held type; scrolls sideways rather than wrapping on a narrow phone. */
 @Composable

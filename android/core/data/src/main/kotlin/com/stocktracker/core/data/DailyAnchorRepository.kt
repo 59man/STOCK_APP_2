@@ -41,9 +41,27 @@ class DailyAnchorRepository @Inject constructor(
     private val _fxAnchors = MutableStateFlow<Map<String, Double>>(emptyMap())
     val fxAnchors: StateFlow<Map<String, Double>> = _fxAnchors
 
-    suspend fun refresh(tickers: List<String>, currencies: List<String>, displayCurrency: String, zone: ZoneId) {
-        val today = LocalDate.now(zone).toString()
-        val midnight = localMidnightEpoch(zone, Instant.now())
+    /** The local date the in-memory maps belong to. */
+    @Volatile
+    private var heldDate: String? = null
+
+    suspend fun refresh(
+        tickers: List<String>,
+        currencies: List<String>,
+        displayCurrency: String,
+        zone: ZoneId,
+        now: Instant = Instant.now(),
+    ) {
+        val today = LocalDate.ofInstant(now, zone).toString()
+        val midnight = localMidnightEpoch(zone, now)
+        // This is a process-wide singleton and the process routinely outlives midnight, so the
+        // in-memory maps must be dropped when the date turns — otherwise every ticker already
+        // held is skipped below and keeps yesterday's anchor for as long as the app stays alive.
+        if (heldDate != today) {
+            _anchors.value = emptyMap()
+            _fxAnchors.value = emptyMap()
+            heldDate = today
+        }
         withContext(Dispatchers.IO) { dao.pruneBefore(today) }
 
         coroutineScope {

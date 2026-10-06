@@ -3,20 +3,28 @@ package com.stocktracker.core.designsystem.chart
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -32,6 +40,9 @@ private const val DrawInDurationMs = 550
  * and an optional dashed zero-reference line — the shared Canvas primitive
  * behind PriceChart's per-ticker view and PortfolioPnLChart's Total Return
  * view (both AreaChart+Area in the web app).
+ *
+ * Tapping or dragging sideways selects the nearest point and shows a crosshair with that
+ * point's [pointLabels] entry and its value; a second tap on the same point hides it.
  */
 @Composable
 fun AreaLineChart(
@@ -43,6 +54,11 @@ fun AreaLineChart(
     /** Optional second series drawn as a dashed line on the same axes (e.g. a benchmark). */
     overlay: List<Double>? = null,
     overlayColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    /** Full per-point label for the touch tooltip (axis [labels] are abbreviated); defaults to [labels]. */
+    pointLabels: List<String> = labels,
+    valueFormatter: (Double) -> String = ::formatChartValue,
+    /** Names the [overlay] value in the touch tooltip; the overlay row is omitted when null. */
+    overlayLabel: String? = null,
 ) {
     if (values.isEmpty()) return
     val overlayPoints = overlay?.takeIf { it.size == values.size }
@@ -51,6 +67,12 @@ fun AreaLineChart(
     val axisLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
     val zeroLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
     val labelStyle = TextStyle(fontSize = 10.sp, color = axisLabelColor)
+    val tooltipBackground = MaterialTheme.colorScheme.surfaceVariant
+    val tooltipStyle = TextStyle(fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+    val crosshairColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+
+    // Reset whenever the data changes: an index into the previous range means nothing now.
+    var selected by remember(values) { mutableStateOf<Int?>(null) }
 
     // Draws the line/fill left-to-right on first composition and whenever the underlying
     // data changes (e.g. a new range selection), instead of popping in fully rendered.
@@ -68,8 +90,30 @@ fun AreaLineChart(
     val domainMax = maxV + (if (pad == 0.0) 1000.0 else pad)
     val domainSpan = (domainMax - domainMin).let { if (it == 0.0) 1.0 else it }
 
-    Canvas(modifier = modifier.fillMaxWidth().height(220.dp)) {
-        val leftMargin = 42.dp.toPx()
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .pointerInput(values) {
+                val leftMargin = ChartLeftMargin.toPx()
+                detectTapGestures { offset ->
+                    val i = nearestPointIndex(offset.x, leftMargin, size.width - leftMargin, values.size)
+                    selected = if (selected == i) null else i
+                }
+            }
+            .pointerInput(values) {
+                val leftMargin = ChartLeftMargin.toPx()
+                fun select(x: Float) {
+                    selected = nearestPointIndex(x, leftMargin, size.width - leftMargin, values.size)
+                }
+                // Horizontal only, so a vertical swipe still scrolls the screen the chart sits in.
+                detectHorizontalDragGestures(onDragStart = { select(it.x) }) { change, _ ->
+                    change.consume()
+                    select(change.position.x)
+                }
+            },
+    ) {
+        val leftMargin = ChartLeftMargin.toPx()
         val bottomMargin = 16.dp.toPx()
         val topMargin = 6.dp.toPx()
         val plotWidth = size.width - leftMargin
@@ -141,5 +185,41 @@ fun AreaLineChart(
                 claimedLeftEdge = x
             }
         }
+
+        selected?.takeIf { it in values.indices }?.let { i ->
+            val x = xFor(i)
+            drawLine(crosshairColor, Offset(x, topMargin), Offset(x, topMargin + plotHeight), strokeWidth = 1.dp.toPx())
+            drawCircle(color, radius = 4.dp.toPx(), center = Offset(x, yFor(values[i])))
+            val overlayValue = overlayPoints?.getOrNull(i)
+            if (overlayValue != null) {
+                drawCircle(overlayColor, radius = 3.dp.toPx(), center = Offset(x, yFor(overlayValue)))
+            }
+
+            val lines = buildList {
+                add(pointLabels.getOrNull(i) ?: labels.getOrNull(i).orEmpty())
+                add(valueFormatter(values[i]))
+                if (overlayValue != null && overlayLabel != null) add("$overlayLabel: ${valueFormatter(overlayValue)}")
+            }.map { textMeasurer.measure(it, style = tooltipStyle) }
+            val padding = 6.dp.toPx()
+            val boxWidth = lines.maxOf { it.size.width } + padding * 2
+            val boxHeight = lines.sumOf { it.size.height } + padding * 2
+            // Beside the crosshair rather than on it, flipping sides near the right edge.
+            val gap = 8.dp.toPx()
+            val boxX = (if (x + gap + boxWidth <= size.width) x + gap else x - gap - boxWidth)
+                .coerceIn(0f, (size.width - boxWidth).coerceAtLeast(0f))
+            drawRoundRect(
+                tooltipBackground,
+                topLeft = Offset(boxX, topMargin),
+                size = Size(boxWidth, boxHeight),
+                cornerRadius = CornerRadius(6.dp.toPx()),
+            )
+            var lineY = topMargin + padding
+            lines.forEach { line ->
+                drawText(line, topLeft = Offset(boxX + padding, lineY))
+                lineY += line.size.height
+            }
+        }
     }
 }
+
+private val ChartLeftMargin = 42.dp

@@ -39,3 +39,13 @@ fun sparseLabelIndices(count: Int, maxLabels: Int = 5): List<Int> {
     }
     return indices
 }
+
+/**
+ * The data point nearest to a touch at [x], for [count] points spread evenly across
+ * [plotWidth] starting at [leftMargin]. Touches outside the plot clamp to the first/last point.
+ */
+fun nearestPointIndex(x: Float, leftMargin: Float, plotWidth: Float, count: Int): Int {
+    if (count <= 1 || plotWidth <= 0f) return 0
+    val fraction = ((x - leftMargin) / plotWidth).coerceIn(0f, 1f)
+    return Math.round(fraction * (count - 1))
+}

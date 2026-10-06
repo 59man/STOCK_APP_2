@@ -592,11 +592,12 @@ internal fun PositionCard(
     onOpenDetail: () -> Unit,
 ) {
     fun dc(amount: Double) = com.stocktracker.core.calc.convert(amount, row.currency, displayCurrency, rates)
-    val dailyPct = row.dailyChangePercent
+    // Already in the display currency, for the whole position — not a per-share figure.
+    val daily = row.dailyChangeDisplay
     val context = LocalContext.current
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
-        // XTB-style compact row: logo, ticker/name, and only today's %, total return incl.
+        // XTB-style compact row: logo, ticker/name, and only today's change, total return incl.
         // dividends, and current price. Everything else (avg buy, IRR, buy/sell/delete) lives on
         // PositionDetailRoute now, reached by tapping the row.
         Row(
@@ -654,9 +655,9 @@ internal fun PositionCard(
                 )
                 Row(modifier = Modifier.padding(top = Spacing.xs), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                     Badge(
-                        signedPercent(dailyPct),
-                        containerColor = pnlColorRounded(dailyPct).copy(alpha = 0.16f),
-                        contentColor = pnlColorRounded(dailyPct),
+                        signedMoney(daily),
+                        containerColor = pnlColorRounded(daily, decimals = 2).copy(alpha = 0.16f),
+                        contentColor = pnlColorRounded(daily, decimals = 2),
                         emphasized = true,
                     )
                     Badge(
