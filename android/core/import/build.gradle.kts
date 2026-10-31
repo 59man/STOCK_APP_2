@@ -20,6 +20,8 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // PDFBox loads its font metrics from AAR assets, which Robolectric only sees with this.
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 dependencies {

@@ -75,4 +75,9 @@ describe('dailyChange', () => {
     expect(r.change).toBeCloseTo(r.priceOnlyChange, 9)
     expect(r.method).toBe('anchored')
   })
+
+  it('reports floating-point dust as exactly zero', () => {
+    const r = dailyChange({ quantity: 3, currentPrice: 0.1, anchorPrice: 0.1, currentFx: 1 / 3, anchorFx: (1 / 3) * (1 + 1e-16) })
+    expect(Object.is(r.change, 0)).toBe(true)
+  })
 })

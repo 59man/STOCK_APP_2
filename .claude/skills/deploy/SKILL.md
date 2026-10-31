@@ -32,13 +32,12 @@ Commit the regenerated lockfile. The local npm reads it fine, so this costs noth
 
 ## Step 1 — build and push from this machine
 
-`VITE_PERSIST_API_KEY` is inlined into the bundle at build time, so it must be a build arg, sourced
-from `.env` in the same command. Never type the key literal into a command — Claude Code's auto-mode
-classifier blocks commands containing what look like secrets.
+The image is public, so it carries no API key: never add a key build arg. The server generates its own
+key on first start (see Auth in `CLAUDE.md`). If `docker build` fails with `operation not supported` on
+a veth pair, add `--network host`.
 
 ```bash
-set -a && . ./.env && set +a
-docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY="$VITE_PERSIST_API_KEY" .
+docker build -t 59man/stock-tracker:latest .
 docker push 59man/stock-tracker:latest
 ```
 
@@ -58,16 +57,15 @@ ssh -q casa "sudo -n docker inspect stock-tracker --format '{{range .Mounts}}{{.
 ssh -q casa "sudo -n docker pull 59man/stock-tracker:latest"
 ```
 
-Recover the runtime `PERSIST_API_KEY` from the old container's own env so the value never appears in a
-command you typed, then stop, remove, and re-run with the flags you just read:
+Stop, remove, and re-run with the flags you just read. The key lives in the backups mount, so it
+survives this. Do not pass `-e PERSIST_API_KEY`: it would override the generated key and block rotation.
+Keep `0.0.0.0` in `-p`: the page hands browsers the key, and on IPv6 Docker hides the client's address.
 
 ```bash
-ssh -q casa 'KEY=$(sudo -n docker inspect stock-tracker --format "{{range .Config.Env}}{{println .}}{{end}}" | grep "^PERSIST_API_KEY=" | cut -d= -f2-) && \
-  sudo -n docker stop stock-tracker && sudo -n docker rm stock-tracker && \
-  sudo -n docker run -d --name stock-tracker -p 4000:8080 \
+ssh -q casa 'sudo -n docker stop stock-tracker && sudo -n docker rm stock-tracker && \
+  sudo -n docker run -d --name stock-tracker -p 0.0.0.0:4000:8080 \
     -v /DATA/stock-tracker/data.json:/app/server/data.json \
     -v /DATA/stock-tracker/backups:/app/server/backups \
-    -e PERSIST_API_KEY="$KEY" \
     --log-opt max-size=10m --log-opt max-file=3 \
     --restart unless-stopped \
     59man/stock-tracker:latest'
@@ -86,19 +84,18 @@ All three, not just the first:
 ```bash
 ssh -q casa "sudo -n docker ps --filter name=stock-tracker"          # expect: healthy
 ssh -q casa "curl -s http://localhost:4000/api/health"               # expect: 200
-ssh -q casa "curl -s -H 'X-API-Key: \$KEY' http://localhost:4000/api/persist/stock_tracker_portfolios"
+ssh -q casa 'KEY=$(sudo -n docker exec stock-tracker node server/index.js show-key) && curl -s -H "X-API-Key: $KEY" http://localhost:4000/api/persist/stock_tracker_portfolios'
 ```
 
 The last check is the one that matters: confirm the four real portfolio names — Main Portfolio,
 rodice, jonas, Marek — are still present. A healthy container serving an empty store is a failed
 deploy, usually a wrong or missing volume mount.
 
-If `VITE_PERSIST_API_KEY` changed, the image must be rebuilt — it is baked in at build time. Only
-`PERSIST_API_KEY` (the server-side runtime check) can change with a plain restart.
+To change the key: `ssh -q casa "sudo -n docker exec stock-tracker node server/index.js rotate-key"`. It
+is live at once, with no rebuild or restart; open browser tabs need a reload and each phone needs the new key.
 
 ## Fallback: build on the NAS
 
 Use this only if Docker on this machine is broken. Clone or update the repo on the NAS
-(`~/stock-tracker-build`, `git fetch origin && git reset --hard origin/main`), `scp` `.env` to a temp
-path, source it, `sudo docker build`, delete the temp file immediately, then stop/rm/run as above. This
+(`~/stock-tracker-build`, `git fetch origin && git reset --hard origin/main`), `sudo docker build`, then stop/rm/run as above. This
 path does not update Docker Hub, so the `:latest` tag goes stale — note that if you use it.

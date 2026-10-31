@@ -1,37 +1,144 @@
 import 'dotenv/config'
 import express from 'express'
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
+import { createHash, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { isLocalHostHeader, isPrivateAddress } from './privateAddress.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // DATA_FILE can point somewhere else so a throwaway dataset can be served without touching
 // the real portfolio — used by the UI tests and by the README screenshot capture. Everything
-// derived from it moves with it, so a demo run never writes a backup next to real data.
+// derived from it moves with it, so a demo run never writes a backup next to real data. The
+// backup folder is named after the file, not "backups" beside it: the demo file lives in server/,
+// where that would be the real folder, and its pruning would delete real backups.
 const DATA_FILE = process.env.DATA_FILE ?? join(__dirname, 'data.json')
 const DATA_BAK  = `${DATA_FILE}.bak`
 const BACKUP_DIR = process.env.DATA_FILE
-  ? join(dirname(DATA_FILE), 'backups')
+  ? `${DATA_FILE}.backups`
   : join(__dirname, 'backups')
 const BACKUP_KEEP = 7
-const DIST_DIR  = join(__dirname, '../dist')
+const DIST_DIR  = process.env.DIST_DIR ?? join(__dirname, '../dist')
 const IS_PROD   = process.env.NODE_ENV === 'production'
 
 // Timestamped stdout/stderr logging — visible via `docker logs stock-tracker`
 const log    = (...args) => console.log(`[${new Date().toISOString()}]`, ...args)
 const logErr = (...args) => console.error(`[${new Date().toISOString()}]`, ...args)
 
+// ── API key ───────────────────────────────────────────────────────────────────
+// PERSIST_API_KEY wins if set. Otherwise production generates a key on first start, never at image
+// build, where it would ship inside the public image. It lives with the backups because that folder
+// is mounted and outlives the container, while data.json is a single-file mount; keeping it out of
+// data.json also means restoring a backup cannot bring back a rotated key.
+const KEY_FILE = join(BACKUP_DIR, '.api-key')
+const ENV_KEY = process.env.PERSIST_API_KEY
+
+function readKeyFile() {
+  try {
+    return readFileSync(KEY_FILE, 'utf8').trim()
+  } catch {
+    return ''
+  }
+}
+
+function writeNewKey() {
+  mkdirSync(BACKUP_DIR, { recursive: true })
+  const key = randomBytes(32).toString('hex')
+  writeFileSync(KEY_FILE, `${key}\n`, { mode: 0o600 })
+  return key
+}
+
+const currentKey = () => ENV_KEY || (IS_PROD ? readKeyFile() : '')
+
+// `docker exec stock-tracker node server/index.js show-key|rotate-key`. Handled here, before the
+// store loads, so a command never starts a second server or restores anything.
+const command = process.argv[2]
+if (command) {
+  if (command === 'show-key' && currentKey()) {
+    console.log(currentKey())
+  } else if (command === 'rotate-key' && IS_PROD && !ENV_KEY) {
+    console.log(writeNewKey())
+  } else if (command === 'rotate-key') {
+    console.error('Cannot rotate: PERSIST_API_KEY is set, or NODE_ENV is not production. Change that value and restart instead.')
+    process.exit(1)
+  } else {
+    console.error('Usage: node server/index.js [show-key|rotate-key] (show-key needs a key to exist)')
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
 // ── In-memory store ──────────────────────────────────────────────────────────
 // Load once at startup; all reads/writes go through this object.
-// Flushed to disk asynchronously with a debounced atomic write.
+// Flushed to disk asynchronously with a debounced write.
 let store = {}
+const PORTFOLIOS_KEY = 'stock_tracker_portfolios'
 
+function readStoreFile(path) {
+  const parsed = JSON.parse(readFileSync(path, 'utf8'))
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not a JSON object')
+  return parsed
+}
+
+// Everything that could restore the store, best first.
+function recoverySources() {
+  const dated = existsSync(BACKUP_DIR)
+    ? readdirSync(BACKUP_DIR)
+        .filter((f) => /^data-\d{4}-\d{2}-\d{2}\.json$/.test(f))
+        .sort()
+        .reverse()
+        .map((f) => join(BACKUP_DIR, f))
+    : []
+  return [DATA_BAK, ...dated]
+}
+
+function firstUsable(sources, accept = () => true) {
+  for (const path of sources) {
+    try {
+      const parsed = readStoreFile(path)
+      if (accept(parsed)) return { path, parsed }
+    } catch { /* missing or unreadable: try the next */ }
+  }
+  return null
+}
+
+function restore(from, reason) {
+  if (existsSync(DATA_FILE)) {
+    const evidence = `${DATA_FILE}.corrupt-${Date.now()}`
+    copyFileSync(DATA_FILE, evidence)
+    logErr(`previous file kept as ${evidence}`)
+  }
+  store = from.parsed
+  copyFileSync(from.path, DATA_FILE)
+  logErr(`RECOVERED from ${from.path} (${reason}) — the most recent writes may be missing`)
+}
+
+// Losing the store must never look like a first run: clients read a missing key as "nothing here",
+// and the next flush would destroy whatever could still be recovered. No client ever removes a key,
+// so a file without a portfolio list, or no file, is a loss whenever a backup says otherwise. The
+// exit handlers that flush are only registered after this has run, so exiting here writes nothing.
 function loadStore() {
-  if (!existsSync(DATA_FILE)) return
+  const hasPortfolios = (s) => typeof s[PORTFOLIOS_KEY] === 'string'
+
+  if (!existsSync(DATA_FILE)) {
+    const from = firstUsable(recoverySources(), hasPortfolios)
+    if (from) restore(from, 'data file missing')
+    return // no file and no backup with data: a genuine first run
+  }
+
   try {
-    store = JSON.parse(readFileSync(DATA_FILE, 'utf8'))
+    store = readStoreFile(DATA_FILE)
   } catch (err) {
-    logErr('data.json unreadable — starting with empty store:', err.message)
+    logErr('data file unreadable:', err.message)
+    const from = firstUsable(recoverySources())
+    if (from) return restore(from, 'data file unreadable')
+    logErr(`no usable backup — refusing to start. Repair ${DATA_FILE} or restore one from ${BACKUP_DIR}.`)
+    process.exit(1)
+  }
+
+  if (!hasPortfolios(store)) {
+    const from = firstUsable(recoverySources(), hasPortfolios)
+    if (from) restore(from, 'data file has no portfolio list')
   }
 }
 
@@ -42,10 +149,26 @@ loadStore()
 if (!Array.isArray(store.devices)) store.devices = []
 
 let flushTimer = null
+let flushWaiters = []
+const FLUSH_RETRY_MS = 30_000
 
 function scheduleFlush() {
   clearTimeout(flushTimer)
-  flushTimer = setTimeout(flushToDisk, 500)
+  flushTimer = setTimeout(flushPending, 500)
+}
+
+// Only writes when something changed: an unconditional flush on shutdown would overwrite .bak
+// with the current version, leaving no rollback copy after every restart.
+function flushPending() {
+  if (flushTimer === null) return
+  clearTimeout(flushTimer)
+  flushTimer = null
+  const waiters = flushWaiters
+  flushWaiters = []
+  const saved = flushToDisk()
+  waiters.forEach((notify) => notify(saved))
+  // The store still holds this data; keep trying, so it reaches disk once the fault clears.
+  if (!saved) flushTimer = setTimeout(flushPending, FLUSH_RETRY_MS)
 }
 
 function flushToDisk() {
@@ -57,8 +180,10 @@ function flushToDisk() {
     // with EBUSY. DATA_BAK above still protects against a write landing mid-corruption.
     writeFileSync(DATA_FILE, JSON.stringify(store, null, 2))
     dailyBackup()
+    return true
   } catch (err) {
     logErr('failed to flush data.json:', err.message)
+    return false
   }
 }
 
@@ -83,9 +208,9 @@ function dailyBackup() {
 }
 
 // Flush before the process exits so no writes are dropped
-process.on('exit', () => { clearTimeout(flushTimer); flushToDisk() })
-process.on('SIGINT', () => { clearTimeout(flushTimer); flushToDisk(); process.exit() })
-process.on('SIGTERM', () => { clearTimeout(flushTimer); flushToDisk(); process.exit() })
+process.on('exit', flushPending)
+process.on('SIGINT', () => process.exit())
+process.on('SIGTERM', () => process.exit())
 
 // ── App ───────────────────────────────────────────────────────────────────────
 const app = express()
@@ -96,21 +221,27 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 // Shared-secret guard for /api/persist (and, in prod, /api/yahoo + /api/stooq).
-// Dev fails open with a warning so `npm run dev` needs no setup; prod fails
-// closed at startup rather than silently serving an unauthenticated instance
-// reachable from a phone.
-const API_KEY = process.env.PERSIST_API_KEY
-if (!API_KEY) {
-  if (IS_PROD) {
-    logErr('PERSIST_API_KEY is not set — refusing to start in production without it.')
+// Dev fails open with a warning so `npm run dev` needs no setup. Prod always requires a key, and
+// refuses to start rather than serve an unauthenticated instance reachable from a phone.
+const AUTH_REQUIRED = IS_PROD || !!ENV_KEY
+if (!AUTH_REQUIRED) {
+  log('PERSIST_API_KEY not set — running without auth (dev only).')
+} else if (!currentKey()) {
+  try {
+    writeNewKey()
+    log('New API key generated. Read it with: docker exec stock-tracker node server/index.js show-key')
+  } catch (err) {
+    logErr(`cannot save a generated API key to ${KEY_FILE}: ${err.message} — refusing to start.`)
     process.exit(1)
   }
-  log('PERSIST_API_KEY not set — running without auth (dev only).')
 }
 
 function requireApiKey(req, res, next) {
-  if (!API_KEY) return next()
-  if (req.header('X-API-Key') !== API_KEY) {
+  if (!AUTH_REQUIRED) return next()
+  // Read per request so rotate-key takes effect without a restart. A key file gone missing while
+  // running leaves no key, which must refuse everyone, including an empty header.
+  const key = currentKey()
+  if (!key || req.header('X-API-Key') !== key) {
     return res.status(401).json({ error: 'unauthorized' })
   }
   next()
@@ -236,16 +367,24 @@ app.get('/api/fio-fund/quote', async (req, res) => {
   }
 })
 
+// A value's version is its hash, so nothing extra is stored and it survives a restart.
+const versionOf = (value) => (value == null ? '' : createHash('sha1').update(value).digest('hex'))
+
 app.get('/api/persist/:key', (req, res) => {
   const value = store[req.params.key] ?? null
-  res.json({ value })
+  res.json({ value, version: versionOf(value) })
 })
 
 app.post('/api/persist/:key', (req, res, next) => {
   if (typeof req.body?.value !== 'string') {
     return res.status(400).json({ error: 'body.value must be a string' })
   }
-  if (req.params.key === 'stock_tracker_portfolios') {
+  // Only a client sending the version it read gets this check; older ones still save as before.
+  const { baseVersion } = req.body
+  if (typeof baseVersion === 'string' && baseVersion !== versionOf(store[req.params.key])) {
+    return res.status(409).json({ error: 'changed since it was read' })
+  }
+  if (req.params.key === PORTFOLIOS_KEY) {
     try {
       const before = new Map(JSON.parse(store[req.params.key] ?? '[]').map((p) => [p.id, p.name]))
       const after  = new Map(JSON.parse(req.body.value).map((p) => [p.id, p.name]))
@@ -259,8 +398,13 @@ app.post('/api/persist/:key', (req, res, next) => {
     } catch { /* malformed JSON — persist anyway, just skip the diff logging */ }
   }
   store[req.params.key] = req.body.value
+  // Answer only once this is on disk: Android clears its dirty flag on {ok:true}, so a success
+  // reported early for a write that then fails (full disk) would lose the data for good.
+  flushWaiters.push((saved) => {
+    if (saved) res.json({ ok: true })
+    else res.status(507).json({ error: 'could not save to disk' })
+  })
   scheduleFlush()
-  res.json({ ok: true })
 })
 
 // ── Device registry ─────────────────────────────────────────────────────────
@@ -323,11 +467,28 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' })
 })
 
-// Serve the built frontend and fall back to index.html for the SPA in production.
+// Serve the built frontend and fall back to index.html for the SPA in production. The page carries
+// the key, so a browser needs no setup and only a phone ever has it entered. That makes whoever can
+// reach this port a holder of the key, which is why it goes only to LAN and Tailscale addresses.
+// ponytail: this trusts the socket address, so it relies on Docker preserving the client's IPv4
+// address. Docker's IPv6 proxy hides it, so publish the port on IPv4 only (see Docker in CLAUDE.md).
 if (IS_PROD) {
+  // A proxy, such as Tailscale Funnel, hides the client behind a private address and says so in a header.
+  const cameThroughProxy = (req) => ['forwarded', 'x-forwarded-for', 'tailscale-funnel-request'].some((h) => req.headers[h])
+  const mayHaveKey = (req) =>
+    isPrivateAddress(req.socket.remoteAddress) && isLocalHostHeader(req.headers.host) && !cameThroughProxy(req)
+  const servePage = (req, res) => {
+    const page = readFileSync(join(DIST_DIR, 'index.html'), 'utf8')
+    const key = mayHaveKey(req) ? currentKey() : ''
+    const script = `<script>window.__STOCK_TRACKER_API_KEY__=${JSON.stringify(key).replace(/</g, '\\u003c')}</script></head>`
+    res.set('Cache-Control', 'no-store').type('html').send(key ? page.replace('</head>', () => script) : page)
+  }
+  app.get(['/', '/index.html'], servePage)
   app.use(express.static(DIST_DIR))
-  app.get('*', (_req, res) => res.sendFile(join(DIST_DIR, 'index.html')))
+  app.get('*', servePage)
 }
 
 const PORT = Number(process.env.PORT ?? 3001)
-app.listen(PORT, () => log(`listening on http://localhost:${PORT}`))
+// With no key there is nothing protecting the data, so nothing past this machine may reach it.
+const HOST = AUTH_REQUIRED ? undefined : '127.0.0.1'
+app.listen(PORT, HOST, () => log(`listening on http://${HOST ?? 'localhost'}:${PORT}`))

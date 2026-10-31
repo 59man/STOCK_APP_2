@@ -158,7 +158,7 @@ private fun referenceBuildPortfolioChartData(
                 val posSellDate = pos.sellDate
                 if (pos.buyDate <= div.date && (posSellDate == null || posSellDate > div.date)) {
                     val rate = taxOverrides["${pos.ticker.uppercase()}::${div.date}"] ?: defaultRate
-                    divPnl += convertAt(pos.quantity * div.amount * (1 - rate), div.currency, displayCurrency, div.date)
+                    divPnl += convertAt(pos.quantity * div.amount * (1 - rate), div.currency!!, displayCurrency, div.date)
                 }
             }
         }

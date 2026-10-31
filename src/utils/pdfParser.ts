@@ -102,7 +102,7 @@ async function parseFio(lines: string[]): Promise<ParseResult> {
     isSell: tx.isSell,
   }))
 
-  const valid = applyFifo(rawLots)
+  const valid = applyFifo(rawLots, () => { skipped++ })
   return { valid, skipped }
 }
 
@@ -196,7 +196,9 @@ export function parseRevolutTradingLines(lines: string[]): {
 }
 
 async function parseRevolutTrading(lines: string[]): Promise<ParseResult> {
-  const { txs, bySymbol, skipped } = parseRevolutTradingLines(lines)
+  const parsed = parseRevolutTradingLines(lines)
+  const { txs, bySymbol } = parsed
+  let { skipped } = parsed
   if (!txs.length) return { valid: [], skipped }
 
   const isinMap = await batchIsins([...new Set(Object.values(bySymbol).map(x => x.isin))])
@@ -221,7 +223,8 @@ async function parseRevolutTrading(lines: string[]): Promise<ParseResult> {
     }
   })
 
-  return { valid: applyFifo(rawLots), skipped }
+  const valid = applyFifo(rawLots, () => { skipped++ })
+  return { valid, skipped }
 }
 
 // ── Generic PDF heuristic ─────────────────────────────────────────────────────

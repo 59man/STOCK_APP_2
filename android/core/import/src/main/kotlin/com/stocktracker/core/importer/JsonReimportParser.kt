@@ -1,5 +1,6 @@
 package com.stocktracker.core.importer
 
+import com.stocktracker.core.calc.isIsoDate
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.model.PositionType
 import kotlinx.serialization.SerialName
@@ -49,10 +50,12 @@ private fun isValidCandidate(el: JsonElement): Boolean {
     val quantity = (obj["quantity"] as? JsonPrimitive)?.doubleOrNull
     val buyPrice = (obj["buyPrice"] as? JsonPrimitive)?.doubleOrNull
     val buyDate = (obj["buyDate"] as? JsonPrimitive)?.contentOrNull
+    val sellDate = (obj["sellDate"] as? JsonPrimitive)?.contentOrNull
     return !ticker.isNullOrBlank() &&
         quantity != null && quantity.isFinite() && quantity > 0 &&
         buyPrice != null && buyPrice.isFinite() && buyPrice >= 0 &&
-        !buyDate.isNullOrEmpty()
+        buyDate != null && isIsoDate(buyDate) &&
+        (sellDate == null || isIsoDate(sellDate))
 }
 
 private fun toPosition(el: JsonElement): Position? {

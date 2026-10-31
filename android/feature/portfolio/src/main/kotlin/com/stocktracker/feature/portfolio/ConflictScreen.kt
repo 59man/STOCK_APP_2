@@ -36,6 +36,8 @@ import com.stocktracker.core.data.sync.ConflictCenter
 import com.stocktracker.core.data.sync.PendingConflict
 import com.stocktracker.core.data.sync.SyncCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,8 +49,21 @@ class ConflictViewModel @Inject constructor(
 ) : ViewModel() {
     val pending: StateFlow<List<PendingConflict>> = conflictCenter.pending
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     fun resolve(conflict: PendingConflict, keepLocal: Boolean) {
-        viewModelScope.launch { syncCoordinator.resolveConflict(conflict, keepLocal) }
+        viewModelScope.launch {
+            // Resolving reads the server. Offline, the conflict stays pending to try again.
+            _error.value = try {
+                syncCoordinator.resolveConflict(conflict, keepLocal)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "Could not reach the server. Try again when you are back online."
+            }
+        }
     }
 }
 
@@ -62,12 +77,13 @@ class ConflictViewModel @Inject constructor(
 @Composable
 fun ConflictRoute(onBack: () -> Unit, viewModel: ConflictViewModel = hiltViewModel()) {
     val pending by viewModel.pending.collectAsStateWithLifecycle()
-    ConflictScreen(pending = pending, onResolve = viewModel::resolve, onBack = onBack)
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    ConflictScreen(pending = pending, error = error, onResolve = viewModel::resolve, onBack = onBack)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ConflictScreen(pending: List<PendingConflict>, onResolve: (PendingConflict, Boolean) -> Unit, onBack: () -> Unit) {
+internal fun ConflictScreen(pending: List<PendingConflict>, error: String? = null, onResolve: (PendingConflict, Boolean) -> Unit, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -88,6 +104,9 @@ internal fun ConflictScreen(pending: List<PendingConflict>, onResolve: (PendingC
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                error?.let { message ->
+                    item { Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                }
                 items(pending, key = { "${it.storageKey}::${it.recordKey}" }) { conflict ->
                     ConflictCard(conflict, onResolve = { keepLocal -> onResolve(conflict, keepLocal) })
                 }

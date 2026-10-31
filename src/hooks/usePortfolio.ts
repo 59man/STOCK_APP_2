@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Position } from '../types'
 import { SEED_POSITIONS } from '../data/seedPositions'
-import { getItem, setItem } from '../utils/storage'
+import { newKeySync, pendingBase, readItem, saveMerged, serverBaseline } from '../utils/storage'
 import { randomUUID } from '../utils/uuid'
 
 const SEEDED_KEY = 'stock_tracker_seeded'
@@ -51,15 +51,20 @@ export function usePortfolio(portfolioId: string) {
     portfolioId ? syncLoad(storageKey) : []
   )
   const [initialized, setInitialized] = useState(false)
+  const sync = useRef(newKeySync(null)).current
 
   useEffect(() => {
     if (!portfolioId) return
     let cancelled = false
-    getItem(storageKey).then((raw) => {
+    sync.disposed = false
+    readItem(storageKey).then((read) => {
       if (cancelled) return
-      if (raw !== null) {
+      // An edit that never reached the server stays on screen; the save below merges it.
+      const pending = pendingBase(storageKey)
+      sync.saved = pending ?? serverBaseline(read, JSON.stringify(positions), '[]')
+      if (pending === null && read.ok && read.value !== null) {
         try {
-          const existing: Position[] = JSON.parse(raw)
+          const existing: Position[] = JSON.parse(read.value)
           const seeded = !!localStorage.getItem(SEEDED_KEY)
           const version = localStorage.getItem(SEED_VERSION_KEY)
           const { positions: migrated, changed } = applyMigration(existing, seeded, version)
@@ -73,15 +78,17 @@ export function usePortfolio(portfolioId: string) {
         }
       }
       setInitialized(true)
-    }).catch(() => { if (!cancelled) setInitialized(true) })
-    return () => { cancelled = true }
+    })
+    return () => {
+      cancelled = true
+      sync.disposed = true
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (!initialized || !portfolioId) return
-    const json = JSON.stringify(positions)
-    setItem(storageKey, json)
+    void saveMerged(storageKey, JSON.stringify(positions), sync, (json) => setPositions(JSON.parse(json)))
     localStorage.setItem(SEED_VERSION_KEY, SEED_VERSION)
     localStorage.setItem(SEEDED_KEY, '1')
   // eslint-disable-next-line react-hooks/exhaustive-deps

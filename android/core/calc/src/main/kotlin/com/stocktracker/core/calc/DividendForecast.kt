@@ -18,6 +18,7 @@ fun dividendForecast(
 ): List<ForecastEntry> {
     val yearAgo = LocalDate.parse(today).minusYears(1).toString()
     val held = positions.filter(::isOpenLot).groupBy { it.ticker }.mapValues { (_, lots) -> lots.sumOf { it.quantity } }
+    val lotCurrency = positions.associate { it.ticker to it.currency }
     return held.flatMap { (ticker, qty) ->
         if (qty <= 0) return@flatMap emptyList()
         val rate = getDividendTaxRate(ticker)
@@ -26,7 +27,7 @@ fun dividendForecast(
             .mapNotNull { e ->
                 // plusYears clamps 29 Feb to 28 Feb, same as the web.
                 val date = LocalDate.parse(e.date).plusYears(1).toString()
-                if (date > today) ForecastEntry(ticker, date, qty * e.amount * (1 - rate), e.currency) else null
+                if (date > today) ForecastEntry(ticker, date, qty * e.amount * (1 - rate), e.currency ?: lotCurrency.getValue(ticker)) else null
             }
     }.sortedWith(compareBy<ForecastEntry> { it.date }.thenBy { it.ticker })
 }

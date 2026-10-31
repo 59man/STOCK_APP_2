@@ -26,7 +26,8 @@ data class ManualPriceEntry(
 data class DividendEvent(
     val date: String,
     val amount: Double,
-    val currency: String,
+    /** Null when the feed names none; every consumer then falls back to the lot's currency, as the web does. */
+    val currency: String? = null,
 )
 
 /** Mirrors the `Record<"TICKER::YYYY-MM-DD", number>` shape in useManualDividendTaxes.ts. */

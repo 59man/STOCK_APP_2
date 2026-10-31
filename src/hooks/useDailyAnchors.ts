@@ -124,7 +124,7 @@ export async function resolveAnchor(ticker: string, midnight: number, expandFx =
   }
 
   const regular = meta?.currentTradingPeriod?.regular
-  if (!needsIntraday(regular ? { regular } : null, midnight)) {
+  if (!needsIntraday(regular ? { regular } : null, midnight, barsOf(daily))) {
     // Step 2 — daily bars are enough; a bar is stamped at its session open, so the session's
     // length is what turns that into a session end.
     const sessionLength = regular ? regular.end - regular.start : 0
@@ -138,28 +138,35 @@ export async function resolveAnchor(ticker: string, midnight: number, expandFx =
   return { price: scaled(resolveAnchorFromIntraday(barsOf(intraday), midnight)), lastTradedAt }
 }
 
-async function resolveFxAnchor(from: string, to: string, midnight: number): Promise<number | null> {
-  if (from === to) return 1
-  const pair = `${from}${to}=X`
-  const intraday = await fetchChart(pair, 'interval=5m&range=2d')
-  const fromIntraday = resolveAnchorFromIntraday(barsOf(intraday), midnight)
-  if (fromIntraday !== null) return fromIntraday
+/** One currency in CZK at local midnight. */
+async function czkAtMidnight(currency: string, midnight: number): Promise<number | null> {
+  if (currency === 'CZK') return 1
+  const pair = `${currency}CZK=X`
+  const { price } = await resolveAnchor(pair, midnight, false)
+  if (price !== null) return price
   // FX closes over the weekend, so the 2-day intraday window can be entirely empty; daily
   // bars still carry Friday's rate, which is the correct anchor for a Saturday.
-  const daily = await fetchChart(pair, 'interval=1d&range=5d')
-  return resolveAnchorFromDaily(barsOf(daily), midnight, 0)
+  return resolveAnchorFromDaily(barsOf(await fetchChart(pair, 'interval=1d&range=5d')), midnight, 0)
+}
+
+/**
+ * Goes through CZK exactly as `convert()` does. Asking Yahoo for the direct pair (JPYUSD=X) instead
+ * disagrees with the cross by about 0.1 %, which a closed market then showed as a move.
+ */
+async function resolveFxAnchor(from: string, to: string, midnight: number): Promise<number | null> {
+  if (from === to) return 1
+  const [fromCzk, toCzk] = await Promise.all([czkAtMidnight(from, midnight), czkAtMidnight(to, midnight)])
+  return fromCzk === null || toCzk === null || toCzk === 0 ? null : fromCzk / toCzk
 }
 
 export function useDailyAnchors(tickers: string[], zone: string, currencies: string[], displayCurrency: string) {
-  const [, forceRender] = useState(0)
+  const [anchorsVersion, forceRender] = useState(0)
   const [retryTick, setRetryTick] = useState(0)
   const inFlight = useRef(new Set<string>())
 
   const midnight = localMidnightEpoch(new Date(), zone)
 
   useEffect(() => {
-    let cancelled = false
-
     async function run() {
       const wanted = tickers.filter((t) => {
         const key = keyFor(t, midnight)
@@ -200,22 +207,22 @@ export function useDailyAnchors(tickers: string[], zone: string, currencies: str
           }
         }),
       ])
-      if (cancelled) return
+      // Runs even after a newer run replaced this one: that run skipped everything in flight here,
+      // so only this one can report those results or schedule their retry.
       forceRender((n) => n + 1)
       if (failed) retryTimer = setTimeout(() => setRetryTick((n) => n + 1), RETRY_MS)
     }
 
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     void run()
-    return () => {
-      cancelled = true
-      clearTimeout(retryTimer)
-    }
+    return () => clearTimeout(retryTimer)
   }, [tickers.join(','), currencies.join(','), displayCurrency, midnight, retryTick])
 
   const anchorFor = useCallback(
     (ticker: string): Anchor | undefined => anchorCache.get(keyFor(ticker, midnight)),
-    [midnight],
+    // anchorsVersion: rows memoise on this function, so it must change when anchors arrive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [midnight, anchorsVersion],
   )
 
   const fxAnchorFor = useCallback(
@@ -223,7 +230,8 @@ export function useDailyAnchors(tickers: string[], zone: string, currencies: str
       if (from === displayCurrency) return 1
       return fxAnchorCache.get(keyFor(`${from}->${displayCurrency}`, midnight))
     },
-    [midnight, displayCurrency],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [midnight, displayCurrency, anchorsVersion],
   )
 
   return { anchorFor, fxAnchorFor }

@@ -58,14 +58,13 @@ The Android app is native Kotlin + Jetpack Compose.
 ## Quick start
 
 ```bash
-cp .env.example .env    # set PERSIST_API_KEY and VITE_PERSIST_API_KEY to the same secret
 npm install
 npm run dev             # web on http://localhost:5173, persist server on :3001
 npm test                # unit tests
 npm run test:ui         # Playwright layout checks across five viewports
 ```
 
-`npm run dev` still works without `.env` (the server logs a warning), but production refuses to start without a key. If port 3001 is taken, run `kill $(lsof -ti:3001)`.
+`npm run dev` needs no setup: with no `.env` it runs without auth, on this machine only. If port 3001 is taken, run `kill $(lsof -ti:3001)`.
 
 ## Docker
 
@@ -76,26 +75,31 @@ docker compose up -d --build     # port 8080, data + backups bind-mounted
 Or build the image and run it on a server:
 
 ```bash
-docker build -t 59man/stock-tracker:latest --build-arg VITE_PERSIST_API_KEY=<secret> .
+docker build -t 59man/stock-tracker:latest .
 docker push 59man/stock-tracker:latest
 
-docker run -d --name stock-tracker -p 4000:8080 \
+docker run -d --name stock-tracker -p 0.0.0.0:4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
   -v /DATA/stock-tracker/backups:/app/server/backups \
-  -e PERSIST_API_KEY=<secret> \
   --log-opt max-size=10m --log-opt max-file=3 \
   --restart unless-stopped \
   59man/stock-tracker:latest
 ```
 
+The server creates its API key on first start and keeps it in the backups folder. Browsers on your LAN or Tailscale get it with the page and need no setup, so anyone who can reach the port can use the app. You only enter the key on a phone.
+
+```bash
+docker exec stock-tracker node server/index.js show-key     # print the key
+docker exec stock-tracker node server/index.js rotate-key   # replace it, live at once; prints the new one
+```
+
+- **Keep it off the internet.** It's meant for your LAN and Tailscale: no router port forward, no `tailscale funnel`, and publish the port on IPv4 only, as above.
 - **Use absolute paths for the volume mounts.** A `~/…` path can point to a different file, and the app would then start empty.
-- **Changing `VITE_PERSIST_API_KEY` needs a rebuild.** It's baked into the frontend when the image is built.
-- **`PERSIST_API_KEY` only needs a restart.** The server reads it at runtime.
 - **To update,** run `docker pull`, then `docker stop stock-tracker && docker rm stock-tracker`, then repeat the `docker run` command above.
 
 ## Android
 
-Install the APK from [Releases](https://github.com/59man/STOCK_APP_2/releases/latest). You'll need to allow installing from unknown sources. Then open **Settings** in the app and enter your server URL and API key. The web app's 🔑 button shows the API key.
+Install the APK from [Releases](https://github.com/59man/STOCK_APP_2/releases/latest). You'll need to allow installing from unknown sources. Then open **Settings** in the app and enter your server URL and API key. The web app's 🔑 button or `show-key` shows the API key.
 
 Build from source:
 

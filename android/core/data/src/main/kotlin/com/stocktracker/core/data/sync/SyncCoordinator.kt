@@ -12,8 +12,11 @@ import com.stocktracker.core.data.DivTaxOverrideRepository
 import com.stocktracker.core.data.ManualPriceRepository
 import com.stocktracker.core.data.PortfolioRepository
 import com.stocktracker.core.data.PositionRepository
+import com.stocktracker.core.database.SyncStateDao
 import com.stocktracker.core.network.PersistKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -35,6 +38,7 @@ class SyncCoordinator @Inject constructor(
     private val divTaxOverrideRepository: DivTaxOverrideRepository,
     private val conflictCenter: ConflictCenter,
     private val deviceRegistry: DeviceRegistry,
+    private val syncStateDao: SyncStateDao,
 ) {
     private val workManager get() = WorkManager.getInstance(context)
 
@@ -50,20 +54,31 @@ class SyncCoordinator @Inject constructor(
 
     /**
      * Pulls every synced key for one portfolio. Each pull independently
-     * no-ops if that key is dirty, and independently swallows network
+     * no-ops if that key is dirty, and independently survives network
      * failures (unreachable server, bad URL, timeout, DNS failure, cleartext
      * blocked, ...) — a pull is opportunistic background refresh, called
      * from app-foreground and "Sync now", and must never crash the caller.
+     * Returns the first failure, for a caller that reports one.
      */
-    suspend fun pullPortfolio(portfolioId: String) {
-        runCatching { positionRepository.pull(portfolioId) }.onFailure { logPullFailure("positionRepository", it) }
-        runCatching { manualPriceRepository.pull(portfolioId) }.onFailure { logPullFailure("manualPriceRepository", it) }
-        runCatching { divTaxOverrideRepository.pull(portfolioId) }.onFailure { logPullFailure("divTaxOverrideRepository", it) }
+    suspend fun pullPortfolio(portfolioId: String): Throwable? = listOfNotNull(
+        pullKey(PersistKeys.positions(portfolioId), portfolioId, SyncTarget.POSITIONS) { positionRepository.pull(portfolioId) },
+        pullKey(PersistKeys.manualPrices(portfolioId), portfolioId, SyncTarget.MANUAL_PRICES) { manualPriceRepository.pull(portfolioId) },
+        pullKey(PersistKeys.divTaxOverrides(portfolioId), portfolioId, SyncTarget.DIV_TAX_OVERRIDES) { divTaxOverrideRepository.pull(portfolioId) },
+    ).firstOrNull()
+
+    suspend fun pullPortfolioList(): Throwable? {
+        val failure = pullKey(PersistKeys.PORTFOLIOS, GLOBAL_SYNC_SCOPE, SyncTarget.PORTFOLIOS) { portfolioRepository.pull() }
+        deviceRegistry.heartbeat() // best-effort, piggybacks on this same cadence — see DeviceRegistry
+        return failure
     }
 
-    suspend fun pullPortfolioList() {
-        runCatching { portfolioRepository.pull() }.onFailure { logPullFailure("portfolioRepository", it) }
-        deviceRegistry.heartbeat() // best-effort, piggybacks on this same cadence — see DeviceRegistry
+    private suspend fun pullKey(storageKey: String, scope: String, target: SyncTarget, pull: suspend () -> Boolean): Throwable? {
+        val failure = runCatching { pull() }.exceptionOrNull()
+        failure?.let { logPullFailure(storageKey, it) }
+        // Conflicts live in memory and a conflicted push is not retried, so after a restart a dirty
+        // key would stay frozen with no prompt. Pushing again re-reports them or finishes the job.
+        if (syncStateDao.isDirty(storageKey) == true) enqueuePush(scope, target)
+        return failure
     }
 
     /**
@@ -73,12 +88,30 @@ class SyncCoordinator @Inject constructor(
      * active portfolio's positions/manual prices/div-tax overrides, so any
      * other portfolio stayed at whatever was last synced (or empty, on a
      * fresh install) until the user switched to it *and* backgrounded and
-     * re-foregrounded the app while it was active.
+     * re-foregrounded the app while it was active. Returns the first failure.
      */
-    suspend fun pullAllPortfolios() {
-        pullPortfolioList()
-        portfolioRepository.observe().first().forEach { portfolio -> pullPortfolio(portfolio.id) }
+    suspend fun pullAllPortfolios(): Throwable? {
+        val listFailure = pullPortfolioList()
+        val portfolios = portfolioRepository.observe().first()
+        // A portfolio deleted on another device leaves its keys here dirty and never pushed.
+        if (listFailure == null && portfolios.isNotEmpty()) {
+            val known = portfolios.map { it.id }.toSet()
+            syncStateDao.dirtyKeys().filter { it != PersistKeys.PORTFOLIOS }
+                .map { it.substringAfterLast('_') }
+                .filterNot { it in known }
+                .distinct()
+                .forEach { syncStateDao.forgetPortfolio(it) }
+        }
+        val portfolioFailures = portfolios.map { portfolio -> pullPortfolio(portfolio.id) }
+        return listFailure ?: portfolioFailures.firstOrNull { it != null }
     }
+
+    /** Local changes the server has not confirmed yet, and why the last attempt failed. */
+    val pendingChanges: Flow<Int> get() = syncStateDao.observeDirtyCount()
+    val lastPushFailure: StateFlow<String?> get() = conflictCenter.lastPushFailure
+
+    /** Call when the configured server changes: see [SyncStateDao.clearMergeBases]. */
+    suspend fun forgetMergeBases() = syncStateDao.clearMergeBases()
 
     /**
      * Applies the user's "keep mine" / "keep server's" choice for one
@@ -103,6 +136,9 @@ class SyncCoordinator @Inject constructor(
         conflictCenter.clear(conflict.storageKey, conflict.recordKey)
     }
 }
+
+/** The PORTFOLIOS key has no portfolio of its own; [SyncCoordinator.enqueuePush] only needs a string for the unique work name. */
+const val GLOBAL_SYNC_SCOPE = "portfolios"
 
 /** Pulls are best-effort, but a failure should still be diagnosable from logcat. */
 private fun logPullFailure(what: String, e: Throwable) {

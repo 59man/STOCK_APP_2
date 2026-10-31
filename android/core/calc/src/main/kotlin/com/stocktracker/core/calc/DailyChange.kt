@@ -61,7 +61,8 @@ fun dailyChange(
 
     val nowValue = quantity * currentPrice * currentFx
     val anchorValue = quantity * anchorPrice * resolvedAnchorFx
-    val change = nowValue - anchorValue
+    // Floating-point dust from the FX cross must not read as "-$0.00" on a closed market.
+    val change = if (kotlin.math.abs(nowValue - anchorValue) < 1e-6) 0.0 else nowValue - anchorValue
 
     return DailyChangeResult(
         change = change,

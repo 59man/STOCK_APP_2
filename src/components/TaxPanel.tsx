@@ -3,6 +3,7 @@ import type { Position } from '../types'
 import { fetchFxHistory, fxHistCache, makeConvertAt } from '../utils/chartHistory'
 import { isOpenLot } from '../utils/rowDerivation'
 import { lotTaxStatus, realizedByYear, SMALL_PROCEEDS_LIMIT_CZK } from '../utils/taxTest'
+import { localToday } from '../utils/localDate'
 
 interface Props {
   positions: Position[]
@@ -18,7 +19,7 @@ const czk = (v: number) =>
  */
 export function TaxPanel({ positions, convert }: Props) {
   const [fxReady, setFxReady] = useState(0)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
 
   const currencies = useMemo(
     () => [...new Set(positions.map((p) => p.currency))].filter((c) => c !== 'CZK').sort(),

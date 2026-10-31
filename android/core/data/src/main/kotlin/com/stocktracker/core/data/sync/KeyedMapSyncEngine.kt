@@ -26,6 +26,8 @@ class KeyedMapSyncEngine<V>(
 
         val remoteJson = persistApi.get(storageKey).value ?: return false
         val remote = PersistJson.decodeFromString(serializer, remoteJson)
+        // The GET can take seconds: an edit made meanwhile must not be overwritten by it.
+        if (syncStateDao.isDirty(storageKey) == true) return false
         writeLocal(remote)
         syncStateDao.upsert(SyncStateEntity(storageKey, remoteJson, dirty = false))
         return true
@@ -39,8 +41,10 @@ class KeyedMapSyncEngine<V>(
         val state = syncStateDao.get(storageKey)
         val base = state?.lastSyncedJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyMap()
         val local = readLocal()
-        val remoteJson = persistApi.get(storageKey).value
-        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyMap()
+        val response = persistApi.get(storageKey)
+        val remoteJson = response.value
+        // An absent key means the server lost it, not that every entry was deleted — see KeyedListSyncEngine.push.
+        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: base
 
         val pairResolve: ((Pair<String, V>, Pair<String, V>) -> Pair<String, V>)? =
             resolveConflict?.let { rc -> { l, r -> l.first to rc(l.second, r.second) } }
@@ -50,7 +54,8 @@ class KeyedMapSyncEngine<V>(
 
         val mergedMap = result.merged.toMap()
         val mergedJson = PersistJson.encodeToString(serializer, mergedMap)
-        persistApi.set(storageKey, PersistBody(mergedJson))
+        persistApi.set(storageKey, PersistBody(mergedJson, response.version)) // see KeyedListSyncEngine.push
+        if (readLocal() != local) return emptyList() // edited during this push: see KeyedListSyncEngine.push
         writeLocal(mergedMap)
         syncStateDao.upsert(SyncStateEntity(storageKey, mergedJson, dirty = false))
         return emptyList()
@@ -69,7 +74,7 @@ class KeyedMapSyncEngine<V>(
         val state = syncStateDao.get(storageKey)
         val base = state?.lastSyncedJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyMap()
         val remoteJson = persistApi.get(storageKey).value
-        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyMap()
+        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: base // see push
         val remoteValue = remote[recordKey]
 
         if (!keepLocal) {

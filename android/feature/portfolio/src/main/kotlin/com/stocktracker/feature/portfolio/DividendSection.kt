@@ -55,8 +55,8 @@ internal fun DividendSection(
                 val isOverridden = overrideKey in taxOverrides
                 val gross = shares * div.amount
                 val net = gross * (1 - appliedRate)
-                val grossDc = com.stocktracker.core.calc.convert(gross, div.currency, displayCurrency, rates)
-                val netDc = com.stocktracker.core.calc.convert(net, div.currency, displayCurrency, rates)
+                val grossDc = com.stocktracker.core.calc.convert(gross, div.currency ?: row.currency, displayCurrency, rates)
+                val netDc = com.stocktracker.core.calc.convert(net, div.currency ?: row.currency, displayCurrency, rates)
 
                 DividendCard(
                     div = div,

@@ -38,7 +38,7 @@ class ImportViewModel @Inject constructor(
                             fileName = fileName,
                             rows = parsed.needsMapping.rows,
                             mapping = importRepository.autoDetectMapping(header),
-                            defaultCurrency = "USD",
+                            defaultCurrency = "CZK",
                             defaultBroker = "",
                             skipRows = 1,
                         )

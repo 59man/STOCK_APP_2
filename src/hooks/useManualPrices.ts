@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react'
-import { getItem, setItem } from '../utils/storage'
+import { useState, useEffect, useRef } from 'react'
+import { newKeySync, pendingBase, readItem, saveMerged, serverBaseline } from '../utils/storage'
 
 export interface ManualPriceEntry {
   price: number
-  updatedAt: string // YYYY-MM-DD
+  updatedAt: string // ISO timestamp; older entries are a plain YYYY-MM-DD
 }
 
 type Store = Record<string, ManualPriceEntry>
+
+/** Moves a ticker's manual price with it on rename; a price the new ticker already has stays. */
+export function renameTickerPrices(store: Store, oldTicker: string, newTicker: string): Store {
+  const { [oldTicker.toUpperCase()]: moved, ...rest } = store
+  if (!moved) return store
+  return { [newTicker.toUpperCase()]: moved, ...rest }
+}
 
 export function useManualPrices(portfolioId: string) {
   const storageKey = `stock_tracker_manual_prices_${portfolioId}`
@@ -19,31 +26,41 @@ export function useManualPrices(portfolioId: string) {
     } catch { return {} }
   })
   const [initialized, setInitialized] = useState(false)
+  const sync = useRef(newKeySync(null)).current
 
   useEffect(() => {
     if (!portfolioId) return
     let cancelled = false
-    getItem(storageKey).then((raw) => {
+    sync.disposed = false
+    readItem(storageKey).then((read) => {
       if (cancelled) return
-      if (raw !== null) {
-        try { setPrices(JSON.parse(raw) as Store) } catch {}
+      // An edit that never reached the server stays on screen; the save below merges it.
+      const pending = pendingBase(storageKey)
+      sync.saved = pending ?? serverBaseline(read, JSON.stringify(prices), '{}')
+      if (pending === null && read.ok && read.value !== null) {
+        try { setPrices(JSON.parse(read.value) as Store) } catch {}
       }
       setInitialized(true)
-    }).catch(() => { if (!cancelled) setInitialized(true) })
-    return () => { cancelled = true }
+    })
+    return () => {
+      cancelled = true
+      sync.disposed = true
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     if (!initialized || !portfolioId) return
-    setItem(storageKey, JSON.stringify(prices))
+    void saveMerged(storageKey, JSON.stringify(prices), sync, (json) => setPrices(JSON.parse(json)))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prices, initialized])
 
   const setPrice = (ticker: string, price: number) => {
     setPrices((prev) => ({
       ...prev,
-      [ticker.toUpperCase()]: { price, updatedAt: new Date().toISOString().slice(0, 10) },
+      [ticker.toUpperCase()]: { price, // A full timestamp: Android resolves a same-ticker conflict by comparing these, and a plain
+      // date loses to any time on the same day.
+      updatedAt: new Date().toISOString() },
     }))
   }
 
@@ -55,5 +72,9 @@ export function useManualPrices(portfolioId: string) {
     })
   }
 
-  return { prices, setPrice, removePrice }
+  const renameTicker = (oldTicker: string, newTicker: string) => {
+    setPrices((prev) => renameTickerPrices(prev, oldTicker, newTicker))
+  }
+
+  return { prices, setPrice, removePrice, renameTicker }
 }

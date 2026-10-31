@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { getApiKey, hasServedKey, saveApiKey } from '../utils/apiKey'
 
 interface Props {
   onClose: () => void
+  /** The server refused the key this browser has. */
+  rejected?: boolean
 }
-
-const API_KEY = import.meta.env.VITE_PERSIST_API_KEY ?? ''
 
 /**
  * navigator.clipboard is only exposed in secure contexts (HTTPS/localhost) — this app is
@@ -38,8 +39,10 @@ async function copyToClipboard(text: string): Promise<boolean> {
   return ok
 }
 
-/** Shows the API key baked into this build so it can be copied into the Android app's Settings screen — never a "generator" that mutates .env, since that value is read once at server startup / baked in at build time, not something a running instance can rotate live. */
-export function ApiKeyModal({ onClose }: Props) {
+/** Enters this browser's API key, and shows it so it can be copied into the Android app's Settings screen. The server owns the key; see show-key and rotate-key in server/index.js. */
+export function ApiKeyModal({ onClose, rejected }: Props) {
+  const API_KEY = getApiKey()
+  const [draft, setDraft] = useState('')
   const [revealed, setRevealed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
@@ -66,16 +69,36 @@ export function ApiKeyModal({ onClose }: Props) {
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
         <div className="modal-form">
-          {!API_KEY ? (
+          {rejected && hasServedKey() && <p style={{ color: 'var(--loss, #f66)' }}>The server's API key changed. Reload this page.</p>}
+          {!hasServedKey() && (
             <>
-              <p>No key is configured for this build.</p>
+              {rejected && <p style={{ color: 'var(--loss, #f66)' }}>The server did not accept this browser's API key. Enter the current one.</p>}
+              <form
+                style={{ display: 'flex', gap: 9 }}
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!draft.trim()) return
+                  saveApiKey(draft)
+                  window.location.reload()
+                }}
+              >
+                <input
+                  aria-label="API key"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Paste the server's API key"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button className="btn-primary" type="submit" disabled={!draft.trim()}>Save</button>
+              </form>
               <p className="muted" style={{ fontSize: 12.5 }}>
-                Create <code>.env</code> from <code>.env.example</code> with a value for both{' '}
-                <code>PERSIST_API_KEY</code> and <code>VITE_PERSIST_API_KEY</code>, then restart{' '}
-                <code>npm run dev</code> (or rebuild for production).
+                Get it on the server with <code>docker exec stock-tracker node server/index.js show-key</code>
               </p>
             </>
-          ) : (
+          )}
+          {API_KEY && (
             <>
               <p className="muted" style={{ fontSize: 12.5 }}>
                 Paste this into the Android app's <strong>Settings → API Key</strong> field to sync with this server.
@@ -96,9 +119,6 @@ export function ApiKeyModal({ onClose }: Props) {
                   Couldn't copy automatically — tap Show, then select and copy the key manually.
                 </p>
               )}
-              <p className="muted" style={{ fontSize: 11.5 }}>
-                This is the key baked into this build at build time (same value as <code>PERSIST_API_KEY</code> in <code>.env</code>). To change it, edit <code>.env</code> and rebuild — a running instance can't rotate it live.
-              </p>
             </>
           )}
         </div>

@@ -22,12 +22,17 @@ fun localMidnightEpoch(zone: ZoneId, now: Instant = Instant.now()): Long =
  * Whether daily bars can answer the question, or whether a session was in progress at local
  * midnight and only intraday bars will do.
  *
- * True for anything trading continuously — crypto reports no session window at all — and for
- * any exchange whose session straddles this particular viewer's midnight.
+ * True for anything with no session window, and for any session that straddles this viewer's
+ * midnight. Yahoo's window is only the *latest* session, not the one running at midnight: BTC's
+ * rolls over at 00:00 UTC, so in Prague from 01:00 on it starts after local midnight. Without
+ * [dailyBars], which carry each session's own open, that read as "no session at midnight" and the
+ * anchor became an older daily close, for nearly the whole day.
  */
-fun needsIntraday(sessionStart: Long?, sessionEnd: Long?, midnight: Long): Boolean {
+fun needsIntraday(sessionStart: Long?, sessionEnd: Long?, midnight: Long, dailyBars: List<AnchorBar> = emptyList()): Boolean {
     if (sessionStart == null || sessionEnd == null) return true
-    return sessionStart < midnight && sessionEnd > midnight
+    if (sessionStart < midnight && sessionEnd > midnight) return true
+    val length = sessionEnd - sessionStart
+    return dailyBars.any { it.epoch < midnight && it.epoch + length > midnight }
 }
 
 /**

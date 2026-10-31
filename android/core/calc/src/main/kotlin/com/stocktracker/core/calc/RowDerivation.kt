@@ -103,7 +103,7 @@ fun deriveRow(
             }.sumOf { it.quantity }
             if (shares != 0.0) {
                 val rate = taxOverrides["${ticker.uppercase()}::${div.date}"] ?: getDividendTaxRate(ticker)
-                flows.add(CashFlow(div.date, toRow(shares * div.amount * (1 - rate), div.currency)))
+                flows.add(CashFlow(div.date, toRow(shares * div.amount * (1 - rate), div.currency ?: rowCurrency)))
             }
         }
         if (!isClosed) flows.add(CashFlow(today, currentValue))
@@ -204,7 +204,7 @@ fun computePortfolioIrr(
             val sellDate = pos.sellDate
             if (pos.buyDate <= div.date && (sellDate == null || sellDate > div.date)) {
                 val rate = taxOverrides["${pos.ticker.uppercase()}::${div.date}"] ?: getDividendTaxRate(pos.ticker)
-                flows.add(CashFlow(div.date, toDc(pos.quantity * div.amount * (1 - rate), div.currency)))
+                flows.add(CashFlow(div.date, toDc(pos.quantity * div.amount * (1 - rate), div.currency ?: pos.currency)))
             }
         }
     }

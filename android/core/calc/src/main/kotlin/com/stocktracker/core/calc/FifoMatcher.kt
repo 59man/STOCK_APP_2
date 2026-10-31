@@ -24,10 +24,11 @@ private class BuyEntry(val lot: RawLot, var remaining: Double)
 
 /**
  * FIFO lot matcher. Mirrors src/utils/fifoMatcher.ts exactly, including the
- * 1e-6 epsilon that governs partial-lot-consumed boundary behavior, and the
- * silent-drop of any sell quantity left over once the buy queue is exhausted.
+ * 1e-6 epsilon that governs partial-lot-consumed boundary behavior. A sell only
+ * consumes buys dated on or before it; whatever it cannot match goes to
+ * [onUnmatchedSell] so the caller can report it.
  */
-fun applyFifo(lots: List<RawLot>): List<Position> {
+fun applyFifo(lots: List<RawLot>, onUnmatchedSell: (sell: RawLot, qty: Double) -> Unit = { _, _ -> }): List<Position> {
     val result = mutableListOf<Position>()
 
     for ((_, group) in lots.groupBy { it.ticker }) {
@@ -44,7 +45,7 @@ fun applyFifo(lots: List<RawLot>): List<Position> {
 
         for (sell in sells) {
             var toSell = sell.qty
-            while (toSell > EPSILON && qi < queue.size) {
+            while (toSell > EPSILON && qi < queue.size && queue[qi].lot.date <= sell.date) {
                 val entry = queue[qi]
                 val closedQty = minOf(entry.remaining, toSell)
                 result.add(entry.lot.toClosedPosition(closedQty, sell))
@@ -52,7 +53,7 @@ fun applyFifo(lots: List<RawLot>): List<Position> {
                 toSell -= closedQty
                 if (entry.remaining < EPSILON) qi++
             }
-            // toSell left over here (buy queue exhausted) is silently dropped, matching the source.
+            if (toSell > EPSILON) onUnmatchedSell(sell, toSell)
         }
 
         if (qi < queue.size) {

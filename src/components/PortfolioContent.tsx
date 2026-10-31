@@ -15,6 +15,7 @@ import { NO_FEED_TICKERS } from '../data/noFeedTickers'
 import { FUND_PROVIDER_SET } from '../data/fundProviderTickers'
 import { useDailyAnchors } from '../hooks/useDailyAnchors'
 import { computePortfolioIrr, deriveRow, groupByTicker } from '../utils/rowDerivation'
+import { localToday } from '../utils/localDate'
 
 interface Props {
   portfolioId: string
@@ -30,8 +31,8 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZo
   const { positions, addPosition, removePositions, updatePosition } = usePortfolio(portfolioId)
   const { quotes, loading: loadingSet, errors, fetchTickers: fetchQuotes } = useQuotes()
   const { dividends, fetchTickers: fetchDividends } = useDividends()
-  const { prices: manualPrices, setPrice: setManualPrice, removePrice: clearManualPrice } = useManualPrices(portfolioId)
-  const { taxOverrides, setDivTax, clearDivTax } = useManualDividendTaxes(portfolioId)
+  const { prices: manualPrices, setPrice: setManualPrice, removePrice: clearManualPrice, renameTicker: renameManualPriceTicker } = useManualPrices(portfolioId)
+  const { taxOverrides, setDivTax, clearDivTax, renameTicker: renameTaxTicker } = useManualDividendTaxes(portfolioId)
   const [showClosed, setShowClosed] = useState(false)
 
   const tickers = useMemo(
@@ -92,7 +93,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZo
   }
 
   const rows: PortfolioRow[] = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     return groupByTicker(positions).map((lots) => {
       const ticker = lots[0].ticker
       const key = ticker.toUpperCase()
@@ -115,7 +116,7 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZo
   }, [positions, quotes, loadingSet, errors, dividends, manualPrices, taxOverrides, convert, displayCurrency, anchorFor, fxAnchorFor])
 
   const portfolioIrr = useMemo(
-    () => computePortfolioIrr(positions, rows, dividends, taxOverrides, displayCurrency, new Date().toISOString().slice(0, 10), convert),
+    () => computePortfolioIrr(positions, rows, dividends, taxOverrides, displayCurrency, localToday(), convert),
     [positions, rows, dividends, taxOverrides, convert, displayCurrency],
   )
 
@@ -128,6 +129,10 @@ export function PortfolioContent({ portfolioId, displayCurrency, convert, timeZo
           ids.forEach((id) => updatePosition(id, { sellPrice, sellDate }))
         }
         onUpdatePosition={updatePosition}
+        onRenameTicker={(oldTicker, newTicker) => {
+          renameManualPriceTicker(oldTicker, newTicker)
+          renameTaxTicker(oldTicker, newTicker)
+        }}
         onRefresh={refresh}
         portfolioIrr={portfolioIrr}
         onSetManualPrice={setManualPrice}

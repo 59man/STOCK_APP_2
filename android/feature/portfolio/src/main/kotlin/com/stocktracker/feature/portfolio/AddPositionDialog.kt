@@ -1,5 +1,6 @@
 package com.stocktracker.feature.portfolio
 
+import com.stocktracker.core.calc.isIsoDate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +63,7 @@ fun AddPositionDialog(portfolioId: String, onDismiss: () -> Unit, onAdded: () ->
     val qty = quantity.toDoubleOrNull() ?: 0.0
     val rawPrice = priceInput.toDoubleOrNull() ?: 0.0
     val perSharePrice = if (priceIsTotal && qty > 0) rawPrice / qty else rawPrice
-    val canSubmit = ticker.isNotBlank() && qty > 0 && rawPrice > 0 && buyDate.isNotBlank()
+    val canSubmit = ticker.isNotBlank() && qty > 0 && rawPrice > 0 && isIsoDate(buyDate)
 
     AppDialog(
         onDismissRequest = onDismiss,

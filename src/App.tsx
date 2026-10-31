@@ -1,14 +1,15 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useSyncExternalStore } from 'react'
 import { usePortfolios } from './hooks/usePortfolios'
 import { useFxRates, DisplayCurrency } from './hooks/useFxRates'
 import { PortfolioContent } from './components/PortfolioContent'
 import { ImportModal } from './components/ImportModal'
 import { ColumnMappingModal } from './components/ColumnMappingModal'
 import { ApiKeyModal } from './components/ApiKeyModal'
+import { planImport } from './utils/dedupe'
 import { DeviceListModal } from './components/DeviceListModal'
 import { useDeviceRegistry } from './hooks/useDeviceRegistry'
 import { Position } from './types'
-import { getItem, setItem } from './utils/storage'
+import { dismissClashes, getItem, getSyncStatus, newKeySync, saveMerged, setItem, subscribeSyncStatus } from './utils/storage'
 import { randomUUID } from './utils/uuid'
 import { parseFile, parseWithMapping, ColumnMapping, MappingDefaults, NeedsMapping } from './utils/importParser'
 import './App.css'
@@ -28,7 +29,7 @@ const TIME_ZONES: string[] = [...new Set([
 ])].sort()
 
 export default function App() {
-  const { portfolios, activeId, ready, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio } = usePortfolios()
+  const { portfolios, activeId, ready, keyRejected, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio } = usePortfolios()
   const { convert } = useFxRates()
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('CZK')
   // Which midnight "today's change" resets at. Per-browser and deliberately not synced to the
@@ -40,6 +41,9 @@ export default function App() {
   )
   const [showAddModal, setShowAddModal] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+  const [keyPromptDismissed, setKeyPromptDismissed] = useState(false)
+  const syncStatus = useSyncExternalStore(subscribeSyncStatus, getSyncStatus)
+  const [importNotice, setImportNotice] = useState<string | null>(null)
   const [showDeviceModal, setShowDeviceModal] = useState(false)
   useDeviceRegistry()
   const [contentKey, setContentKey] = useState(0)
@@ -151,7 +155,11 @@ export default function App() {
           console.warn('[import] could not parse existing positions — appending to empty list')
         }
       }
-      await setItem(posKey, JSON.stringify([...current, ...positions]))
+      const plan = planImport(current, positions)
+      await saveMerged(posKey, JSON.stringify(plan.positions), newKeySync(existing ?? '[]'), () => {}, 0)
+      setImportNotice(plan.duplicates > 0
+        ? `Imported ${plan.added} lot${plan.added === 1 ? '' : 's'}. ${plan.duplicates} already in this portfolio, skipped.`
+        : null)
 
       if (importData.taxOverrides && Object.keys(importData.taxOverrides).length > 0) {
         const taxKey = `stock_tracker_div_tax_${activeId}`
@@ -224,7 +232,7 @@ export default function App() {
                 <option key={z} value={z}>{z}</option>
               ))}
             </select>
-            <button className="btn-secondary" title="Copy the Persist API key for the Android app" onClick={() => setShowApiKeyModal(true)}>
+            <button className="btn-secondary" title="API key, to copy into the Android app" onClick={() => setShowApiKeyModal(true)}>
               🔑
             </button>
             <button className="btn-secondary" title="Devices synced with this server" onClick={() => setShowDeviceModal(true)}>
@@ -297,6 +305,23 @@ export default function App() {
       </header>
 
       <main className="main">
+        {syncStatus.unsaved.length > 0 && (
+          <p role="status" style={{ fontSize: 13, color: 'var(--loss, #f66)' }}>
+            {syncStatus.unsaved.length === 1 ? '1 change' : `${syncStatus.unsaved.length} changes`} not saved to the server yet. Kept on this device and retrying.
+          </p>
+        )}
+        {syncStatus.clashes.length > 0 && (
+          <p role="status" className="muted" style={{ fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+            Also changed on another device: {syncStatus.clashes.join(', ')}. This device's version was kept.
+            <button className="close-btn" aria-label="Dismiss" onClick={dismissClashes}>✕</button>
+          </p>
+        )}
+        {importNotice && (
+          <p className="muted" style={{ fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+            {importNotice}
+            <button className="close-btn" aria-label="Dismiss" onClick={() => setImportNotice(null)}>✕</button>
+          </p>
+        )}
         {ready && activeId && (
           <PortfolioContent
             key={`${activeId}-${contentKey}`}
@@ -335,7 +360,15 @@ export default function App() {
           onClose={() => setColumnMapData(null)}
         />
       )}
-      {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
+      {(showApiKeyModal || (keyRejected && !keyPromptDismissed)) && (
+        <ApiKeyModal
+          rejected={keyRejected}
+          onClose={() => {
+            setShowApiKeyModal(false)
+            setKeyPromptDismissed(true)
+          }}
+        />
+      )}
       {showDeviceModal && <DeviceListModal onClose={() => setShowDeviceModal(false)} />}
     </div>
   )

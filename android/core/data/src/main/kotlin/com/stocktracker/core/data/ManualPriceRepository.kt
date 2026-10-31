@@ -44,6 +44,17 @@ class ManualPriceRepository @Inject constructor(
         syncEngine.markDirty(PersistKeys.manualPrices(portfolioId))
     }
 
+    /** Moves a ticker's manual price with it on rename; a price the new ticker already has stays. Returns whether anything changed. */
+    suspend fun renameTicker(portfolioId: String, oldTicker: String, newTicker: String): Boolean {
+        val all = dao.getByPortfolio(portfolioId)
+        val moved = all.firstOrNull { it.ticker == oldTicker.uppercase() } ?: return false
+        val kept = all - moved
+        val renamed = moved.copy(ticker = newTicker.uppercase())
+        dao.replaceByPortfolio(portfolioId, if (kept.any { it.ticker == renamed.ticker }) kept else kept + renamed)
+        syncEngine.markDirty(PersistKeys.manualPrices(portfolioId))
+        return true
+    }
+
     suspend fun pull(portfolioId: String): Boolean = syncEngine.pull(PersistKeys.manualPrices(portfolioId)) { remote ->
         dao.replaceByPortfolio(portfolioId, remote.map { (ticker, entry) -> ManualPriceEntity(portfolioId, ticker, entry.price, entry.updatedAt) })
     }

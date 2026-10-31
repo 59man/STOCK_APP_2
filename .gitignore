@@ -34,3 +34,4 @@ android/*.aab
 /test-results/
 /playwright-report/
 /.playwright-mcp/
+server/*.backups/

@@ -97,7 +97,7 @@ object AnchorClient {
         }
 
         val regular = meta?.currentTradingPeriod?.regular
-        if (!needsIntraday(regular?.start, regular?.end, midnight)) {
+        if (!needsIntraday(regular?.start, regular?.end, midnight, barsOf(daily))) {
             val sessionLength = if (regular?.start != null && regular.end != null) {
                 regular.end - regular.start
             } else {
@@ -111,11 +111,22 @@ object AnchorClient {
         return ResolvedAnchor(resolveAnchorFromIntraday(barsOf(intraday), midnight)?.times(scale), lastTradedAt)
     }
 
-    /** Null when the currency pair could not be resolved; the caller then holds FX flat. */
+    /**
+     * Null when a pair could not be resolved; the caller then holds FX flat. Goes through CZK exactly
+     * as `convert()` does. Asking Yahoo for the direct pair (JPYUSD=X) instead disagrees with the
+     * cross by about 0.1 %, which a closed market then showed as a move.
+     */
     suspend fun resolveFx(from: String, to: String, midnight: Long): Double? {
         if (from.equals(to, ignoreCase = true)) return 1.0
-        val pair = "$from$to=X"
-        resolveAnchorFromIntraday(barsOf(fetch(pair, "interval=5m&range=2d")), midnight)?.let { return it }
+        val fromCzk = czkAtMidnight(from, midnight) ?: return null
+        val toCzk = czkAtMidnight(to, midnight)?.takeIf { it != 0.0 } ?: return null
+        return fromCzk / toCzk
+    }
+
+    private suspend fun czkAtMidnight(currency: String, midnight: Long): Double? {
+        if (currency.equals("CZK", ignoreCase = true)) return 1.0
+        val pair = "${currency}CZK=X"
+        resolveRaw(pair, midnight).price?.let { return it }
         // FX closes over the weekend, so the 2-day intraday window can be empty on a Saturday
         // while daily bars still carry Friday's rate — which is the correct anchor.
         return resolveAnchorFromDaily(barsOf(fetch(pair, "interval=1d&range=5d")), midnight, 0)

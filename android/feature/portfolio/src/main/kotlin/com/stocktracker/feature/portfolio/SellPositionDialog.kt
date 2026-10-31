@@ -1,5 +1,6 @@
 package com.stocktracker.feature.portfolio
 
+import com.stocktracker.core.calc.isIsoDate
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +50,7 @@ fun SellPositionDialog(row: PortfolioRow, onDismiss: () -> Unit, onConfirm: (sel
             }
         },
         confirmButton = {
-            TextButton(enabled = price > 0 && sellDate.isNotBlank(), onClick = { onConfirm(price, sellDate) }) { Text("Sell") }
+            TextButton(enabled = price > 0 && isIsoDate(sellDate), onClick = { onConfirm(price, sellDate) }) { Text("Sell") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

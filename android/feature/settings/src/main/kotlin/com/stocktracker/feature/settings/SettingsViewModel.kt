@@ -25,14 +25,20 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val connectionTest = MutableStateFlow<ConnectionTestState>(ConnectionTestState.Idle)
+    private val syncError = MutableStateFlow<String?>(null)
 
-    val uiState: StateFlow<SettingsUiState> = combine(settingsRepository.settings, connectionTest) { settings, test ->
+    val uiState: StateFlow<SettingsUiState> = combine(
+        settingsRepository.settings, connectionTest, syncError, syncCoordinator.pendingChanges, syncCoordinator.lastPushFailure,
+    ) { settings, test, error, pending, pushFailure ->
         SettingsUiState(
             serverUrl = settings.serverUrl,
             apiKey = settings.apiKey,
             displayCurrency = settings.displayCurrency,
             lastSyncedAt = settings.lastSyncedAt,
             connectionTest = test,
+            syncError = error,
+            pendingChanges = pending,
+            lastPushFailure = pushFailure,
             themeMode = settings.themeMode,
             timeZoneId = settings.timeZoneId,
         )
@@ -40,7 +46,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onAction(action: SettingsAction) {
         when (action) {
-            is SettingsAction.ServerUrlChanged -> viewModelScope.launch { settingsRepository.setServerUrl(action.value) }
+            is SettingsAction.ServerUrlChanged -> viewModelScope.launch {
+                settingsRepository.setServerUrl(action.value)
+                syncCoordinator.forgetMergeBases()
+            }
             is SettingsAction.ApiKeyChanged -> viewModelScope.launch { settingsRepository.setApiKey(action.value) }
             is SettingsAction.DisplayCurrencyChanged -> viewModelScope.launch { settingsRepository.setDisplayCurrency(action.value) }
             is SettingsAction.ThemeModeChanged -> viewModelScope.launch { settingsRepository.setThemeMode(action.value) }
@@ -60,6 +69,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             deviceRegistry.unregister()
             settingsRepository.setServerUrl("")
+            syncCoordinator.forgetMergeBases()
             settingsRepository.setApiKey("")
         }
     }
@@ -67,8 +77,7 @@ class SettingsViewModel @Inject constructor(
     private fun testConnection() {
         viewModelScope.launch {
             connectionTest.update { ConnectionTestState.Testing }
-            val url = uiState.value.serverUrl
-            val result = HealthCheck.check(url)
+            val result = HealthCheck.check(uiState.value.serverUrl, uiState.value.apiKey)
             connectionTest.update {
                 result.fold(
                     onSuccess = { ConnectionTestState.Success },
@@ -80,8 +89,12 @@ class SettingsViewModel @Inject constructor(
 
     private fun syncNow() {
         viewModelScope.launch {
-            syncCoordinator.pullAllPortfolios()
-            settingsRepository.setLastSyncedAt(Instant.now().toString())
+            // Keys with unsent changes skip their pull, so with only those a wrong key or a dead server
+            // would otherwise look like a successful sync.
+            val failure = HealthCheck.check(uiState.value.serverUrl, uiState.value.apiKey).exceptionOrNull()
+                ?: syncCoordinator.pullAllPortfolios()
+            syncError.value = failure?.let { "Sync failed: ${it.message ?: it::class.simpleName}" }
+            if (failure == null) settingsRepository.setLastSyncedAt(Instant.now().toString())
         }
     }
 }

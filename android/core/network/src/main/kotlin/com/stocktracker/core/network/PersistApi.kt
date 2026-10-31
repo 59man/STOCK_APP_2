@@ -7,10 +7,14 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 @Serializable
-data class PersistResponse(val value: String? = null)
+data class PersistResponse(val value: String? = null, val version: String? = null)
 
 @Serializable
-data class PersistBody(val value: String)
+data class PersistBody(
+    val value: String,
+    /** The version this write was merged against, so the server can refuse it if the key moved on. */
+    val baseVersion: String? = null,
+)
 
 @Serializable
 data class PersistAck(val ok: Boolean = false)

@@ -1,7 +1,9 @@
 package com.stocktracker.core.data
 
+import com.stocktracker.core.model.FUND_PROVIDER_TICKERS
 import com.stocktracker.core.model.NO_FEED_TICKERS
 import com.stocktracker.core.model.Quote
+import com.stocktracker.core.network.FundQuoteClient
 import com.stocktracker.core.network.QuoteClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -78,12 +80,15 @@ class QuoteRepository @Inject constructor() {
         }
     }
 
+    private val fundQuotes = FundQuoteClient()
+
     private suspend fun fetchOne(ticker: String): Quote {
         val now = System.currentTimeMillis()
         cache[ticker]?.let { entry -> if (now - entry.fetchedAtMs < CACHE_TTL_MS) return entry.quote }
 
         return try {
-            val quote = QuoteClient.fetchQuote(ticker)
+            val provider = FUND_PROVIDER_TICKERS[ticker]
+            val quote = if (provider != null) fundQuotes.fetchQuote(ticker, provider) else QuoteClient.fetchQuote(ticker)
             cache[ticker] = CacheEntry(quote, now)
             quote
         } catch (e: CancellationException) {

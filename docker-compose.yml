@@ -2,22 +2,19 @@ services:
   stock-tracker:
     build:
       context: .
-      args:
-        # Baked into the frontend bundle at build time — see Dockerfile. Must match
-        # PERSIST_API_KEY below, and requires a rebuild (not just a restart) to change.
-        VITE_PERSIST_API_KEY: ${VITE_PERSIST_API_KEY}
     ports:
-      - "8080:8080"
+      # IPv4 only: the page hands browsers the key, and on IPv6 Docker hides the client's address.
+      - "0.0.0.0:8080:8080"
     volumes:
       # Bind-mount the existing data file so your portfolio persists between restarts.
       # The file must exist on the host before running `docker compose up`.
       - ./server/data.json:/app/server/data.json
-      # Daily rotating backups (last 7 days) — without this mount they vanish on `docker rm`.
+      # Daily rotating backups (last 7 days) and the generated API key — without this mount
+      # both vanish on `docker rm`.
       - ./server/backups:/app/server/backups
     environment:
       NODE_ENV: production
       PORT: "8080"
-      PERSIST_API_KEY: ${PERSIST_API_KEY}
     logging:
       driver: json-file
       options:

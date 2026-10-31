@@ -48,7 +48,7 @@ fun parseXtbRows(rows: List<List<String?>>, accountCurrency: String): Pair<List<
 
         // XTB uses .CZ for the Prague exchange; the app uses .PR.
         val ticker = if (xtbTicker.endsWith(".CZ")) xtbTicker.removeSuffix(".CZ") + ".PR" else xtbTicker
-        val buyDate = time.split(Regex("[T ]"))[0]
+        val buyDate = excelSerialToIso(time) ?: time.split(Regex("[T ]"))[0]
 
         rawLots.add(RawLot(
             ticker = ticker, name = name, qty = qty, price = abs(amount) / qty, date = buyDate,
@@ -68,10 +68,11 @@ suspend fun parseXtbFromRows(rows: List<List<String?>>, fileName: String, lookup
     val prefixCurrency = accountCurrencyFromFileName(fileName)
     val accountCurrency = prefixCurrency ?: "CZK"
 
-    val (rawLots, skipped) = parseXtbRows(rows, accountCurrency)
+    val (rawLots, skippedRows) = parseXtbRows(rows, accountCurrency)
     if (rawLots.isEmpty()) return null
 
-    val positions = applyFifo(rawLots)
+    var skipped = skippedRows
+    val positions = applyFifo(rawLots) { _, _ -> skipped++ }
     if (positions.isEmpty()) return null
 
     val typeMap = lookupTickers(positions.map { it.ticker }.distinct())

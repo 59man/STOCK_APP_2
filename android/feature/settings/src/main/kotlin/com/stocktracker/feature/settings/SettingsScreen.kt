@@ -158,6 +158,20 @@ internal fun SettingsScreen(uiState: SettingsUiState, onAction: (SettingsAction)
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (uiState.pendingChanges > 0 && uiState.serverUrl.isNotBlank()) {
+                Text(
+                    text = buildString {
+                        append(if (uiState.pendingChanges == 1) "1 change" else "${uiState.pendingChanges} changes")
+                        append(" waiting to reach the server")
+                        uiState.lastPushFailure?.let { append(". Last try: $it") }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (uiState.lastPushFailure != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            uiState.syncError?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
 
             var showDisconnectConfirm by remember { mutableStateOf(false) }
             Button(

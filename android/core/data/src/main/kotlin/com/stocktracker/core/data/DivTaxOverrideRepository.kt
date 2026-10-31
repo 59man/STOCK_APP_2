@@ -44,6 +44,17 @@ class DivTaxOverrideRepository @Inject constructor(
         syncEngine.markDirty(PersistKeys.divTaxOverrides(portfolioId))
     }
 
+    /** Moves a ticker's overrides with it on rename; one the new ticker already has for a date stays. Returns whether anything changed. */
+    suspend fun renameTicker(portfolioId: String, oldTicker: String, newTicker: String): Boolean {
+        val all = dao.getByPortfolio(portfolioId)
+        val (moved, kept) = all.partition { it.ticker == oldTicker.uppercase() }
+        if (moved.isEmpty()) return false
+        val taken = kept.filter { it.ticker == newTicker.uppercase() }.map { it.date }.toSet()
+        dao.replaceByPortfolio(portfolioId, kept + moved.filterNot { it.date in taken }.map { it.copy(ticker = newTicker.uppercase()) })
+        syncEngine.markDirty(PersistKeys.divTaxOverrides(portfolioId))
+        return true
+    }
+
     private fun toEntities(portfolioId: String, map: Map<String, Double>): List<DivTaxOverrideEntity> =
         map.mapNotNull { (compositeKey, rate) ->
             val parts = compositeKey.split("::")

@@ -17,8 +17,10 @@ export interface RawLot {
  * Given raw buy/sell lots (in any order), applies FIFO matching per ticker.
  * Returns Position[] with sellDate/sellPrice set on closed lots.
  * Partial sells split a buy lot into a closed portion and an open remainder.
+ * A sell only consumes buys dated on or before it. Whatever it cannot match, usually because the
+ * statement starts after the buy, goes to `onUnmatchedSell` so the caller can report it.
  */
-export function applyFifo(lots: RawLot[]): Position[] {
+export function applyFifo(lots: RawLot[], onUnmatchedSell?: (sell: RawLot, qty: number) => void): Position[] {
   const byTicker: Record<string, RawLot[]> = {}
   for (const lot of lots) {
     (byTicker[lot.ticker] ??= []).push(lot)
@@ -41,7 +43,7 @@ export function applyFifo(lots: RawLot[]): Position[] {
 
     for (const sell of sells) {
       let toSell = sell.qty
-      while (toSell > 1e-6 && qi < queue.length) {
+      while (toSell > 1e-6 && qi < queue.length && queue[qi].date <= sell.date) {
         const buy = queue[qi]
         const closed = Math.min(buy.remaining, toSell)
         result.push({
@@ -55,7 +57,7 @@ export function applyFifo(lots: RawLot[]): Position[] {
         toSell -= closed
         if (buy.remaining < 1e-6) qi++
       }
-      // Unmatched sell qty → no buy found; silently ignored
+      if (toSell > 1e-6) onUnmatchedSell?.(sell, toSell)
     }
 
     // Remaining open buy lots

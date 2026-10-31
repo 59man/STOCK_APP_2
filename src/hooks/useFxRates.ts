@@ -30,23 +30,35 @@ async function fetchFxRate(fxTicker: string): Promise<number> {
   return price
 }
 
+const FX_RETRY_MS = 60_000
+const FX_REFRESH_MS = 15 * 60_000
+
 export function useFxRates() {
   const [rates, setRates] = useState<Rates>(DEFAULTS)
 
   useEffect(() => {
-    Promise.all(FX_PAIRS.map(([key, ticker]) => fetchFxRate(ticker).catch((e) => {
-      // A defaulted pair silently skews every converted amount — at least say which.
-      console.warn(`[useFxRates] ${key}/CZK failed, using default ${DEFAULTS[key]}:`, e instanceof Error ? e.message : e)
-      return null
-    })))
-      .then((values) => {
-        const next = { ...DEFAULTS }
+    let timer: ReturnType<typeof setTimeout>
+    let stopped = false
+    async function load() {
+      const values = await Promise.all(FX_PAIRS.map(([key, ticker]) => fetchFxRate(ticker).catch((e) => {
+        // A defaulted pair silently skews every converted amount — at least say which.
+        console.warn(`[useFxRates] ${key}/CZK failed, keeping the last known rate:`, e instanceof Error ? e.message : e)
+        return null
+      })))
+      if (stopped) return
+      setRates((prev) => {
+        const next = { ...prev }
         FX_PAIRS.forEach(([key], i) => { if (values[i] !== null) next[key] = values[i]! })
-        setRates(next)
+        return next
       })
-      .catch((err) => {
-        console.warn('[useFxRates] failed to fetch FX rates, using defaults:', err instanceof Error ? err.message : err)
-      })
+      // One 429 used to pin the whole session to a hardcoded rate.
+      timer = setTimeout(load, values.includes(null) ? FX_RETRY_MS : FX_REFRESH_MS)
+    }
+    void load()
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
   }, [])
 
   const convert = useCallback(
