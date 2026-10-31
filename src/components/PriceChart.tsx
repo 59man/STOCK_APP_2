@@ -39,19 +39,23 @@ const RANGE_TO_YAHOO: Record<Range, string> = {
   'All': 'max',
 }
 
-function parseRaw(json: unknown, yahooRange: string): ChartPoint[] {
+export function parseRaw(json: unknown, yahooRange: string): ChartPoint[] {
   const result = (json as { chart?: { result?: unknown[] } })?.chart?.result?.[0] as {
     timestamp?: number[]
+    meta?: { gmtoffset?: number }
     indicators?: { quote?: { close?: number[] }[] }
   } | undefined
   if (!result) return []
+  // The bar's date on its own exchange. FX bars are stamped 23:00 UTC the evening before, so the UTC
+  // date is a day out, and XAU in CZK multiplies a price and an FX series by matching dates.
+  const offset = result.meta?.gmtoffset ?? 0
   const ts = result.timestamp ?? []
   const closes = result.indicators?.quote?.[0]?.close ?? []
   const showYear = yahooRange === 'max' || yahooRange === '5y' || yahooRange === '3y'
   return ts
     .map((t, i) => ({
       date: new Date(t * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: showYear ? '2-digit' : undefined }),
-      isoDate: new Date(t * 1000).toISOString().slice(0, 10),
+      isoDate: new Date((t + offset) * 1000).toISOString().slice(0, 10),
       price: closes[i] ?? 0,
     }))
     .filter((d) => isFinite(d.price) && d.price > 0)

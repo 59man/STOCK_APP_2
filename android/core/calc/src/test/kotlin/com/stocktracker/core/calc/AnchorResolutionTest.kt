@@ -34,6 +34,19 @@ class AnchorResolutionTest {
         assertTrue(needsIntraday(midnight - 2 * hour, midnight + 4 * hour, midnight))
     }
 
+    @Test fun `sees a session running at midnight even after a newer one has become the latest`() {
+        // Real BTC-USD, Saturday 16:00 in Prague: the window is already Saturday's (UTC), but at
+        // Prague's midnight, 23:00 UTC on Friday, Friday's session was still running.
+        fun utc(day: Int, h: Int = 0, m: Int = 0) = java.time.LocalDateTime.of(2026, 10, day, h, m).toEpochSecond(java.time.ZoneOffset.UTC)
+        val bars = listOf(AnchorBar(utc(29), 1.0), AnchorBar(utc(30), 2.0))
+        assertTrue(needsIntraday(utc(31), utc(31, 23, 59), utc(30, 23), bars))
+    }
+
+    @Test fun `leaves a stock alone when midnight falls between its sessions`() {
+        fun utc(day: Int, h: Int = 0, m: Int = 0) = java.time.LocalDateTime.of(2026, 10, day, h, m).toEpochSecond(java.time.ZoneOffset.UTC)
+        assertFalse(needsIntraday(utc(30, 13, 30), utc(30, 20), utc(29, 23), listOf(AnchorBar(utc(29, 13, 30), 1.0))))
+    }
+
     @Test fun `no session window at all needs intraday bars, as for 24-7 crypto`() {
         assertTrue(needsIntraday(null, null, midnight))
     }

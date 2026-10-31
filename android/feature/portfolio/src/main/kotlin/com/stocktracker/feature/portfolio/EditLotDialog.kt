@@ -1,5 +1,6 @@
 package com.stocktracker.feature.portfolio
 
+import com.stocktracker.core.calc.isIsoDate
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,7 +44,7 @@ fun EditLotDialog(position: Position, onDismiss: () -> Unit, onSave: (Position) 
 
     val qty = quantity.toDoubleOrNull() ?: 0.0
     val price = buyPrice.toDoubleOrNull() ?: 0.0
-    val canSave = qty > 0 && price >= 0 && buyDate.isNotBlank() && (!isClosed || sellPrice.toDoubleOrNull() != null)
+    val canSave = qty > 0 && price >= 0 && isIsoDate(buyDate) && (!isClosed || (sellPrice.toDoubleOrNull() != null && isIsoDate(sellDate)))
 
     AppDialog(
         onDismissRequest = onDismiss,

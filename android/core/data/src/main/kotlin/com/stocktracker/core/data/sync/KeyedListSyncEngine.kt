@@ -20,6 +20,12 @@ class KeyedListSyncEngine<T>(
     private val serializer: KSerializer<List<T>>,
     private val keyOf: (T) -> String,
     private val resolveConflict: ((local: T, remote: T) -> T)? = null,
+    /**
+     * For the portfolio list: a remote sharing no record with the last sync means another server, or
+     * this one reset and re-created, not that every portfolio was deleted. A pull then keeps local and
+     * forgets the base, so the next push unites both instead of orphaning everything here.
+     */
+    private val mergeWhenRemoteIsUnrelated: Boolean = false,
 ) {
     /**
      * Refreshes local state from the server. Returns false without touching
@@ -32,6 +38,15 @@ class KeyedListSyncEngine<T>(
 
         val remoteJson = persistApi.get(storageKey).value ?: return false
         val remote = PersistJson.decodeFromString(serializer, remoteJson)
+        if (mergeWhenRemoteIsUnrelated) {
+            val baseKeys = state?.lastSyncedJson?.let { PersistJson.decodeFromString(serializer, it) }.orEmpty().map(keyOf).toSet()
+            if (baseKeys.isNotEmpty() && remote.isNotEmpty() && remote.none { keyOf(it) in baseKeys }) {
+                syncStateDao.upsert(SyncStateEntity(storageKey, null, dirty = true))
+                return false
+            }
+        }
+        // The GET can take seconds: an edit made meanwhile must not be overwritten by it.
+        if (syncStateDao.isDirty(storageKey) == true) return false
         writeLocal(remote)
         syncStateDao.upsert(SyncStateEntity(storageKey, remoteJson, dirty = false))
         return true
@@ -48,14 +63,22 @@ class KeyedListSyncEngine<T>(
         val state = syncStateDao.get(storageKey)
         val base = state?.lastSyncedJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyList()
         val local = readLocal()
-        val remoteJson = persistApi.get(storageKey).value
-        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyList()
+        val response = persistApi.get(storageKey)
+        val remoteJson = response.value
+        // No client ever removes a key, so an absent one means the server lost it (reset, restored,
+        // or a different server), not that every record was deleted. Treating it as "no remote
+        // change" keeps local intact and the push below restores the key.
+        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: base
 
         val result = threeWayMerge(base, local, remote, keyOf, resolveConflict)
         if (result.conflicts.isNotEmpty()) return result.conflicts
 
         val mergedJson = PersistJson.encodeToString(serializer, result.merged)
-        persistApi.set(storageKey, PersistBody(mergedJson))
+        // A write landing since the GET makes the server refuse this one; the worker retries and merges again.
+        persistApi.set(storageKey, PersistBody(mergedJson, response.version))
+        // Edited during this push: keep the edit, the old base and the dirty flag, so the push it
+        // queued sees what this merge brought in as remote additions rather than local deletes.
+        if (readLocal() != local) return emptyList()
         writeLocal(result.merged)
         syncStateDao.upsert(SyncStateEntity(storageKey, mergedJson, dirty = false))
         return emptyList()
@@ -90,7 +113,7 @@ class KeyedListSyncEngine<T>(
         val state = syncStateDao.get(storageKey)
         val base = state?.lastSyncedJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyList()
         val remoteJson = persistApi.get(storageKey).value
-        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: emptyList()
+        val remote = remoteJson?.let { PersistJson.decodeFromString(serializer, it) } ?: base // see push
         val remoteRecord = remote.firstOrNull { keyOf(it) == recordKey }
 
         if (!keepLocal) {

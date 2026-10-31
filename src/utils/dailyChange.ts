@@ -37,6 +37,8 @@ export interface DailyChangeResult {
   method: AnchorMethod
 }
 
+const DUST = 1e-6
+
 const ZERO = (method: AnchorMethod): DailyChangeResult => ({
   change: 0,
   changePercent: 0,
@@ -68,7 +70,8 @@ export function dailyChange(input: DailyChangeInput): DailyChangeResult {
 
   const nowValue = quantity * currentPrice * currentFx
   const anchorValue = quantity * anchorPrice * anchorFx
-  const change = nowValue - anchorValue
+  // Floating-point dust from the FX cross must not read as "-$0.00" on a closed market.
+  const change = Math.abs(nowValue - anchorValue) < DUST ? 0 : nowValue - anchorValue
   const priceOnlyChange = quantity * (currentPrice - anchorPrice) * currentFx
 
   return {

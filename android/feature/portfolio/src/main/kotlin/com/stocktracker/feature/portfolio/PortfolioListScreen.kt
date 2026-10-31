@@ -917,6 +917,9 @@ fun PositionDetailRoute(
                     onDismiss = { editTickerTarget = false },
                     onSave = { updatedLots ->
                         updatedLots.forEach { viewModel.onAction(PortfolioListAction.UpdatePosition(it)) }
+                        updatedLots.firstOrNull()?.ticker?.takeIf { it != row.ticker }?.let {
+                            viewModel.onAction(PortfolioListAction.RenameTicker(row.ticker, it))
+                        }
                         editTickerTarget = false
                     },
                 )

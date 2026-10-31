@@ -40,6 +40,7 @@ sealed interface PortfolioListAction {
     data class AddPortfolio(val name: String) : PortfolioListAction
     data class RenamePortfolio(val portfolioId: String, val name: String) : PortfolioListAction
     data class DeletePortfolio(val portfolioId: String) : PortfolioListAction
+    data class RenameTicker(val oldTicker: String, val newTicker: String) : PortfolioListAction
     data object ToggleShowClosed : PortfolioListAction
     data object Refresh : PortfolioListAction
     data class DeletePosition(val positionId: String) : PortfolioListAction

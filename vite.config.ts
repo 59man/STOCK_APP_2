@@ -44,7 +44,8 @@ export default defineConfig({
   },
   // tests/ui holds Playwright specs, which import @playwright/test and cannot run under
   // vitest — without this, `npm test` reports a failing file alongside its 105 passes.
+  // .claude/ can hold whole git worktrees, each with its own tests and node_modules.
   test: {
-    exclude: ['tests/ui/**', 'node_modules/**', 'dist/**'],
+    exclude: ['tests/ui/**', 'node_modules/**', 'dist/**', '.claude/**'],
   },
 })

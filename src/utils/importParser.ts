@@ -1,6 +1,7 @@
 import { Position } from '../types'
 import { parsePdf } from './pdfParser'
-import { detectCsvFormat, parseT212, parseDegiro } from './csvParser'
+import { detectCsvFormat, parseBrokerNumber, parseT212, parseDegiro, usesCommaDecimals } from './csvParser'
+import { applyFifo, RawLot } from './fifoMatcher'
 import { batchTickers } from './yahooLookup'
 
 export interface ParseResult {
@@ -37,6 +38,9 @@ export interface MappingDefaults {
   skipRows: number
 }
 
+const POSITION_TYPES: string[] = ['stock', 'etf', 'fund', 'commodity', 'crypto']
+const isIsoDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(Date.parse(v))
+
 /** Minimal schema guard */
 function isValidPosition(p: unknown): p is Omit<Position, 'id'> {
   if (!p || typeof p !== 'object') return false
@@ -45,8 +49,23 @@ function isValidPosition(p: unknown): p is Omit<Position, 'id'> {
     typeof x.ticker === 'string' && x.ticker.trim().length > 0 &&
     typeof x.quantity === 'number' && isFinite(x.quantity) && x.quantity > 0 &&
     typeof x.buyPrice === 'number' && isFinite(x.buyPrice) && x.buyPrice >= 0 &&
-    typeof x.buyDate === 'string' && x.buyDate.length > 0
+    isIsoDate(x.buyDate) &&
+    (x.sellDate === undefined || x.sellDate === null || isIsoDate(x.sellDate))
   )
+}
+
+/**
+ * Fills what older or hand-edited files leave out, with the same defaults as Android's importer.
+ * Android decodes a stored key as a whole, so one lot missing a required field would stop that key
+ * syncing altogether.
+ */
+function withRequiredFields(p: Position): Position {
+  return {
+    ...p,
+    name: typeof p.name === 'string' && p.name ? p.name : p.ticker,
+    type: POSITION_TYPES.includes(p.type) ? p.type : 'stock',
+    currency: typeof p.currency === 'string' && p.currency ? p.currency : 'USD',
+  }
 }
 
 export function parsePositionsFromJson(raw: unknown): ParseResult | null {
@@ -92,7 +111,7 @@ export function parsePositionsFromJson(raw: unknown): ParseResult | null {
   }
 
   if (candidates.length === 0) return null
-  const valid = candidates.filter(isValidPosition) as Position[]
+  const valid = (candidates.filter(isValidPosition) as Position[]).map(withRequiredFields)
   return { valid, skipped: candidates.length - valid.length, dividendTaxOverrides, manualPrices }
 }
 
@@ -103,8 +122,8 @@ function getStr(row: unknown[], col: number | null): string {
   return String(row[col] ?? '').trim()
 }
 
-function getNum(row: unknown[], col: number | null): number {
-  return parseFloat(getStr(row, col).replace(/[,\s]/g, '')) || 0
+function getNum(row: unknown[], col: number | null, commaDecimal: boolean): number {
+  return parseBrokerNumber(getStr(row, col), commaDecimal) || 0
 }
 
 function parseAnyDate(s: string): string | null {
@@ -130,22 +149,34 @@ export async function parseWithMapping(
   defaults: MappingDefaults,
 ): Promise<ParseResult | null> {
   const dataRows = rows.slice(defaults.skipRows)
-  const valid: Position[] = []
+  const numberCols = [mapping.quantity, mapping.buyPrice, mapping.sellPrice]
+  const commaDecimal = usesCommaDecimals(dataRows.flatMap((r) => numberCols.map((c) => getStr(r as unknown[], c))))
+  let valid: Position[] = []
+  const sells: RawLot[] = []
   let skipped = 0
 
   for (const rawRow of dataRows) {
     const row = rawRow as unknown[]
     const ticker = getStr(row, mapping.ticker).toUpperCase()
     const dateRaw = getStr(row, mapping.date)
-    const qty = getNum(row, mapping.quantity)
-    const price = getNum(row, mapping.buyPrice)
+    const qty = getNum(row, mapping.quantity, commaDecimal)
+    const price = getNum(row, mapping.buyPrice, commaDecimal)
 
-    if (!ticker || !dateRaw || qty <= 0 || price <= 0) { skipped++; continue }
+    if (!ticker || !dateRaw || qty === 0 || price <= 0) { skipped++; continue }
     const buyDate = parseAnyDate(dateRaw)
     if (!buyDate) { skipped++; continue }
 
+    // The wizard has no direction column, but statements commonly write a sale as negative quantity.
+    if (qty < 0) {
+      sells.push({
+        ticker, name: ticker, type: 'stock', qty: -qty, price, date: buyDate,
+        currency: getStr(row, mapping.currency) || defaults.currency, broker: '', isSell: true,
+      })
+      continue
+    }
+
     const sellDateRaw = getStr(row, mapping.sellDate)
-    const sellPrice = getNum(row, mapping.sellPrice)
+    const sellPrice = getNum(row, mapping.sellPrice, commaDecimal)
     const sellDate = sellDateRaw ? parseAnyDate(sellDateRaw) : null
 
     valid.push({
@@ -161,6 +192,16 @@ export async function parseWithMapping(
       isin: getStr(row, mapping.isin) || undefined,
       ...(sellDate && sellPrice > 0 ? { sellDate, sellPrice } : {}),
     } as Position)
+  }
+
+  if (sells.length) {
+    const open = valid.filter((p) => !p.sellDate)
+    const rawBuys: RawLot[] = open.map((p) => ({
+      ticker: p.ticker, name: p.name, type: p.type, qty: p.quantity, price: p.buyPrice, date: p.buyDate,
+      currency: p.currency, broker: p.broker ?? '', ...(p.isin ? { isin: p.isin } : {}), isSell: false,
+    }))
+    valid = [...valid.filter((p) => p.sellDate), ...applyFifo([...rawBuys, ...sells], () => { skipped++ })]
+    valid.forEach((p) => { if (!p.broker) delete p.broker })
   }
 
   if (!valid.length) return null
@@ -201,7 +242,9 @@ export async function parseFile(file: File): Promise<ParseFileResult | null> {
   if (ext === 'xlsx' || ext === 'csv') {
     const XLSX = await import('xlsx')
     const wb = ext === 'csv'
-      ? XLSX.read(new TextDecoder().decode(buf), { type: 'string', raw: false })
+      // raw: keep every cell as the text in the file. Otherwise SheetJS "helpfully" reads 05-03-2024 as
+      // a US date and rewrites it, so Degiro rows with a day of 12 or less vanish.
+      ? XLSX.read(new TextDecoder().decode(buf), { type: 'string', raw: true })
       : XLSX.read(buf, { type: 'array', cellDates: true })
 
     if (wb.Sheets['Cash Operations']) {

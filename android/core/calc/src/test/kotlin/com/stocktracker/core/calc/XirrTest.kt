@@ -2,6 +2,8 @@ package com.stocktracker.core.calc
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import kotlin.math.abs
 
@@ -49,5 +51,20 @@ class XirrTest {
             )
         )
         assertNull(result)
+    }
+
+    @Test
+    fun `a malformed date gives no rate instead of crashing`() {
+        assertNull(xirr(listOf(CashFlow("2026-1-5", -100.0), CashFlow("2027-01-05", 110.0))))
+        assertNull(xirr(listOf(CashFlow("2026-01-05", -100.0), CashFlow("", 110.0))))
+    }
+
+    @Test
+    fun `isIsoDate accepts only real dates in the exact stored form`() {
+        assertTrue(isIsoDate("2024-02-29"))
+        assertFalse(isIsoDate("2026-1-5"))
+        assertFalse(isIsoDate("2023-02-29"))
+        assertFalse(isIsoDate(""))
+        assertFalse(isIsoDate("5.1.2026"))
     }
 }

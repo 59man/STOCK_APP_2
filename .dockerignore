@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.env*
+.claude/
 .git/
 Transactions_folder/
 session.md
@@ -9,3 +11,4 @@ server/*.pdf
 server/backups/
 server/*.xlsx
 android/
+server/*.backups/

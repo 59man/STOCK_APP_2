@@ -111,7 +111,8 @@ fun parseRevolutTradingLines(lines: List<String>): RevolutTradingLines {
 
 /** Mirrors parseRevolutTrading in src/utils/pdfParser.ts. */
 suspend fun parseRevolutTrading(lines: List<String>, lookupIsins: IsinLookup, lookupTickers: TickerLookup): ParseResult {
-    val (txs, bySymbol, skipped) = parseRevolutTradingLines(lines)
+    val (txs, bySymbol, skippedRows) = parseRevolutTradingLines(lines)
+    var skipped = skippedRows
     if (txs.isEmpty()) return ParseResult(valid = emptyList(), skipped = skipped)
 
     val isinMap = lookupIsins(bySymbol.values.map { it.isin }.distinct())
@@ -135,5 +136,6 @@ suspend fun parseRevolutTrading(lines: List<String>, lookupIsins: IsinLookup, lo
         )
     }
 
-    return ParseResult(valid = applyFifo(rawLots), skipped = skipped)
+    val valid = applyFifo(rawLots) { _, _ -> skipped++ }
+    return ParseResult(valid = valid, skipped = skipped)
 }

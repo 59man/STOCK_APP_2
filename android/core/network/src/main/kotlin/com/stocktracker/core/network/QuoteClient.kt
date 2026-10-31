@@ -111,7 +111,7 @@ object QuoteClient {
         if (code == 429) noteYahoo429()
         if (code !in 200..299) throw Exception("Yahoo $code")
         val meta = parsed?.chart?.result?.firstOrNull()?.meta
-        val price = meta?.regularMarketPrice ?: throw Exception("Yahoo: no data")
+        val price = meta?.regularMarketPrice?.takeIf { it > 0 } ?: throw Exception("Yahoo: no data") // as useQuotes.ts: 0 means no price
         val prev = meta.previousClose ?: meta.chartPreviousClose ?: price
         var currency = meta.currency ?: "CZK"
         var finalPrice = price

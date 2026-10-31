@@ -9,11 +9,8 @@ import java.io.InputStream
 
 /**
  * Extracts per-page positioned text items from a PDF via PDFBox-Android,
- * then hands them to the pure [groupItemsIntoLines] algorithm. This is the
- * one piece of core:import that genuinely needs an Android runtime — it
- * can't be unit-tested the way the rest of this module is (no emulator in
- * this environment); only compile-checked. [groupItemsIntoLines] itself is
- * fully unit-tested against synthetic items.
+ * then hands them to the pure [groupItemsIntoLines] algorithm. The one piece
+ * of core:import that needs an Android runtime, so its test uses Robolectric.
  */
 object PdfBoxTextExtractor {
 
@@ -37,7 +34,8 @@ object PdfBoxTextExtractor {
                     override fun writeString(text: String, textPositions: MutableList<TextPosition>) {
                         val first = textPositions.firstOrNull() ?: return
                         if (text.isBlank()) return
-                        items.add(PdfTextItem(text = text, x = first.xDirAdj, y = first.yDirAdj))
+                        // PDFBox reports y from the top of the page; PdfTextItem's y increases upward, as in pdfjs.
+                        items.add(PdfTextItem(text = text, x = first.xDirAdj, y = first.pageHeight - first.yDirAdj))
                     }
                 }
                 stripper.startPage = pageIndex + 1

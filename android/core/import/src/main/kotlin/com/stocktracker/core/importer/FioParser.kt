@@ -74,5 +74,6 @@ suspend fun parseFio(lines: List<String>, lookupIsins: IsinLookup): ParseResult 
         )
     }
 
-    return ParseResult(valid = applyFifo(rawLots), skipped = skipped)
+    val valid = applyFifo(rawLots) { _, _ -> skipped++ }
+    return ParseResult(valid = valid, skipped = skipped)
 }

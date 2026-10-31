@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react'
 import { Position } from '../types'
 import { proxyFetch } from '../utils/proxyFetch'
 import { mapType } from '../utils/yahooLookup'
+import { localToday } from '../utils/localDate'
 
 interface Props {
   onAdd: (p: Omit<Position, 'id'>) => void
@@ -17,12 +18,12 @@ export function AddPositionModal({ onAdd, onClose }: Props) {
     type: 'stock' as Position['type'],
     quantity: '',
     buyPrice: '',
-    buyDate: new Date().toISOString().slice(0, 10),
+    buyDate: localToday(),
     currency: 'USD',
     broker: '',
     isClosed: false,
     sellPrice: '',
-    sellDate: new Date().toISOString().slice(0, 10),
+    sellDate: localToday(),
   })
   const [nameLoading, setNameLoading] = useState(false)
   // Buy price entry mode: per-share, or total paid for the whole lot (divided by qty on save)

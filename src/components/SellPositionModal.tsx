@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { localToday } from '../utils/localDate'
 
 interface Lot {
   id: string
@@ -22,7 +23,7 @@ function fmt(n: number, currency: string) {
 }
 
 export function SellPositionModal({ ticker, lots, onSell, onClose }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const [sellDate, setSellDate] = useState(today)
   const [sellPrice, setSellPrice] = useState('')
   const [error, setError] = useState<string | null>(null)

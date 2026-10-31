@@ -74,4 +74,9 @@ class DailyChangeTest {
         assertEquals(r.priceOnlyChange, r.change, 1e-9)
         assertEquals(AnchorMethod.ANCHORED, r.method)
     }
+
+    @Test fun `reports floating-point dust as exactly zero`() {
+        val r = dailyChange(quantity = 3.0, currentPrice = 0.1, anchorPrice = 0.1, currentFx = 1.0 / 3, anchorFx = (1.0 / 3) * (1 + 1e-16))
+        assertEquals(0.0, r.change, 0.0)
+    }
 }

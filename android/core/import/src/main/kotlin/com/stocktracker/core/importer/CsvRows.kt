@@ -3,9 +3,14 @@ package com.stocktracker.core.importer
 /**
  * Minimal RFC 4180-aware CSV split — quoted fields, embedded commas, and
  * doubled-quote escaping (`""` inside a quoted field). No external library
- * needed; T212/Degiro exports are plain enough that this covers them.
+ * needed; T212/Degiro exports are plain enough that this covers them. The
+ * delimiter is whichever of comma, semicolon or tab the first line uses most,
+ * since European exports commonly use a semicolon. A leading BOM is ignored.
  */
-fun parseCsvRows(text: String): List<List<String>> {
+fun parseCsvRows(input: String): List<List<String>> {
+    val text = input.removePrefix("\uFEFF")
+    val firstLine = text.lineSequence().firstOrNull().orEmpty()
+    val delimiter = listOf(',', ';', '\t').maxBy { d -> firstLine.count { it == d } }
     val rows = mutableListOf<List<String>>()
     var field = StringBuilder()
     var row = mutableListOf<String>()
@@ -24,7 +29,7 @@ fun parseCsvRows(text: String): List<List<String>> {
                 } else field.append(c)
             }
             c == '"' -> inQuotes = true
-            c == ',' -> endField()
+            c == delimiter -> endField()
             c == '\r' -> { }
             c == '\n' -> endRow()
             else -> field.append(c)

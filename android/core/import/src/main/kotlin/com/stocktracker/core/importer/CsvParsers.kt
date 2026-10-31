@@ -1,12 +1,47 @@
 package com.stocktracker.core.importer
 
+import com.stocktracker.core.calc.RawLot
+import com.stocktracker.core.calc.applyFifo
+import com.stocktracker.core.calc.isIsoDate
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.model.PositionType
 
 private fun colIdx(header: List<String>, name: String): Int =
     header.indexOfFirst { it.trim().equals(name, ignoreCase = true) }
 
-private fun parseDecimal(s: String?): Double = (s ?: "").replace(",", "").toDoubleOrNull() ?: Double.NaN
+private val THOUSANDS_ONLY = Regex("""^[+-]?\d{1,3}(,\d{3})+$""")
+private val NUMBER_SHAPE = Regex("""^[+-]?[\d.,]*\d[\d.,]*$""")
+
+/**
+ * A number as brokers write it: `1,234.56`, `1.234,56`, `150,25`, `1 234`. With both separators the
+ * last one is the decimal point. A lone comma is thousands only in the exact `1,000` shape, unless
+ * [commaDecimal] says this file writes decimals with a comma: see [usesCommaDecimals]. Anything else,
+ * like `1.2.3`, is NaN. Mirrors parseBrokerNumber in csvParser.ts.
+ */
+fun parseBrokerNumber(raw: String?, commaDecimal: Boolean = false): Double {
+    val t = (raw ?: "").filterNot { it.isWhitespace() || it == '\u00a0' }
+    if (!NUMBER_SHAPE.matches(t)) return Double.NaN
+    val comma = t.lastIndexOf(',')
+    val dot = t.lastIndexOf('.')
+    val normalized = when {
+        comma >= 0 && dot >= 0 ->
+            if (comma > dot) t.replace(".", "").replace(',', '.') else t.replace(",", "")
+        comma >= 0 -> if (!commaDecimal && THOUSANDS_ONLY.matches(t)) t.replace(",", "") else t.replace(',', '.')
+        commaDecimal && DOT_THOUSANDS.matches(t) -> t.replace(".", "")
+        else -> t
+    }
+    return normalized.toDoubleOrNull() ?: Double.NaN
+}
+
+private val DOT_THOUSANDS = Regex("""^[+-]?\d{1,3}(\.\d{3})+$""")
+private val COMMA_DECIMAL_PROOF = Regex("""^[+-]?\d+,(\d{1,2}|\d{4,})$|^[+-]?\d{1,3}(\.\d{3})+,\d+$""")
+
+/**
+ * `1,234` alone could be either number. Another cell in the same file settles it: `150,25` or
+ * `1.234,5` cannot be anything but comma decimals. Mirrors usesCommaDecimals in csvParser.ts.
+ */
+fun usesCommaDecimals(cells: List<String>): Boolean =
+    cells.any { c -> COMMA_DECIMAL_PROOF.matches(c.filterNot { it.isWhitespace() || it == '\u00a0' }) }
 
 /**
  * Trading 212 CSV/XLSX export. Columns: Action | Time | ISIN | Ticker | Name |
@@ -31,31 +66,32 @@ suspend fun parseT212(rows: List<List<String>>, lookupTickers: TickerLookup): Pa
 
     fun cell(row: List<String>, i: Int): String? = if (i in row.indices) row[i] else null
 
-    val valid = mutableListOf<Position>()
+    val rawLots = mutableListOf<RawLot>()
     var skipped = 0
 
     for (i in 1 until rows.size) {
         val row = rows[i]
         val action = (cell(row, iAction) ?: "").lowercase()
-        if (!action.contains("buy")) { skipped++; continue }
+        val isSell = action.contains("sell")
+        if (!isSell && !action.contains("buy")) { skipped++; continue }
 
         val ticker = (cell(row, iTicker) ?: "").trim()
         val name = (cell(row, iName) ?: ticker).trim()
         val isin = (cell(row, iISIN) ?: "").trim()
-        val timeStr = cell(row, iTime) ?: ""
-        val qty = parseDecimal(cell(row, iQty))
-        val price = parseDecimal(cell(row, iPrice))
+        val date = (cell(row, iTime) ?: "").split('T', ' ')[0]
+        val qty = parseBrokerNumber(cell(row, iQty))
+        val price = parseBrokerNumber(cell(row, iPrice))
         val currency = (cell(row, iCurrency) ?: "USD").trim()
 
-        if (ticker.isEmpty() || timeStr.isEmpty() || !(qty > 0) || !(price > 0)) { skipped++; continue }
+        if (ticker.isEmpty() || !isIsoDate(date) || !(qty > 0) || !(price > 0)) { skipped++; continue }
 
-        valid.add(Position(
-            id = newId(), ticker = ticker, name = name, type = PositionType.STOCK,
-            quantity = qty, buyPrice = price, buyDate = timeStr.substringBefore('T'),
-            currency = currency, broker = "Trading 212", isin = isin.ifEmpty { null },
+        rawLots.add(RawLot(
+            ticker = ticker, name = name, qty = qty, price = price, date = date, currency = currency,
+            broker = "Trading 212", isin = isin.ifEmpty { null }, type = PositionType.STOCK, isSell = isSell,
         ))
     }
 
+    val valid = applyFifo(rawLots) { _, _ -> skipped++ }
     if (valid.isEmpty()) return null
 
     val typeMap = lookupTickers(valid.map { it.ticker }.distinct())
@@ -64,13 +100,13 @@ suspend fun parseT212(rows: List<List<String>>, lookupTickers: TickerLookup): Pa
     return ParseResult(valid = enriched, skipped = skipped)
 }
 
-private val DEGIRO_BUY = Regex("""^Buy\s+([\d.]+)[^@]*@\s*([\d.]+)\s*([A-Z]{3})""", RegexOption.IGNORE_CASE)
+private val DEGIRO_TRADE = Regex("""^(Buy|Sell)\s+([\d.,]+)[^@]*@\s*([\d.,]+)\s*([A-Z]{3})""", RegexOption.IGNORE_CASE)
 private val DEGIRO_DATE = Regex("""(\d{1,2})[-/](\d{1,2})[-/](\d{4})""")
 
 /**
  * Degiro CSV export. Columns vary by region; key ones are Date, Product,
  * ISIN, Description — the Description field encodes "Buy N PRODUCT @ PRICE
- * CURRENCY" for buy rows. Mirrors parseDegiro in src/utils/csvParser.ts.
+ * CURRENCY", or "Sell ...", for trade rows. Mirrors parseDegiro in src/utils/csvParser.ts.
  */
 suspend fun parseDegiro(rows: List<List<String>>, lookupIsins: IsinLookup): ParseResult? {
     if (rows.isEmpty()) return null
@@ -84,7 +120,7 @@ suspend fun parseDegiro(rows: List<List<String>>, lookupIsins: IsinLookup): Pars
 
     fun cell(row: List<String>, i: Int): String? = if (i in row.indices) row[i] else null
 
-    val valid = mutableListOf<Position>()
+    val rawLots = mutableListOf<RawLot>()
     var skipped = 0
 
     for (i in 1 until rows.size) {
@@ -92,28 +128,29 @@ suspend fun parseDegiro(rows: List<List<String>>, lookupIsins: IsinLookup): Pars
         val isin = (cell(row, iISIN) ?: "").trim()
         if (isin.isEmpty()) { skipped++; continue }
 
-        val desc = cell(row, iDesc) ?: ""
-        val buyM = DEGIRO_BUY.find(desc)
-        if (buyM == null) { skipped++; continue }
+        val trade = DEGIRO_TRADE.find(cell(row, iDesc) ?: "")
+        if (trade == null) { skipped++; continue }
 
-        val qty = buyM.groupValues[1].toDouble()
-        val price = buyM.groupValues[2].toDouble()
-        val currency = buyM.groupValues[3]
+        val qty = parseBrokerNumber(trade.groupValues[2])
+        val price = parseBrokerNumber(trade.groupValues[3])
+        val currency = trade.groupValues[4]
+        if (!(qty > 0) || !(price > 0)) { skipped++; continue }
 
         val rawDate = cell(row, iDate) ?: ""
         val dm = DEGIRO_DATE.find(rawDate)
         if (dm == null) { skipped++; continue }
-        val buyDate = "${dm.groupValues[3]}-${dm.groupValues[2].padStart(2, '0')}-${dm.groupValues[1].padStart(2, '0')}"
+        val date = "${dm.groupValues[3]}-${dm.groupValues[2].padStart(2, '0')}-${dm.groupValues[1].padStart(2, '0')}"
 
         val name = if (iProduct != -1) (cell(row, iProduct) ?: isin).trim() else isin
 
-        valid.add(Position(
-            id = newId(), ticker = isin, name = name, type = PositionType.STOCK,
-            quantity = qty, buyPrice = price, buyDate = buyDate, currency = currency,
-            broker = "Degiro", isin = isin,
+        rawLots.add(RawLot(
+            ticker = isin, name = name, qty = qty, price = price, date = date, currency = currency,
+            broker = "Degiro", isin = isin, type = PositionType.STOCK,
+            isSell = trade.groupValues[1].equals("sell", ignoreCase = true),
         ))
     }
 
+    val valid = applyFifo(rawLots) { _, _ -> skipped++ }
     if (valid.isEmpty()) return null
 
     val isinMap = lookupIsins(valid.mapNotNull { it.isin }.distinct())

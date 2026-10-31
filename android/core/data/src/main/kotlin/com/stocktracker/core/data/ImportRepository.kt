@@ -16,10 +16,11 @@ import javax.inject.Singleton
 /** Result of committing a parse — how many positions actually landed vs. how many were already there. */
 data class CommitResult(val committed: Int, val duplicatesSkipped: Int)
 
-private fun mapPositionType(type: String): PositionType = when (type) {
+internal fun mapPositionType(type: String): PositionType = when (type) {
     "etf" -> PositionType.ETF
     "fund" -> PositionType.FUND
     "commodity" -> PositionType.COMMODITY
+    "crypto" -> PositionType.CRYPTO
     else -> PositionType.STOCK
 }
 
@@ -62,8 +63,8 @@ class ImportRepository @Inject constructor(
 
     /**
      * Commits a successful parse into the target portfolio and enqueues a sync push for every
-     * key touched. Positions already present in the portfolio (same broker+ticker+date+qty+price)
-     * are dropped first, so re-uploading the same monthly statement doesn't double-count it.
+     * key touched. See [com.stocktracker.core.importer.planImport] for how shares already in the
+     * portfolio are matched, so re-uploading or overlapping a statement doesn't double-count it.
      */
     suspend fun commit(portfolioId: String, result: ParseResult, currencyOverride: String?): CommitResult {
         val positions = if (currencyOverride != null) {
@@ -72,10 +73,12 @@ class ImportRepository @Inject constructor(
             result.valid
         }
         val existing = positionRepository.observe(portfolioId).first()
-        val (toInsert, duplicates) = com.stocktracker.core.importer.filterDuplicates(positions, existing)
+        val plan = com.stocktracker.core.importer.planImport(existing, positions)
 
-        if (toInsert.isNotEmpty()) {
-            positionRepository.upsertAll(portfolioId, toInsert)
+        if (plan.positions != existing) {
+            val keptIds = plan.positions.map { it.id }.toSet()
+            existing.filterNot { it.id in keptIds }.forEach { positionRepository.delete(portfolioId, it.id) }
+            positionRepository.upsertAll(portfolioId, plan.positions)
             syncCoordinator.enqueuePush(portfolioId, SyncTarget.POSITIONS)
         }
 
@@ -92,7 +95,7 @@ class ImportRepository @Inject constructor(
             if (overrides.isNotEmpty()) syncCoordinator.enqueuePush(portfolioId, SyncTarget.DIV_TAX_OVERRIDES)
         }
 
-        return CommitResult(committed = toInsert.size, duplicatesSkipped = duplicates)
+        return CommitResult(committed = plan.added, duplicatesSkipped = plan.duplicates)
     }
 
     /** Builds a re-importable JSON backup of one portfolio's positions, manual prices, and div-tax overrides. */

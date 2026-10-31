@@ -46,12 +46,14 @@ class PushWorker @AssistedInject constructor(
             }
         } catch (e: Exception) {
             Log.w("PushWorker", "push failed for $target/$portfolioId, retrying", e)
+            if (e !is kotlinx.coroutines.CancellationException) conflictCenter.reportPushFailure(e.message ?: e::class.simpleName ?: "unknown error")
             Result.retry() // network failure etc. — WorkManager's own backoff handles the wait
         }
     }
 
     private suspend fun pushOrReport(portfolioId: String, storageKey: String, push: suspend () -> List<MergeConflict<*>>): Result {
         val conflicts = push()
+        conflictCenter.reportPushFailure(null)
         if (conflicts.isEmpty()) return Result.success()
         conflictCenter.report(portfolioId, storageKey, conflicts)
         return Result.failure() // waits on the user resolving the conflict, not an automatic retry

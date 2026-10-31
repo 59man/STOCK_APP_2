@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getItem, setItem } from '../utils/storage'
+import { getItem, newKeySync, pendingBase, readItem, saveMerged, setItem } from '../utils/storage'
 import { randomUUID } from '../utils/uuid'
 
 export interface Portfolio {
@@ -31,22 +31,46 @@ export function usePortfolios() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>(local.portfolios)
   const [activeId, setActiveId] = useState<string>(local.activeId)
   const [ready, setReady] = useState(local.portfolios.length > 0)
+  const [keyRejected, setKeyRejected] = useState(false)
 
   useEffect(() => {
     async function init() {
-      const [rawList, rawActive] = await Promise.all([
-        getItem(PORTFOLIOS_KEY).catch(() => null),
+      const [read, rawActive] = await Promise.all([
+        readItem(PORTFOLIOS_KEY),
         getItem(ACTIVE_KEY).catch(() => null),
       ])
+      if (cancelled) return
 
-      if (rawList !== null) {
+      if (!read.ok) {
+        // A wrong key will not fix itself, so this is the one failure the user has to hear about.
+        if (read.unauthorized) setKeyRejected(true)
+        // We don't know what the server holds, so nothing may be written. With no local copy
+        // there is no list to show either: a made-up default would invite edits nobody could
+        // find again once the real list loads. Stay on the loading state and ask again.
+        if (local.portfolios.length === 0) retryTimer = setTimeout(init, 5_000)
+        return
+      }
+
+      const pending = pendingBase(PORTFOLIOS_KEY)
+      if (pending !== null && local.portfolios.length > 0) {
+        // A list change made during an outage never reached the server: merge it in now.
+        await saveMerged(PORTFOLIOS_KEY, JSON.stringify(local.portfolios), newKeySync(pending), (json) => setPortfolios(JSON.parse(json)), 0)
+      } else if (read.value !== null) {
         try {
-          const list: Portfolio[] = JSON.parse(rawList)
+          const list: Portfolio[] = JSON.parse(read.value)
           setPortfolios(list)
           const active = rawActive ?? list[0]?.id ?? ''
           const validActive = list.some((p) => p.id === active) ? active : (list[0]?.id ?? '')
           setActiveId(validActive)
         } catch {}
+      } else if (local.portfolios.length > 0) {
+        // The server has lost the list but this browser still has it — not a first run. Put it
+        // back; each portfolio's own data is restored the same way when its hooks load.
+        console.warn('[usePortfolios] server has no portfolio list; restoring it from this browser')
+        await Promise.all([
+          setItem(PORTFOLIOS_KEY, JSON.stringify(local.portfolios)),
+          setItem(ACTIVE_KEY, local.activeId),
+        ])
       } else {
         // First run — migrate legacy data into a default portfolio
         const [legacyPos, legacyManual] = await Promise.all([
@@ -72,7 +96,13 @@ export function usePortfolios() {
 
       setReady(true)
     }
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
     init()
+    return () => {
+      cancelled = true
+      clearTimeout(retryTimer)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -91,7 +121,7 @@ export function usePortfolios() {
     } catch {}
     const next = mutate(current)
     setPortfolios(next)
-    await setItem(PORTFOLIOS_KEY, JSON.stringify(next))
+    await saveMerged(PORTFOLIOS_KEY, JSON.stringify(next), newKeySync(JSON.stringify(current)), (json) => setPortfolios(JSON.parse(json)), 0)
     return next
   }
 
@@ -121,5 +151,5 @@ export function usePortfolios() {
     setItem(ACTIVE_KEY, id)
   }
 
-  return { portfolios, activeId, ready, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio }
+  return { portfolios, activeId, ready, keyRejected, addPortfolio, removePortfolio, renamePortfolio, switchPortfolio }
 }

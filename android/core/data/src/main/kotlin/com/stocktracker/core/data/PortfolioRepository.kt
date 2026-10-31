@@ -19,10 +19,11 @@ import javax.inject.Singleton
 class PortfolioRepository @Inject constructor(
     private val portfolioDao: PortfolioDao,
     persistApi: PersistApi,
-    syncStateDao: SyncStateDao,
+    private val syncStateDao: SyncStateDao,
 ) {
     private val syncEngine = KeyedListSyncEngine(
         persistApi, syncStateDao, ListSerializer(Portfolio.serializer()), keyOf = { it: Portfolio -> it.id },
+        mergeWhenRemoteIsUnrelated = true,
     )
 
     fun observe(): Flow<List<Portfolio>> = portfolioDao.observeAll().map { list -> list.map { it.toDomain() } }
@@ -44,6 +45,7 @@ class PortfolioRepository @Inject constructor(
     /** Blocking below one remaining portfolio (same guard as usePortfolios.removePortfolio) is the ViewModel's job — it observes the list. */
     suspend fun delete(id: String) {
         portfolioDao.deleteById(id)
+        syncStateDao.forgetPortfolio(id)
         markDirty()
     }
 

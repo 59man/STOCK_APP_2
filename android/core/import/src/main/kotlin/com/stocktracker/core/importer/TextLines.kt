@@ -10,7 +10,7 @@ data class PdfTextItem(val text: String, val x: Float, val y: Float)
  * ordering items within a line by X. Mirrors the per-page body of `getLines`
  * in pdfParser.ts. Pure and library-free — the actual PDFBox-Android call
  * that produces [PdfTextItem]s lives in PdfBoxTextExtractor.kt, which needs
- * an Android runtime and isn't unit-testable the way this is.
+ * an Android runtime.
  */
 fun groupItemsIntoLines(items: List<PdfTextItem>): List<String> {
     val ti = items.filter { it.text.isNotBlank() }

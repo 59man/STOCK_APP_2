@@ -6,10 +6,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-# VITE_* vars are inlined into the built JS at this step — a runtime `environment:`
-# entry in docker-compose.yml can't reach back into bytes already written to dist/.
-ARG VITE_PERSIST_API_KEY
-ENV VITE_PERSIST_API_KEY=$VITE_PERSIST_API_KEY
+# No API key in the image: this one is public. The server generates its key on first start.
 RUN npm run build
 
 # ── Stage 2: production image ─────────────────────────────────────────────────

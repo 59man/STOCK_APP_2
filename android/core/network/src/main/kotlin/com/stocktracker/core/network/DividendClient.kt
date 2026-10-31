@@ -110,7 +110,7 @@ internal data class DividendChart(val bars: Int, val events: List<DividendEvent>
 /** Yahoo's dividend map → events in the feed's own currency. Exposed for tests. */
 internal fun parseDividendChart(body: String): DividendChart {
     val result = PersistJson.decodeFromString(YahooDivChartResponse.serializer(), body).chart?.result?.firstOrNull()
-    val currency = result?.meta?.currency ?: "USD"
+    val currency = result?.meta?.currency
     val events = (result?.events?.dividends ?: emptyMap()).values.map { d ->
         val date = Instant.ofEpochSecond(d.date).atZone(ZoneOffset.UTC).toLocalDate().toString()
         DividendEvent(date = date, amount = d.amount, currency = currency)

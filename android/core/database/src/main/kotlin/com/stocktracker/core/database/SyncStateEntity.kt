@@ -49,6 +49,21 @@ interface SyncStateDao {
         if (get(key) != null) setDirtyFlag(key) else upsert(SyncStateEntity(key = key, lastSyncedJson = null, dirty = true))
     }
 
+    /** Local changes not yet confirmed by the server. */
+    @Query("SELECT COUNT(*) FROM sync_state WHERE dirty = 1")
+    fun observeDirtyCount(): Flow<Int>
+
+    @Query("SELECT `key` FROM sync_state WHERE dirty = 1")
+    suspend fun dirtyKeys(): List<String>
+
+    /** A deleted portfolio's keys will never be pushed, so they must not count as waiting. */
+    @Query("DELETE FROM sync_state WHERE `key` LIKE '%\\_' || :portfolioId ESCAPE '\\'")
+    suspend fun forgetPortfolio(portfolioId: String)
+
+    /** Merge bases describe one server; pointing at another must not read its data as deletions. */
+    @Query("UPDATE sync_state SET lastSyncedJson = NULL")
+    suspend fun clearMergeBases()
+
     @Query("SELECT dirty FROM sync_state WHERE `key` = :key")
     suspend fun isDirty(key: String): Boolean?
 }

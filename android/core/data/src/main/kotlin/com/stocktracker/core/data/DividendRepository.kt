@@ -2,7 +2,7 @@ package com.stocktracker.core.data
 
 import android.util.Log
 import com.stocktracker.core.model.DividendEvent
-import com.stocktracker.core.model.NO_FEED_TICKERS
+import com.stocktracker.core.model.isOnYahoo
 import com.stocktracker.core.network.DividendClient
 import com.stocktracker.core.network.DividendSource
 import kotlinx.coroutines.CancellationException
@@ -22,7 +22,7 @@ import javax.inject.Singleton
  * Live dividend history, direct from Yahoo (see DividendClient) — never
  * through the user's own server. Mirrors useDividends.ts: cached forever on
  * success (errors are not cached, so a failed ticker retries on the next
- * fetch cycle), in-flight dedup per ticker. [NO_FEED_TICKERS] never fetched.
+ * fetch cycle), in-flight dedup per ticker. Tickers not on Yahoo are never fetched.
  */
 @Singleton
 class DividendRepository @Inject constructor(
@@ -45,7 +45,7 @@ class DividendRepository @Inject constructor(
     suspend fun fetchTickers(tickers: List<String>) = coroutineScope {
         val cached = _dividends.value.keys
         val candidates = tickers.map { it.uppercase() }.distinct()
-            .filterNot { it in NO_FEED_TICKERS || it in cached }
+            .filter { isOnYahoo(it) && it !in cached }
 
         candidates.forEach { ticker ->
             launch {

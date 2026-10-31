@@ -22,7 +22,7 @@ import com.stocktracker.core.data.ManualPriceRepository
 import com.stocktracker.core.data.PositionRepository
 import com.stocktracker.core.data.QuoteRepository
 import com.stocktracker.core.data.SettingsRepository
-import com.stocktracker.core.model.NO_FEED_TICKERS
+import com.stocktracker.core.model.isOnYahoo
 import com.stocktracker.core.model.PriceHistory
 import com.stocktracker.core.model.Position
 import com.stocktracker.core.network.HistoryClient
@@ -117,7 +117,7 @@ class PortfolioChartViewModel @Inject constructor(
         try {
             val fetched = tickers.map { ticker ->
                 async {
-                    if (NO_FEED_TICKERS.contains(ticker.uppercase())) {
+                    if (!isOnYahoo(ticker)) {
                         ticker to null
                     } else {
                         ticker to runCatching { HistoryClient.fetchHistory(ticker, range.yahooParam) }.getOrNull()

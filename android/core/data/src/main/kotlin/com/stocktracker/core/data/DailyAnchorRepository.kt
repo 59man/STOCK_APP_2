@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import com.stocktracker.core.model.isOnYahoo
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,22 +55,25 @@ class DailyAnchorRepository @Inject constructor(
     ) {
         val today = LocalDate.ofInstant(now, zone).toString()
         val midnight = localMidnightEpoch(zone, now)
+        // A midnight depends on the zone as well as the date. A plain date still sorts before this
+        // for dao.pruneBefore, so rows stored under the old key simply age out.
+        val dayKey = "$today@${zone.id}"
         // This is a process-wide singleton and the process routinely outlives midnight, so the
         // in-memory maps must be dropped when the date turns — otherwise every ticker already
         // held is skipped below and keeps yesterday's anchor for as long as the app stays alive.
-        if (heldDate != today) {
+        if (heldDate != dayKey) {
             _anchors.value = emptyMap()
             _fxAnchors.value = emptyMap()
-            heldDate = today
+            heldDate = dayKey
         }
         withContext(Dispatchers.IO) { dao.pruneBefore(today) }
 
         coroutineScope {
-            tickers.map { ticker ->
+            tickers.filter { isOnYahoo(it) }.map { ticker ->
                 async {
                     val key = ticker.uppercase()
                     if (_anchors.value.containsKey(key)) return@async
-                    val cached = dao.get(key, today)
+                    val cached = dao.get(key, dayKey)
                     val anchor = if (cached != null) {
                         Anchor(cached.price, cached.lastTradedAt)
                     } else {
@@ -78,7 +82,7 @@ class DailyAnchorRepository @Inject constructor(
                         val resolved = resolveOrNull("anchor $key") { AnchorClient.resolve(ticker, midnight) }
                             ?: return@async
                         val value = Anchor(resolved.price, resolved.lastTradedAt)
-                        dao.upsert(DailyAnchorEntity(key, today, value.price, value.lastTradedAt))
+                        dao.upsert(DailyAnchorEntity(key, dayKey, value.price, value.lastTradedAt))
                         value
                     }
                     _anchors.value = _anchors.value + (key to anchor)
@@ -89,7 +93,7 @@ class DailyAnchorRepository @Inject constructor(
                 async {
                     val key = "$currency->$displayCurrency"
                     if (_fxAnchors.value.containsKey(key)) return@async
-                    val cached = dao.get(key, today)
+                    val cached = dao.get(key, dayKey)
                     val rate = if (cached != null) {
                         cached.price
                     } else {
@@ -99,7 +103,7 @@ class DailyAnchorRepository @Inject constructor(
                             listOf(AnchorClient.resolveFx(currency, displayCurrency, midnight))
                         } ?: return@async
                         val resolved = outcome.single()
-                        dao.upsert(DailyAnchorEntity(key, today, resolved, null))
+                        dao.upsert(DailyAnchorEntity(key, dayKey, resolved, null))
                         resolved
                     }
                     if (rate != null) _fxAnchors.value = _fxAnchors.value + (key to rate)

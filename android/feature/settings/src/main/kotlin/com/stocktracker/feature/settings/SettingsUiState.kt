@@ -13,6 +13,9 @@ data class SettingsUiState(
     val displayCurrency: String = "CZK",
     val lastSyncedAt: String? = null,
     val connectionTest: ConnectionTestState = ConnectionTestState.Idle,
+    val syncError: String? = null,
+    val pendingChanges: Int = 0,
+    val lastPushFailure: String? = null,
     /** "system" | "light" | "dark" */
     val themeMode: String = "system",
     /** Stored override; empty means the device zone, which [effectiveTimeZoneLabel] spells out. */

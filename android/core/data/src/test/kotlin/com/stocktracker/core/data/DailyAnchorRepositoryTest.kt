@@ -29,10 +29,10 @@ class DailyAnchorRepositoryTest {
     fun `anchors held in memory are replaced once the local date changes`() = runTest {
         val dao = FakeDao(
             listOf(
-                DailyAnchorEntity("TABAK.PR", "2026-10-05", 17980.0, 1L),
-                DailyAnchorEntity("TABAK.PR", "2026-10-06", 18900.0, 2L),
-                DailyAnchorEntity("EUR->CZK", "2026-10-05", 24.41, null),
-                DailyAnchorEntity("EUR->CZK", "2026-10-06", 24.43, null),
+                DailyAnchorEntity("TABAK.PR", "2026-10-05@Europe/Prague", 17980.0, 1L),
+                DailyAnchorEntity("TABAK.PR", "2026-10-06@Europe/Prague", 18900.0, 2L),
+                DailyAnchorEntity("EUR->CZK", "2026-10-05@Europe/Prague", 24.41, null),
+                DailyAnchorEntity("EUR->CZK", "2026-10-06@Europe/Prague", 24.43, null),
             ),
         )
         val repo = DailyAnchorRepository(dao)
@@ -50,8 +50,8 @@ class DailyAnchorRepositoryTest {
     fun `local date follows the chosen zone, not UTC`() = runTest {
         val dao = FakeDao(
             listOf(
-                DailyAnchorEntity("TABAK.PR", "2026-10-05", 17980.0, 1L),
-                DailyAnchorEntity("TABAK.PR", "2026-10-06", 18900.0, 2L),
+                DailyAnchorEntity("TABAK.PR", "2026-10-05@Europe/Prague", 17980.0, 1L),
+                DailyAnchorEntity("TABAK.PR", "2026-10-06@Europe/Prague", 18900.0, 2L),
             ),
         )
         val repo = DailyAnchorRepository(dao)
@@ -59,5 +59,15 @@ class DailyAnchorRepositoryTest {
         // 22:30 UTC on the 5th is already 00:30 on the 6th in Prague.
         repo.refresh(listOf("TABAK.PR"), emptyList(), "CZK", prague, Instant.parse("2026-10-05T22:30:00Z"))
         assertEquals(18900.0, repo.anchors.value["TABAK.PR"]?.price)
+    }
+
+    @Test
+    fun `an anchor stored under one zone is not reused for another`() = runTest {
+        val dao = FakeDao(listOf(DailyAnchorEntity("TABAK.PR", "2026-10-05@Europe/Prague", 17980.0, 1L)))
+        val repo = DailyAnchorRepository(dao)
+
+        assertEquals(null, dao.get("TABAK.PR", "2026-10-05@Asia/Tokyo"))
+        repo.refresh(listOf("TABAK.PR"), emptyList(), "CZK", ZoneId.of("Europe/Prague"), Instant.parse("2026-10-05T08:00:00Z"))
+        assertEquals(17980.0, repo.anchors.value["TABAK.PR"]?.price)
     }
 }

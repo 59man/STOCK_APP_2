@@ -16,8 +16,10 @@ private const val MAX_ITERATIONS = 200
 fun xirr(cashFlows: List<CashFlow>): Double? {
     if (cashFlows.size < 2) return null
 
-    val t0 = LocalDate.parse(cashFlows[0].date)
-    val years = cashFlows.map { ChronoUnit.DAYS.between(t0, LocalDate.parse(it.date)) / DAYS_PER_YEAR }
+    // A malformed date arrives by sync from anywhere and would otherwise crash the app on every launch.
+    val dates = cashFlows.map { runCatching { LocalDate.parse(it.date) }.getOrNull() ?: return null }
+    val t0 = dates[0]
+    val years = dates.map { ChronoUnit.DAYS.between(t0, it) / DAYS_PER_YEAR }
     val amounts = cashFlows.map { it.amount }
 
     fun f(r: Double) = amounts.indices.sumOf { i -> amounts[i] / Math.pow(1 + r, years[i]) }

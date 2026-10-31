@@ -12,6 +12,7 @@ import {
   fetchFxHistory, fetchYahooHistory, fxHistCache, histCurrency, interpolateDaily, makeConvertAt, priceAt,
   yahooHistCurrency, type TickerHistory,
 } from '../utils/chartHistory'
+import { localToday, monthsBack } from '../utils/localDate'
 import {
   TYPE_ORDER, effectiveTypeFilter, filterPositionsByType, parseStoredTypes, toggleType, typeFilterLabel, typeLabel,
   type AssetType,
@@ -48,17 +49,16 @@ function fmtCurrency(v: number, currency: string) {
 }
 
 function rangeStartDate(range: Range): string {
-  const d = new Date()
+  const today = localToday()
   switch (range) {
-    case '1M': d.setMonth(d.getMonth() - 1); break
-    case '3M': d.setMonth(d.getMonth() - 3); break
-    case '6M': d.setMonth(d.getMonth() - 6); break
-    case '1Y': d.setFullYear(d.getFullYear() - 1); break
-    case '3Y': d.setFullYear(d.getFullYear() - 3); break
-    case '5Y': d.setFullYear(d.getFullYear() - 5); break
+    case '1M': return monthsBack(today, 1)
+    case '3M': return monthsBack(today, 3)
+    case '6M': return monthsBack(today, 6)
+    case '1Y': return monthsBack(today, 12)
+    case '3Y': return monthsBack(today, 36)
+    case '5Y': return monthsBack(today, 60)
     case 'All': return '0000-00-00'
   }
-  return d.toISOString().slice(0, 10)
 }
 
 interface Props {
@@ -177,7 +177,7 @@ export function PortfolioPnLChart({ positions, dividends, manualPrices, quotes, 
   // table's live intraday total return (rather than lagging behind at yesterday's close).
   const effectiveHistories = useMemo(() => {
     const map = new Map(histories)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localToday()
     // Skip live-price injection on weekends for ordinary exchange-traded
     // tickers: markets are closed, quotes hold Friday's stale close, and
     // injecting today's date would create a phantom non-trading-day bar.

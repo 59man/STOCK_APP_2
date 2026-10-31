@@ -2,6 +2,7 @@ import { Position } from '../types'
 import { ParseResult } from './importParser'
 import { batchTickers } from './yahooLookup'
 import { applyFifo, RawLot } from './fifoMatcher'
+import { localToday } from './localDate'
 
 // "OPEN BUY 3/3.4281 @ 37.185" or "CLOSE SELL 3.4281 @ 40.00" → qty
 function parseFillQty(comment: string): number | null {
@@ -58,7 +59,7 @@ export async function parseXtbXlsx(buffer: ArrayBuffer, fileName = ''): Promise<
     const ticker = xtbTicker.replace(/\.CZ$/, '.PR')
 
     const buyDate = time instanceof Date
-      ? time.toISOString().split('T')[0]
+      ? localToday(time) // SheetJS builds these in local time; the UTC date can be a day out
       : String(time).split(/[T ]/)[0]
 
     rawLots.push({
@@ -75,7 +76,7 @@ export async function parseXtbXlsx(buffer: ArrayBuffer, fileName = ''): Promise<
   if (!rawLots.length) return null
 
   // FIFO: match sells against buys per ticker
-  const positions = applyFifo(rawLots)
+  const positions = applyFifo(rawLots, () => { skipped++ })
   if (!positions.length) return null
 
   // Enrich type via Yahoo (ETF / stock / fund / commodity)

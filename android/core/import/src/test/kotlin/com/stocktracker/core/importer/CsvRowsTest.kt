@@ -28,4 +28,9 @@ class CsvRowsTest {
         val rows = parseCsvRows("a,b\n\n1,2\n")
         assertEquals(listOf(listOf("a", "b"), listOf("1", "2")), rows)
     }
+
+    @Test
+    fun `reads a semicolon file with a BOM`() {
+        assertEquals(listOf(listOf("ticker", "price"), listOf("ACME", "150,25")), parseCsvRows("\uFEFFticker;price\nACME;150,25\n"))
+    }
 }

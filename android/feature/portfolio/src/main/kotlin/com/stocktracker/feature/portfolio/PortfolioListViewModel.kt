@@ -29,8 +29,12 @@ import com.stocktracker.core.data.SettingsRepository
 import com.stocktracker.core.data.effectiveZoneId
 import com.stocktracker.core.data.sync.ConflictCenter
 import com.stocktracker.core.data.sync.PendingConflict
+import com.stocktracker.core.data.sync.GLOBAL_SYNC_SCOPE
 import com.stocktracker.core.data.sync.SyncCoordinator
 import com.stocktracker.core.data.sync.SyncTarget
+import com.stocktracker.core.calc.fundPricesToStore
+import java.time.Instant
+import com.stocktracker.core.model.Portfolio
 import com.stocktracker.core.model.DividendEvent
 import com.stocktracker.core.model.SortField
 import com.stocktracker.core.model.SortOrder
@@ -40,6 +44,7 @@ import com.stocktracker.core.model.Quote
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.stocktracker.core.model.NO_FEED_TICKERS
+import com.stocktracker.core.model.isOnYahoo
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
@@ -58,8 +63,6 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
 
-/** [SyncCoordinator.enqueuePush] only needs a string to build a unique work name for the PORTFOLIOS key — it isn't a real portfolio id. */
-private const val GLOBAL_SYNC_SCOPE = "portfolios"
 
 /** Upper bound on the startup loading screen — past this, show whatever has loaded rather than hang on a slow feed. */
 private const val STARTUP_TIMEOUT_MS = 10_000L
@@ -75,6 +78,13 @@ private fun openTickersOf(positions: List<Position>): List<String> =
         .toList()
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+/**
+ * The selected portfolio, or the first one if it no longer exists — deleted on another device, or
+ * on this one. Staying on a deleted id would keep writing lots to a key nothing else reads.
+ */
+internal fun resolveActivePortfolio(activeId: String?, portfolios: List<Portfolio>): String? =
+    portfolios.firstOrNull { it.id == activeId }?.id ?: portfolios.firstOrNull()?.id
+
 @HiltViewModel
 class PortfolioListViewModel @Inject constructor(
     private val portfolioRepository: PortfolioRepository,
@@ -161,12 +171,22 @@ class PortfolioListViewModel @Inject constructor(
         // Dividend income counts for closed lots too (received while the lot was still open), so
         // fetch the full ticker set rather than just open ones — unlike the live-quote fetch above.
         viewModelScope.launch {
-            portfolioData.collectLatest { data ->
+            // refreshTick: a failed fetch is not cached, so a resume retries it rather than leaving
+            // return and IRR reading low until the app restarts.
+            combine(portfolioData, refreshTick) { data, _ -> data }.collectLatest { data ->
                 val allTickers = data.positions.map { it.ticker }.distinct()
                 if (allTickers.isNotEmpty()) dividendRepository.fetchTickers(allTickers)
             }
         }
         viewModelScope.launch { refreshTick.collect { fxRateRepository.refresh() } }
+        viewModelScope.launch {
+            combine(portfolioData, quoteRepository.quotes) { data, quotes -> data to quotes }.collectLatest { (data, quotes) ->
+                val id = data.portfolioId ?: return@collectLatest
+                val toStore = fundPricesToStore(data.positions.map { it.ticker }, quotes, data.manualPrices)
+                toStore.forEach { (ticker, price) -> manualPriceRepository.set(id, ticker, price, Instant.now().toString()) }
+                if (toStore.isNotEmpty()) syncCoordinator.enqueuePush(id, SyncTarget.MANUAL_PRICES)
+            }
+        }
         // Midnight anchors for today's change. Cached per ticker per local date, so this is a
         // no-op after the first pass of the day and costs nothing on a resume refresh.
         viewModelScope.launch {
@@ -223,8 +243,8 @@ class PortfolioListViewModel @Inject constructor(
         val anchors = combined.anchors
         val fxAnchors = combined.fxAnchors
         val settings = flags.settings
-        val resolvedActiveId = activeId ?: portfolios.firstOrNull()?.id
-        if (activeId == null && resolvedActiveId != null) activePortfolioId.value = resolvedActiveId
+        val resolvedActiveId = resolveActivePortfolio(activeId, portfolios)
+        if (activeId != resolvedActiveId && resolvedActiveId != null) activePortfolioId.value = resolvedActiveId
 
         // Rows are only trustworthy once Room has emitted for the portfolio actually selected —
         // before that (startup, or right after a switch) they belong to nobody / the old portfolio.
@@ -344,7 +364,7 @@ class PortfolioListViewModel @Inject constructor(
             .filterNot { it in NO_FEED_TICKERS }
             .all { it in quotes.quotes || it in quotes.errors }
         val divsDone = positions.map { it.ticker.uppercase() }.distinct()
-            .filterNot { it in NO_FEED_TICKERS }
+            .filter { isOnYahoo(it) }
             .all { it in divsSettled }
         return quotesSettled && divsDone
     }
@@ -365,6 +385,15 @@ class PortfolioListViewModel @Inject constructor(
                 if (uiState.value.portfolios.size <= 1) return@launch
                 portfolioRepository.delete(action.portfolioId)
                 syncCoordinator.enqueuePush(GLOBAL_SYNC_SCOPE, SyncTarget.PORTFOLIOS)
+            }
+            is PortfolioListAction.RenameTicker -> viewModelScope.launch {
+                val portfolioId = activePortfolioId.value ?: return@launch
+                if (manualPriceRepository.renameTicker(portfolioId, action.oldTicker, action.newTicker)) {
+                    syncCoordinator.enqueuePush(portfolioId, SyncTarget.MANUAL_PRICES)
+                }
+                if (divTaxOverrideRepository.renameTicker(portfolioId, action.oldTicker, action.newTicker)) {
+                    syncCoordinator.enqueuePush(portfolioId, SyncTarget.DIV_TAX_OVERRIDES)
+                }
             }
             PortfolioListAction.ToggleShowClosed -> showClosed.update { !it }
             PortfolioListAction.Refresh -> refresh(force = true)

@@ -141,12 +141,16 @@ fun buildEffectiveHistories(
             }
             return@forEach
         }
-        val mp = manualPrices[key] ?: return@forEach
+        // Latest known price, live first — a fund priced by its provider has no Yahoo history, and
+        // its stored manual price may be months old. Mirrors PortfolioPnLChart's synthetic history.
+        val live = quotes[key]?.price?.takeIf { it > 0 && it.isFinite() }
+        val mp = manualPrices[key]
+        if (live == null && mp == null) return@forEach
         val tickerLots = positions.filter { it.ticker.uppercase() == key }
         if (tickerLots.isEmpty()) return@forEach
         val knots = linkedMapOf<String, Double>()
         tickerLots.forEach { p -> knots.putIfAbsent(p.buyDate, p.buyPrice) }
-        knots[mp.updatedAt.take(10).ifEmpty { todayStr }] = mp.price
+        if (live != null) knots[todayStr] = live else if (mp != null) knots[mp.updatedAt.take(10).ifEmpty { todayStr }] = mp.price
         val sortedKnots = knots.entries.sortedBy { it.key }.map { it.key to it.value }
         map[key] = TickerChartHistory(interpolateDaily(sortedKnots), currency = tickerLots.first().currency)
     }
@@ -254,7 +258,7 @@ fun buildPortfolioChartData(
         for (div in divs) {
             if (pos.buyDate <= div.date && (posSellDate == null || posSellDate > div.date)) {
                 val rate = taxOverrides["${pos.ticker.uppercase()}::${div.date}"] ?: defaultRate
-                divEvents += div.date to convertAt(pos.quantity * div.amount * (1 - rate), div.currency, displayCurrency, div.date)
+                divEvents += div.date to convertAt(pos.quantity * div.amount * (1 - rate), div.currency ?: pos.currency, displayCurrency, div.date)
             }
         }
     }

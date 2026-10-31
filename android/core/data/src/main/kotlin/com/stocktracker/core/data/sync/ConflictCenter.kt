@@ -18,6 +18,14 @@ class ConflictCenter @Inject constructor() {
     private val _pending = MutableStateFlow<List<PendingConflict>>(emptyList())
     val pending: StateFlow<List<PendingConflict>> = _pending
 
+    /** Why the latest background push failed, null once one succeeds. WorkManager keeps retrying regardless. */
+    private val _lastPushFailure = MutableStateFlow<String?>(null)
+    val lastPushFailure: StateFlow<String?> = _lastPushFailure
+
+    fun reportPushFailure(message: String?) {
+        _lastPushFailure.value = message
+    }
+
     fun report(portfolioId: String, storageKey: String, conflicts: List<MergeConflict<*>>) {
         val entries = conflicts.map { PendingConflict(portfolioId, storageKey, it.key, it.local, it.remote) }
         _pending.update { current -> current.filterNot { it.storageKey == storageKey } + entries }

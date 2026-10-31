@@ -7,7 +7,7 @@
     "dev": "concurrently --kill-others-on-fail \"vite\" \"node server/index.js\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "start": "node server/index.js",
+    "start": "NODE_ENV=production node server/index.js",
     "test": "vitest run",
     "test:ui": "playwright test"
   },

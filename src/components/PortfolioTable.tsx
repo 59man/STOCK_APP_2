@@ -9,6 +9,7 @@ import { ManualPriceEntry } from '../hooks/useManualPrices'
 import { PriceChart } from './PriceChart'
 import { SellPositionModal } from './SellPositionModal'
 import { proxyFetch } from '../utils/proxyFetch'
+import { localToday } from '../utils/localDate'
 
 // ── Ticker fetch test & ISIN lookup ───────────────────────────────────────────
 interface FetchTestResult { state: 'loading' | 'ok' | 'error'; msg: string }
@@ -162,6 +163,7 @@ interface Props {
   onRemove: (ids: string[]) => void
   onSellPositions: (ids: string[], sellPrice: number, sellDate: string) => void
   onUpdatePosition: (id: string, updates: Partial<Omit<Position, 'id'>>) => void
+  onRenameTicker: (oldTicker: string, newTicker: string) => void
   onRefresh: () => void
   portfolioIrr: number | null
   onSetManualPrice: (ticker: string, price: number) => void
@@ -253,7 +255,7 @@ function lastTradedLabel(epochSeconds: number | null): string {
 }
 
 export function PortfolioTable({
-  rows, onRemove, onSellPositions, onUpdatePosition, onRefresh, portfolioIrr,
+  rows, onRemove, onSellPositions, onUpdatePosition, onRenameTicker, onRefresh, portfolioIrr,
   onSetManualPrice, onClearManualPrice, showClosed, onToggleClosed,
   displayCurrency, convert, dividendsByTicker, taxOverrides, manualPrices, onSetDivTax, onClearDivTax,
 }: Props) {
@@ -407,6 +409,7 @@ export function PortfolioTable({
     const newTicker = (tickerEdits[oldTicker] ?? oldTicker).toUpperCase().trim()
     if (newTicker && newTicker !== oldTicker) {
       positions.forEach(p => onUpdatePosition(p.id, { ticker: newTicker }))
+      onRenameTicker(oldTicker, newTicker)
     }
     setTickerEdits(prev => { const n = { ...prev }; delete n[oldTicker]; return n })
     setFetchTests(prev => { const n = { ...prev }; delete n[oldTicker]; return n })
@@ -450,7 +453,7 @@ export function PortfolioTable({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `portfolio_${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `portfolio_${localToday()}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -459,7 +462,7 @@ export function PortfolioTable({
   const visibleRows = showClosed ? rows : rows.filter((r) => !r.isClosed)
 
   const cv = (amount: number, currency: string) => convert(amount, currency, displayCurrency)
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = localToday()
 
   const sortValue = (r: PortfolioRow, key: ColKey | 'ticker'): string | number => {
     switch (key) {
@@ -831,7 +834,7 @@ export function PortfolioTable({
                                   <span>
                                     {fmtPrice(cv(r.currentPrice, r.currency), displayCurrency)}
                                     {r.priceIsManual && (
-                                      <span className="badge-manual" title={`Manually set on ${r.manualPriceDate ?? 'unknown'} — edit in Cur. Value`}> M</span>
+                                      <span className="badge-manual" title={`Manually set on ${r.manualPriceDate?.slice(0, 10) ?? 'unknown'} — edit in Cur. Value`}> M</span>
                                     )}
                                   </span>
                                 )}
@@ -883,7 +886,7 @@ export function PortfolioTable({
                                     {fmt(cv(r.currentValue, r.currency), displayCurrency)}
                                     {isEditing ? editInline : (
                                       <>
-                                        <span className="badge-manual" title={`Set ${r.manualPriceDate ?? ''} — click to update`}
+                                        <span className="badge-manual" title={`Set ${r.manualPriceDate?.slice(0, 10) ?? ''} — click to update`}
                                           onClick={() => startEdit(r.ticker, r.currentValue.toFixed(2))}>M</span>
                                         <button className="price-clear-btn" title="Clear manual price" onClick={() => onClearManualPrice(r.ticker)}>×</button>
                                       </>

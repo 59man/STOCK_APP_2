@@ -5,95 +5,70 @@ import com.stocktracker.core.model.PositionType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** The same table runs in src/utils/dedupe.test.ts. */
 class DedupeTest {
-
-    private fun lot(
-        ticker: String = "AAPL.US",
-        qty: Double = 10.0,
-        price: Double = 150.0,
-        date: String = "2024-05-01",
-        broker: String? = "XTB",
-        sellDate: String? = null,
-        sellPrice: Double? = null,
-    ) = Position(
-        id = "id-${System.nanoTime()}",
-        ticker = ticker,
-        name = ticker,
-        type = PositionType.STOCK,
-        quantity = qty,
-        buyPrice = price,
-        buyDate = date,
-        currency = "USD",
-        broker = broker,
-        sellDate = sellDate,
-        sellPrice = sellPrice,
+    private fun lot(id: String, quantity: Double, sold: Boolean = false) = Position(
+        id = id, ticker = "ACME", name = "Acme", type = PositionType.STOCK, quantity = quantity, buyPrice = 10.0,
+        buyDate = "2024-01-02", currency = "USD", broker = "XTB",
+        sellDate = if (sold) "2024-06-01" else null, sellPrice = if (sold) 15.0 else null,
     )
+    private fun shape(ps: List<Position>) = ps.map { Triple(it.id, it.quantity, it.sellDate) }.sortedBy { it.first }
 
     @Test
-    fun `exact re-upload of the same statement is fully deduped`() {
-        val existing = listOf(lot())
-        val candidates = listOf(lot())
-
-        val (toInsert, duplicates) = filterDuplicates(candidates, existing)
-
-        assertEquals(0, toInsert.size)
-        assertEquals(1, duplicates)
+    fun `adds everything to an empty portfolio`() {
+        val plan = planImport(emptyList(), listOf(lot("n", 5.0)))
+        assertEquals(1, plan.added)
+        assertEquals(0, plan.duplicates)
     }
 
     @Test
-    fun `ticker case and broker case do not defeat the match`() {
-        val existing = listOf(lot(ticker = "aapl.us", broker = "xtb"))
-        val candidates = listOf(lot(ticker = "AAPL.US", broker = "XTB"))
-
-        val (toInsert, duplicates) = filterDuplicates(candidates, existing)
-
-        assertEquals(0, toInsert.size)
-        assertEquals(1, duplicates)
+    fun `drops an identical re-import`() {
+        val plan = planImport(listOf(lot("e", 10.0)), listOf(lot("n", 10.0)))
+        assertEquals(shape(listOf(lot("e", 10.0))), shape(plan.positions))
+        assertEquals(1, plan.duplicates)
     }
 
     @Test
-    fun `a genuinely new lot in the same statement survives`() {
-        val existing = listOf(lot(date = "2024-05-01"))
-        val candidates = listOf(lot(date = "2024-05-01"), lot(date = "2024-06-01"))
-
-        val (toInsert, duplicates) = filterDuplicates(candidates, existing)
-
-        assertEquals(1, toInsert.size)
-        assertEquals("2024-06-01", toInsert[0].buyDate)
-        assertEquals(1, duplicates)
+    fun `counts a split lot once when the same shares come back split`() {
+        val existing = listOf(lot("c", 4.0, sold = true), lot("o", 6.0))
+        val plan = planImport(existing, listOf(lot("n1", 4.0, sold = true), lot("n2", 6.0)))
+        assertEquals(shape(existing), shape(plan.positions))
+        assertEquals(2, plan.duplicates)
     }
 
     @Test
-    fun `different quantity or price is not a duplicate`() {
-        val existing = listOf(lot(qty = 10.0, price = 150.0))
-        val candidates = listOf(lot(qty = 11.0, price = 150.0), lot(qty = 10.0, price = 151.0))
-
-        val (toInsert, duplicates) = filterDuplicates(candidates, existing)
-
-        assertEquals(2, toInsert.size)
-        assertEquals(0, duplicates)
+    fun `closes open shares when a newer statement contains the sale`() {
+        val plan = planImport(listOf(lot("e", 10.0)), listOf(lot("n1", 4.0, sold = true), lot("n2", 6.0)))
+        assertEquals(shape(listOf(lot("e", 6.0), lot("n1", 4.0, sold = true))), shape(plan.positions))
+        assertEquals(1, plan.added)
+        assertEquals(1, plan.duplicates)
     }
 
     @Test
-    fun `closed lot only matches when sell date and price also match`() {
-        val existing = listOf(lot(sellDate = "2024-07-01", sellPrice = 200.0))
-        val candidates = listOf(
-            lot(sellDate = "2024-07-01", sellPrice = 200.0),
-            lot(sellDate = "2024-07-02", sellPrice = 200.0),
-        )
-
-        val (toInsert, duplicates) = filterDuplicates(candidates, existing)
-
-        assertEquals(1, toInsert.size)
-        assertEquals("2024-07-02", toInsert[0].sellDate)
-        assertEquals(1, duplicates)
+    fun `removes an open lot its sale closes entirely`() {
+        val plan = planImport(listOf(lot("e", 10.0)), listOf(lot("n", 10.0, sold = true)))
+        assertEquals(shape(listOf(lot("n", 10.0, sold = true))), shape(plan.positions))
     }
 
     @Test
-    fun `empty existing portfolio never dedupes`() {
-        val (toInsert, duplicates) = filterDuplicates(listOf(lot(), lot()), emptyList())
+    fun `does not reopen shares when an older statement arrives after a newer one`() {
+        val existing = listOf(lot("c", 4.0, sold = true), lot("o", 6.0))
+        val plan = planImport(existing, listOf(lot("n", 10.0)))
+        assertEquals(shape(existing), shape(plan.positions))
+        assertEquals(1, plan.duplicates)
+    }
 
-        assertEquals(2, toInsert.size)
-        assertEquals(0, duplicates)
+    @Test
+    fun `adds only the shares beyond what is already there`() {
+        val plan = planImport(listOf(lot("e", 10.0)), listOf(lot("n", 15.0)))
+        assertEquals(shape(listOf(lot("e", 10.0), lot("n", 5.0))), shape(plan.positions))
+    }
+
+    @Test
+    fun `treats a different ticker, date, price or broker as a different buy`() {
+        val base = lot("n", 10.0)
+        listOf(base.copy(ticker = "OTHER"), base.copy(buyDate = "2024-01-03"), base.copy(buyPrice = 11.0), base.copy(broker = "Revolut")).forEach {
+            assertEquals(1, planImport(listOf(lot("e", 10.0)), listOf(it)).added)
+        }
     }
 }

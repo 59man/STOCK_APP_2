@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { Position } from '../types'
 import type { DividendEvent } from '../utils/dividends'
 import { dividendForecast } from '../utils/dividendForecast'
+import { localToday } from '../utils/localDate'
 
 interface Props {
   positions: Position[]
@@ -15,7 +16,7 @@ const fmt = (v: number, currency: string) =>
 
 /** Upcoming dividends, estimated from last year's payments on today's holdings. */
 export function DividendCalendar({ positions, dividends, displayCurrency, convert }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const entries = useMemo(() => dividendForecast(positions, dividends, today), [positions, dividends, today])
   if (entries.length === 0) return null
   const total = entries.reduce((s, e) => s + convert(e.net, e.currency, displayCurrency), 0)

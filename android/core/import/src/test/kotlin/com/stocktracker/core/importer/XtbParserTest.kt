@@ -60,4 +60,23 @@ class XtbParserTest {
         assertEquals("EUR", accountCurrencyFromFileName("EUR_53675935_2020-01-01_2024-01-01.xlsx"))
         assertNull(accountCurrencyFromFileName("statement.xlsx"))
     }
+
+    @Test
+    fun `a real XLSX date cell reads as a date, through the whole import path`() = kotlinx.coroutines.test.runTest {
+        // Real XTB statements store Time as a date cell, which the reader hands over as its raw serial number.
+        val bytes = javaClass.getResourceAsStream("/xtb-date-cell.xlsx")!!.readBytes()
+        val lookups = ImportLookups(lookupIsins = { emptyMap() }, lookupTickers = { emptyMap() })
+
+        val result = parseFile(bytes, "EUR_1.xlsx", lookups) as ParseResultFile
+
+        assertEquals("2024-03-05", result.result.valid.single().buyDate)
+    }
+
+    @Test
+    fun `excel serials convert and everything else is left alone`() {
+        assertEquals("2024-03-05", excelSerialToIso("45356.02"))
+        assertEquals("2024-03-05", excelSerialToIso("45356"))
+        assertNull(excelSerialToIso("2024-03-05"))
+        assertNull(excelSerialToIso("150"))
+    }
 }
