@@ -7,6 +7,8 @@ import { networkInterfaces, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { isPrivateAddress } from './privateAddress.js'
+
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), 'index.js')
 const API_KEY = 'test-key'
 const GOOD = JSON.stringify({ stock_tracker_portfolios: '[{"id":"p1","name":"Real"}]', devices: [] })
@@ -294,6 +296,63 @@ describe('the generated API key', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('rotate-key')
   })
+})
+
+describe('the page the server serves', () => {
+  let dist
+  const pageEnv = () => ({ PATH: process.env.PATH, DATA_FILE: dataFile, PORT: String(port), NODE_ENV: 'production', DIST_DIR: dist })
+  const startPage = () => {
+    port = nextPort++
+    child = spawn(process.execPath, [SERVER], { cwd: dir, env: pageEnv(), stdio: 'ignore' })
+  }
+  const currentKey = () => spawnSync(process.execPath, [SERVER, 'show-key'], { cwd: dir, env: pageEnv(), encoding: 'utf8', timeout: 5000 }).stdout.trim()
+  const servedKey = (html) => /__STOCK_TRACKER_API_KEY__="([^"]*)"/.exec(html)?.[1]
+
+  beforeEach(() => {
+    writeFileSync(dataFile, GOOD)
+    dist = join(dir, 'dist')
+    mkdirSync(dist)
+    writeFileSync(join(dist, 'index.html'), '<html><head><title>t</title></head><body></body></html>')
+    writeFileSync(join(dist, 'app.js'), 'console.log(1)')
+  })
+
+  it.each(['/', '/index.html', '/any/spa/route'])('carries the current key at %s, uncached', async (path) => {
+    startPage()
+    await waitUntilListening()
+
+    const res = await fetch(`http://127.0.0.1:${port}${path}`)
+
+    expect(servedKey(await res.text())).toBe(currentKey())
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('carries the new key after a rotation', async () => {
+    startPage()
+    await waitUntilListening()
+    const rotated = spawnSync(process.execPath, [SERVER, 'rotate-key'], { cwd: dir, env: pageEnv(), encoding: 'utf8', timeout: 5000 }).stdout.trim()
+
+    expect(servedKey(await (await fetch(`http://127.0.0.1:${port}/`)).text())).toBe(rotated)
+  })
+
+  it('still serves other static files untouched', async () => {
+    startPage()
+    await waitUntilListening()
+    expect(await (await fetch(`http://127.0.0.1:${port}/app.js`)).text()).toBe('console.log(1)')
+  })
+})
+
+describe('isPrivateAddress', () => {
+  it.each([
+    '127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.255.255', '172.17.0.1', '192.168.0.50',
+    '100.64.0.1', '100.127.255.255', '100.103.137.108', '::1', 'fd7a:115c:a1e0::1', 'fe80::1',
+    '::ffff:192.168.0.50', '::ffff:100.103.137.108',
+  ])('accepts %s', (ip) => expect(isPrivateAddress(ip)).toBe(true))
+
+  it.each([
+    '8.8.8.8', '172.32.0.1', '192.169.0.1', '100.128.0.1', '100.63.255.255', '2001:4860:4860::8888',
+    '::ffff:8.8.8.8', '', undefined,
+  ])('refuses %s', (ip) => expect(isPrivateAddress(ip)).toBe(false))
 })
 
 describe('a lost store is not a first run', () => {

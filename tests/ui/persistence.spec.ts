@@ -143,6 +143,27 @@ test('a key the server rejects asks for the right one, then loads', async ({ pag
   await expect(page.getByText('did not accept')).toHaveCount(0)
 })
 
+test('a page served with the key loads with no prompt and offers the key for the phone', async ({ page }) => {
+  const server = { [LIST_KEY]: JSON.stringify([PORTFOLIO]), [POSITIONS_KEY]: JSON.stringify([LOT]) }
+  await page.addInitScript(() => {
+    (window as unknown as { __STOCK_TRACKER_API_KEY__: string }).__STOCK_TRACKER_API_KEY__ = 'served-key'
+  })
+  await page.route('**/api/persist/**', (route) => {
+    if (route.request().headers()['x-api-key'] !== 'served-key') return route.fulfill({ status: 401, json: { error: 'unauthorized' } })
+    const key = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop()!)
+    return route.fulfill({ json: { value: server[key] ?? null } })
+  })
+  await page.route(/\/api\/(yahoo|stooq|onemarkets|fio-fund|devices)/, (route) => route.abort())
+  await page.goto('/')
+
+  await expect(page.getByText(PORTFOLIO.name)).toBeVisible()
+  await expect(page.getByText('did not accept')).toHaveCount(0)
+
+  await page.getByRole('button', { name: '🔑' }).click()
+  await expect(page.getByRole('button', { name: 'Copy' })).toBeVisible()
+  await expect(page.getByLabel('API key')).toHaveCount(0)
+})
+
 test('an edit from a stale tab keeps what another device added meanwhile', async ({ page }) => {
   const server = { [LIST_KEY]: JSON.stringify([PORTFOLIO]), [POSITIONS_KEY]: JSON.stringify([LOT]) }
   await mockPersist(page, { server })

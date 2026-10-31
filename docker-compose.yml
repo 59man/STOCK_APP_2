@@ -3,7 +3,8 @@ services:
     build:
       context: .
     ports:
-      - "8080:8080"
+      # IPv4 only: the page hands browsers the key, and on IPv6 Docker hides the client's address.
+      - "0.0.0.0:8080:8080"
     volumes:
       # Bind-mount the existing data file so your portfolio persists between restarts.
       # The file must exist on the host before running `docker compose up`.

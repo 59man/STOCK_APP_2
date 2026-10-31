@@ -59,10 +59,11 @@ ssh -q casa "sudo -n docker pull 59man/stock-tracker:latest"
 
 Stop, remove, and re-run with the flags you just read. The key lives in the backups mount, so it
 survives this. Do not pass `-e PERSIST_API_KEY`: it would override the generated key and block rotation.
+Keep `0.0.0.0` in `-p`: the page hands browsers the key, and on IPv6 Docker hides the client's address.
 
 ```bash
 ssh -q casa 'sudo -n docker stop stock-tracker && sudo -n docker rm stock-tracker && \
-  sudo -n docker run -d --name stock-tracker -p 4000:8080 \
+  sudo -n docker run -d --name stock-tracker -p 0.0.0.0:4000:8080 \
     -v /DATA/stock-tracker/data.json:/app/server/data.json \
     -v /DATA/stock-tracker/backups:/app/server/backups \
     --log-opt max-size=10m --log-opt max-file=3 \
@@ -91,7 +92,7 @@ rodice, jonas, Marek — are still present. A healthy container serving an empty
 deploy, usually a wrong or missing volume mount.
 
 To change the key: `ssh -q casa "sudo -n docker exec stock-tracker node server/index.js rotate-key"`. It
-is live at once, with no rebuild or restart; every browser and phone then needs the new key once.
+is live at once, with no rebuild or restart; open browser tabs need a reload and each phone needs the new key.
 
 ## Fallback: build on the NAS
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getApiKey, saveApiKey } from '../utils/apiKey'
+import { getApiKey, hasServedKey, saveApiKey } from '../utils/apiKey'
 
 interface Props {
   onClose: () => void
@@ -69,30 +69,35 @@ export function ApiKeyModal({ onClose, rejected }: Props) {
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
         <div className="modal-form">
-          {rejected && <p style={{ color: 'var(--loss, #f66)' }}>The server did not accept this browser's API key. Enter the current one.</p>}
-          <form
-            style={{ display: 'flex', gap: 9 }}
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!draft.trim()) return
-              saveApiKey(draft)
-              window.location.reload()
-            }}
-          >
-            <input
-              aria-label="API key"
-              type="password"
-              autoComplete="off"
-              placeholder="Paste the server's API key"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              style={{ flex: 1 }}
-            />
-            <button className="btn-primary" type="submit" disabled={!draft.trim()}>Save</button>
-          </form>
-          <p className="muted" style={{ fontSize: 12.5 }}>
-            Get it on the server with <code>docker exec stock-tracker node server/index.js show-key</code>
-          </p>
+          {rejected && hasServedKey() && <p style={{ color: 'var(--loss, #f66)' }}>The server's API key changed. Reload this page.</p>}
+          {!hasServedKey() && (
+            <>
+              {rejected && <p style={{ color: 'var(--loss, #f66)' }}>The server did not accept this browser's API key. Enter the current one.</p>}
+              <form
+                style={{ display: 'flex', gap: 9 }}
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!draft.trim()) return
+                  saveApiKey(draft)
+                  window.location.reload()
+                }}
+              >
+                <input
+                  aria-label="API key"
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Paste the server's API key"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button className="btn-primary" type="submit" disabled={!draft.trim()}>Save</button>
+              </form>
+              <p className="muted" style={{ fontSize: 12.5 }}>
+                Get it on the server with <code>docker exec stock-tracker node server/index.js show-key</code>
+              </p>
+            </>
+          )}
           {API_KEY && (
             <>
               <p className="muted" style={{ fontSize: 12.5 }}>

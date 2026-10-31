@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readd
 import { createHash, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { isPrivateAddress } from './privateAddress.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // DATA_FILE can point somewhere else so a throwaway dataset can be served without touching
@@ -17,7 +18,7 @@ const BACKUP_DIR = process.env.DATA_FILE
   ? `${DATA_FILE}.backups`
   : join(__dirname, 'backups')
 const BACKUP_KEEP = 7
-const DIST_DIR  = join(__dirname, '../dist')
+const DIST_DIR  = process.env.DIST_DIR ?? join(__dirname, '../dist')
 const IS_PROD   = process.env.NODE_ENV === 'production'
 
 // Timestamped stdout/stderr logging — visible via `docker logs stock-tracker`
@@ -466,10 +467,21 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' })
 })
 
-// Serve the built frontend and fall back to index.html for the SPA in production.
+// Serve the built frontend and fall back to index.html for the SPA in production. The page carries
+// the key, so a browser needs no setup and only a phone ever has it entered. That makes whoever can
+// reach this port a holder of the key, which is why it goes only to LAN and Tailscale addresses.
+// ponytail: this trusts the socket address, so it relies on Docker preserving the client's IPv4
+// address. Docker's IPv6 proxy hides it, so publish the port on IPv4 only (see Docker in CLAUDE.md).
 if (IS_PROD) {
+  const servePage = (req, res) => {
+    const page = readFileSync(join(DIST_DIR, 'index.html'), 'utf8')
+    const key = isPrivateAddress(req.socket.remoteAddress) ? currentKey() : ''
+    const script = `<script>window.__STOCK_TRACKER_API_KEY__=${JSON.stringify(key).replace(/</g, '\\u003c')}</script></head>`
+    res.set('Cache-Control', 'no-store').type('html').send(key ? page.replace('</head>', () => script) : page)
+  }
+  app.get(['/', '/index.html'], servePage)
   app.use(express.static(DIST_DIR))
-  app.get('*', (_req, res) => res.sendFile(join(DIST_DIR, 'index.html')))
+  app.get('*', servePage)
 }
 
 const PORT = Number(process.env.PORT ?? 3001)

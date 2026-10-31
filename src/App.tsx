@@ -232,7 +232,7 @@ export default function App() {
                 <option key={z} value={z}>{z}</option>
               ))}
             </select>
-            <button className="btn-secondary" title="Enter this browser's API key, or copy it for the Android app" onClick={() => setShowApiKeyModal(true)}>
+            <button className="btn-secondary" title="API key, to copy into the Android app" onClick={() => setShowApiKeyModal(true)}>
               🔑
             </button>
             <button className="btn-secondary" title="Devices synced with this server" onClick={() => setShowDeviceModal(true)}>

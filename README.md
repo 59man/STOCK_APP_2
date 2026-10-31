@@ -78,7 +78,7 @@ Or build the image and run it on a server:
 docker build -t 59man/stock-tracker:latest .
 docker push 59man/stock-tracker:latest
 
-docker run -d --name stock-tracker -p 4000:8080 \
+docker run -d --name stock-tracker -p 0.0.0.0:4000:8080 \
   -v /DATA/stock-tracker/data.json:/app/server/data.json \
   -v /DATA/stock-tracker/backups:/app/server/backups \
   --log-opt max-size=10m --log-opt max-file=3 \
@@ -86,14 +86,14 @@ docker run -d --name stock-tracker -p 4000:8080 \
   59man/stock-tracker:latest
 ```
 
-The server creates its API key on first start and keeps it in the backups folder. Each browser asks for it once.
+The server creates its API key on first start and keeps it in the backups folder. Browsers on your LAN or Tailscale get it with the page and need no setup, so anyone who can reach the port can use the app. You only enter the key on a phone.
 
 ```bash
 docker exec stock-tracker node server/index.js show-key     # print the key
 docker exec stock-tracker node server/index.js rotate-key   # replace it, live at once; prints the new one
 ```
 
-- **Keep it off the internet.** It's meant for your LAN and Tailscale: no router port forward, no `tailscale funnel`.
+- **Keep it off the internet.** It's meant for your LAN and Tailscale: no router port forward, no `tailscale funnel`, and publish the port on IPv4 only, as above.
 - **Use absolute paths for the volume mounts.** A `~/…` path can point to a different file, and the app would then start empty.
 - **To update,** run `docker pull`, then `docker stop stock-tracker && docker rm stock-tracker`, then repeat the `docker run` command above.
 
