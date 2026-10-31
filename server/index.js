@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, readd
 import { createHash, randomBytes } from 'crypto'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
-import { isPrivateAddress } from './privateAddress.js'
+import { isLocalHostHeader, isPrivateAddress } from './privateAddress.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // DATA_FILE can point somewhere else so a throwaway dataset can be served without touching
@@ -473,9 +473,13 @@ app.use((err, _req, res, _next) => {
 // ponytail: this trusts the socket address, so it relies on Docker preserving the client's IPv4
 // address. Docker's IPv6 proxy hides it, so publish the port on IPv4 only (see Docker in CLAUDE.md).
 if (IS_PROD) {
+  // A proxy, such as Tailscale Funnel, hides the client behind a private address and says so in a header.
+  const cameThroughProxy = (req) => ['forwarded', 'x-forwarded-for', 'tailscale-funnel-request'].some((h) => req.headers[h])
+  const mayHaveKey = (req) =>
+    isPrivateAddress(req.socket.remoteAddress) && isLocalHostHeader(req.headers.host) && !cameThroughProxy(req)
   const servePage = (req, res) => {
     const page = readFileSync(join(DIST_DIR, 'index.html'), 'utf8')
-    const key = isPrivateAddress(req.socket.remoteAddress) ? currentKey() : ''
+    const key = mayHaveKey(req) ? currentKey() : ''
     const script = `<script>window.__STOCK_TRACKER_API_KEY__=${JSON.stringify(key).replace(/</g, '\\u003c')}</script></head>`
     res.set('Cache-Control', 'no-store').type('html').send(key ? page.replace('</head>', () => script) : page)
   }

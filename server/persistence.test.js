@@ -7,7 +7,8 @@ import { networkInterfaces, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { isPrivateAddress } from './privateAddress.js'
+import { request } from 'node:http'
+import { isLocalHostHeader, isPrivateAddress } from './privateAddress.js'
 
 const SERVER = join(dirname(fileURLToPath(import.meta.url)), 'index.js')
 const API_KEY = 'test-key'
@@ -342,6 +343,49 @@ describe('the page the server serves', () => {
   })
 })
 
+describe('the key in the page and the Host header', () => {
+  it('stays out of a page requested under a public name, as DNS rebinding would', async () => {
+    const dist = join(dir, 'dist')
+    mkdirSync(dist)
+    writeFileSync(join(dist, 'index.html'), '<html><head></head><body></body></html>')
+    writeFileSync(dataFile, GOOD)
+    port = nextPort++
+    child = spawn(process.execPath, [SERVER], {
+      cwd: dir,
+      env: { PATH: process.env.PATH, DATA_FILE: dataFile, PORT: String(port), NODE_ENV: 'production', DIST_DIR: dist },
+      stdio: 'ignore',
+    })
+    await waitUntilListening()
+
+    // fetch() will not send a custom Host header.
+    const pageFor = (host, headers = {}) => new Promise((resolve, reject) => {
+      request({ host: '127.0.0.1', port, path: '/', headers: { Host: host, ...headers } }, (res) => {
+        let body = ''
+        res.on('data', (d) => { body += d })
+        res.on('end', () => resolve(body))
+      }).on('error', reject).end()
+    })
+
+    expect(await pageFor('evil.example:4000')).not.toContain('__STOCK_TRACKER_API_KEY__')
+    expect(await pageFor('192.168.0.103:4000')).toContain('__STOCK_TRACKER_API_KEY__')
+    // Tailscale Funnel: a public visitor arrives under a .ts.net name from a local proxy.
+    expect(await pageFor('casa.tail1234.ts.net', { 'Tailscale-Funnel-Request': '?1' })).not.toContain('__STOCK_TRACKER_API_KEY__')
+    expect(await pageFor('192.168.0.103:4000', { 'X-Forwarded-For': '8.8.8.8' })).not.toContain('__STOCK_TRACKER_API_KEY__')
+  })
+})
+
+describe('isLocalHostHeader', () => {
+  it.each([
+    '192.168.0.103:4000', '100.64.0.1:4000', 'localhost:4000', '127.0.0.1', '[fd7a:115c:a1e0::1]:4000',
+    'casaos:4000', 'CasaOS.local:4000', 'casa.tail1234.ts.net:4000',
+  ])('accepts %s', (host) => expect(isLocalHostHeader(host)).toBe(true))
+
+  it.each([
+    'evil.example:4000', '8.8.8.8:4000', '[2001:4860:4860::8888]:4000', 'casaos.local.evil.example',
+    'ts.net.evil.example', 'evil.example/@192.168.0.103', '', undefined,
+  ])('refuses %s', (host) => expect(isLocalHostHeader(host)).toBe(false))
+})
+
 describe('isPrivateAddress', () => {
   it.each([
     '127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.255.255', '172.17.0.1', '192.168.0.50',
@@ -351,7 +395,7 @@ describe('isPrivateAddress', () => {
 
   it.each([
     '8.8.8.8', '172.32.0.1', '192.169.0.1', '100.128.0.1', '100.63.255.255', '2001:4860:4860::8888',
-    '::ffff:8.8.8.8', '', undefined,
+    '::ffff:8.8.8.8', 'evil.example', '', undefined,
   ])('refuses %s', (ip) => expect(isPrivateAddress(ip)).toBe(false))
 })
 
